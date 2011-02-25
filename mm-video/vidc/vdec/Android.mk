@@ -33,6 +33,7 @@ libmm-vdec-inc	        := $(LOCAL_PATH)/inc
 libmm-vdec-inc	        += $(TARGET_OUT_HEADERS)/mm-core/omxcore
 
 LOCAL_MODULE		:= libOmxVdec
+LOCAL_MODULE_TAGS       := optional
 LOCAL_CFLAGS		:= $(libOmxVdec-def)
 LOCAL_C_INCLUDES	:= $(libmm-vdec-inc)
 LOCAL_PRELINK_MODULE	:= false
@@ -52,7 +53,7 @@ include $(CLEAR_VARS)
 mm-vdec-test-inc		:= $(TARGET_OUT_HEADERS)/mm-core/omxcore
 mm-vdec-test-inc		+= $(LOCAL_PATH)/inc
 
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS               := optional eng
 LOCAL_MODULE			:= mm-vdec-omx-test
 LOCAL_CFLAGS	  		:= $(libOmxVdec-def)
 LOCAL_C_INCLUDES  		:= $(mm-vdec-test-inc)
@@ -71,7 +72,7 @@ include $(CLEAR_VARS)
 mm-vdec-drv-test-inc		:= $(TARGET_OUT_HEADERS)/mm-core/omxcore
 mm-vdec-drv-test-inc		+= $(LOCAL_PATH)/inc
 
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS               := optional eng
 LOCAL_MODULE			:= mm-video-driver-test
 LOCAL_CFLAGS	  		:= $(libOmxVdec-def)
 LOCAL_C_INCLUDES  		:= $(mm-vdec-drv-test-inc)
