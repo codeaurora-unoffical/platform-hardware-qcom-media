@@ -41,7 +41,6 @@ LOCAL_COPY_HEADERS      += inc/QOMX_AudioIndexExtensions.h
 LOCAL_C_INCLUDES        := $(LOCAL_PATH)/src/common
 LOCAL_C_INCLUDES        += $(LOCAL_PATH)/inc
 LOCAL_MODULE            := libOmxCore
-LOCAL_MODULE_TAGS       := optional
 LOCAL_SHARED_LIBRARIES  := liblog libdl
 LOCAL_CFLAGS            := $(OMXCORE_CFLAGS)
 
@@ -60,7 +59,6 @@ include $(CLEAR_VARS)
 LOCAL_C_INCLUDES        := $(LOCAL_PATH)/src/common
 LOCAL_C_INCLUDES        += $(LOCAL_PATH)/inc
 LOCAL_MODULE            := libmm-omxcore
-LOCAL_MODULE_TAGS       := optional
 LOCAL_SHARED_LIBRARIES  := liblog libdl
 LOCAL_CFLAGS            := $(OMXCORE_CFLAGS)
 
