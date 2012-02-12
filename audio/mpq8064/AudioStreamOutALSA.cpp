@@ -37,10 +37,6 @@
 
 #include "AudioHardwareALSA.h"
 
-#ifndef ALSA_DEFAULT_SAMPLE_RATE
-#define ALSA_DEFAULT_SAMPLE_RATE 44100 // in Hz
-#endif
-
 namespace android_audio_legacy
 {
 
@@ -231,7 +227,6 @@ status_t AudioStreamOutALSA::close()
 
 status_t AudioStreamOutALSA::standby()
 {
-
      if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
        (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
          return NO_ERROR;

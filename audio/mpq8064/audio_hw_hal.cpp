@@ -47,6 +47,12 @@ struct qcom_stream_out {
     AudioStreamOut *qcom_out;
 };
 
+struct qcom_broadcast_stream {
+    struct audio_broadcast_stream stream;
+
+    AudioBroadcastStream *qcom_out;
+};
+
 struct qcom_stream_in {
     struct audio_stream_in stream;
 
@@ -165,6 +171,41 @@ static int out_get_render_position(const struct audio_stream_out *stream,
     return out->qcom_out->getRenderPosition(dsp_frames);
 }
 
+static status_t out_start(struct audio_stream_out *stream, int64_t startTime)
+{
+    struct qcom_stream_out *out =
+        reinterpret_cast<struct qcom_stream_out *>(stream);
+    return out->qcom_out->start(startTime);
+}
+
+static status_t out_pause(struct audio_stream_out *stream)
+{
+    struct qcom_stream_out *out =
+        reinterpret_cast<struct qcom_stream_out *>(stream);
+    return out->qcom_out->pause();
+}
+
+static status_t out_flush(struct audio_stream_out *stream)
+{
+    struct qcom_stream_out *out =
+        reinterpret_cast<struct qcom_stream_out *>(stream);
+    return out->qcom_out->flush();
+}
+
+static status_t out_resume(struct audio_stream_out *stream)
+{
+    struct qcom_stream_out *out =
+        reinterpret_cast<struct qcom_stream_out *>(stream);
+    return out->qcom_out->resume();
+}
+
+static status_t out_stop(struct audio_stream_out *stream)
+{
+    struct qcom_stream_out *out =
+        reinterpret_cast<struct qcom_stream_out *>(stream);
+    return out->qcom_out->stop();
+}
+
 static int out_add_audio_effect(const struct audio_stream *stream, effect_handle_t effect)
 {
     return 0;
@@ -173,6 +214,36 @@ static int out_add_audio_effect(const struct audio_stream *stream, effect_handle
 static int out_remove_audio_effect(const struct audio_stream *stream, effect_handle_t effect)
 {
     return 0;
+}
+
+static int broadcast_start(struct audio_broadcast_stream *stream, int64_t timeToStart)
+{
+    struct qcom_broadcast_stream *out =
+        reinterpret_cast<struct qcom_broadcast_stream *>(stream);
+    return out->qcom_out->start(timeToStart);
+}
+
+static int broadcast_mute(struct audio_broadcast_stream *stream, bool mute)
+{
+    struct qcom_broadcast_stream *out =
+        reinterpret_cast<struct qcom_broadcast_stream *>(stream);
+    return out->qcom_out->mute(mute);
+}
+
+static int broadcast_set_volume(struct audio_broadcast_stream *stream, float left,
+                          float right)
+{
+    struct qcom_broadcast_stream *out =
+        reinterpret_cast<struct qcom_broadcast_stream *>(stream);
+    return out->qcom_out->setVolume(left, right);
+}
+
+static ssize_t broadcast_write(struct audio_broadcast_stream *stream, const void* buffer,
+                         size_t bytes, int64_t timestamp, int audiotype)
+{
+    struct qcom_broadcast_stream *out =
+        reinterpret_cast<struct qcom_broadcast_stream *>(stream);
+    return out->qcom_out->write(buffer, bytes, timestamp, audiotype);
 }
 
 /** audio_stream_in implementation **/
@@ -321,6 +392,9 @@ static uint32_t adev_get_supported_devices(const struct audio_hw_device *dev)
             AUDIO_DEVICE_OUT_FM_TX |
             AUDIO_DEVICE_OUT_DIRECTOUTPUT |
             AUDIO_DEVICE_OUT_PROXY |
+            AUDIO_DEVICE_OUT_BLUETOOTH_A2DP |
+            AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES |
+            AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER |
             AUDIO_DEVICE_OUT_DEFAULT |
             /* IN */
             AUDIO_DEVICE_IN_VOICE_CALL |
@@ -408,6 +482,8 @@ static int adev_open_output_session(struct audio_hw_device *dev,
                                    uint32_t devices,
                                    int *format,
                                    int sessionId,
+                                   uint32_t samplingRate, 
+                                   uint32_t channels,
                                    struct audio_stream_out **stream_out)
 {
     struct qcom_audio_device *qadev = to_ladev(dev);
@@ -419,15 +495,29 @@ static int adev_open_output_session(struct audio_hw_device *dev,
     if (!out)
         return -ENOMEM;
 
-    out->qcom_out = qadev->hwif->openOutputSession(devices, format,&status,sessionId);
+    out->qcom_out = qadev->hwif->openOutputSession(devices, format,&status,
+                                                   sessionId, samplingRate, channels);
     if (!out->qcom_out) {
         ret = status;
         goto err_open;
     }
 
+    out->stream.common.get_sample_rate = out_get_sample_rate;
+    out->stream.common.set_sample_rate = out_set_sample_rate;
+    out->stream.common.get_buffer_size = out_get_buffer_size;
+    out->stream.common.get_channels = out_get_channels;
+    out->stream.common.get_format = out_get_format;
+    out->stream.common.set_format = out_set_format;
     out->stream.common.standby = out_standby;
     out->stream.common.set_parameters = out_set_parameters;
+    out->stream.common.get_parameters = out_get_parameters;
     out->stream.set_volume = out_set_volume;
+    out->stream.write = out_write;
+    out->stream.start = out_start;
+    out->stream.pause = out_pause;
+    out->stream.flush = out_flush;
+    out->stream.resume = out_resume;
+    out->stream.stop = out_stop;
 
     *stream_out = &out->stream;
     return 0;
@@ -494,6 +584,66 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     struct qcom_stream_out *out = reinterpret_cast<struct qcom_stream_out *>(stream);
 
     qadev->hwif->closeOutputStream(out->qcom_out);
+    free(out);
+}
+
+static int adev_open_broadcast_stream(struct audio_hw_device *dev,
+                                      uint32_t devices,
+                                      int      *format,
+                                      uint32_t *channels,
+                                      uint32_t *sample_rate,
+                                      uint32_t audio_source,
+                                      struct audio_broadcast_stream **stream_out)
+{
+    struct qcom_audio_device *qadev = to_ladev(dev);
+    status_t status;
+    struct qcom_broadcast_stream *out;
+    int ret;
+
+    out = (struct qcom_broadcast_stream *)calloc(1, sizeof(*out));
+    if (!out)
+        return -ENOMEM;
+
+    out->qcom_out = qadev->hwif->openBroadcastStream(devices, format, channels,
+                                                    sample_rate, audio_source, &status);
+    if (!out->qcom_out) {
+        ret = status;
+        goto err_open;
+    }
+
+    out->stream.common.get_sample_rate = out_get_sample_rate;
+    out->stream.common.set_sample_rate = out_set_sample_rate;
+    out->stream.common.get_buffer_size = out_get_buffer_size;
+    out->stream.common.get_channels = out_get_channels;
+    out->stream.common.get_format = out_get_format;
+    out->stream.common.set_format = out_set_format;
+    out->stream.common.standby = out_standby;
+    out->stream.common.dump = out_dump;
+    out->stream.common.set_parameters = out_set_parameters;
+    out->stream.common.get_parameters = out_get_parameters;
+    out->stream.common.add_audio_effect = out_add_audio_effect;
+    out->stream.common.remove_audio_effect = out_remove_audio_effect;
+    out->stream.set_volume = broadcast_set_volume;
+    out->stream.write = broadcast_write;
+    out->stream.start = broadcast_start;
+    out->stream.mute  = broadcast_mute;
+
+    *stream_out = &out->stream;
+    return 0;
+
+err_open:
+    free(out);
+    *stream_out = NULL;
+    return ret;
+}
+
+static void adev_close_broadcast_stream(struct audio_hw_device *dev,
+                                        struct audio_broadcast_stream* stream)
+{
+    struct qcom_audio_device *qadev = to_ladev(dev);
+    struct qcom_broadcast_stream *out = reinterpret_cast<struct qcom_broadcast_stream *>(stream);
+
+    qadev->hwif->closeBroadcastStream(out->qcom_out);
     free(out);
 }
 
@@ -617,6 +767,8 @@ static int qcom_adev_open(const hw_module_t* module, const char* name,
     qadev->device.open_output_stream = adev_open_output_stream;
     qadev->device.open_output_session = adev_open_output_session;
     qadev->device.close_output_stream = adev_close_output_stream;
+    qadev->device.open_broadcast_stream = adev_open_broadcast_stream;
+    qadev->device.close_broadcast_stream = adev_close_broadcast_stream;
     qadev->device.open_input_stream = adev_open_input_stream;
     qadev->device.close_input_stream = adev_close_input_stream;
     qadev->device.dump = adev_dump;

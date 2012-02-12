@@ -10,8 +10,11 @@ LOCAL_CFLAGS := -D_POSIX_SOURCE
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp 	\
   AudioStreamOutALSA.cpp 	\
+  AudioBroadcastStream.cpp 	\
+  AudioSessionOut.cpp 	\
   AudioStreamInALSA.cpp 	\
   ALSAStreamOps.cpp		\
+  ALSADevice.cpp		\
   audio_hw_hal.cpp
 
 LOCAL_STATIC_LIBRARIES := \
@@ -21,7 +24,6 @@ LOCAL_STATIC_LIBRARIES := \
 LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libutils \
-    libmedia \
     libhardware \
     libc        \
     libpower    \
@@ -33,7 +35,6 @@ LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/audio-acdb-util
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/libalsa-intf
 LOCAL_C_INCLUDES += hardware/libhardware/include
 LOCAL_C_INCLUDES += hardware/libhardware_legacy/include
-LOCAL_C_INCLUDES += frameworks/base/include
 LOCAL_C_INCLUDES += system/core/include
 
 LOCAL_C_INCLUDES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
@@ -76,34 +77,4 @@ LOCAL_C_INCLUDES := hardware/libhardware_legacy/audio
 
 include $(BUILD_SHARED_LIBRARY)
 
-
-# This is the ALSA module which behaves closely like the original
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
-
-LOCAL_CFLAGS := -D_POSIX_SOURCE -Wno-multichar
-
-ifneq ($(ALSA_DEFAULT_SAMPLE_RATE),)
-    LOCAL_CFLAGS += -DALSA_DEFAULT_SAMPLE_RATE=$(ALSA_DEFAULT_SAMPLE_RATE)
-endif
-
-LOCAL_C_INCLUDES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
-LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
-LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/libalsa-intf
-
-LOCAL_SRC_FILES:= \
-    alsa_default.cpp \
-    ALSAControl.cpp
-
-LOCAL_SHARED_LIBRARIES := \
-    libcutils \
-    liblog    \
-    libalsa-intf
-
-LOCAL_MODULE:= alsa.mpq8064
-LOCAL_MODULE_TAGS := optional
-
-  include $(BUILD_SHARED_LIBRARY)
 endif

@@ -1,4 +1,4 @@
-/* alsa_default.cpp
+/* ALSADevice.cpp
  **
  ** Copyright 2009 Wind River Systems
  ** Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
@@ -16,7 +16,7 @@
  ** limitations under the License.
  */
 
-#define LOG_TAG "ALSAModule"
+#define LOG_TAG "ALSADevice"
 //#define LOG_NDEBUG 0
 #define LOG_NDDEBUG 0
 #include <utils/Log.h>
@@ -25,96 +25,17 @@
 #include "AudioHardwareALSA.h"
 #include <media/AudioRecord.h>
 
-#ifndef ALSA_DEFAULT_SAMPLE_RATE
-#define ALSA_DEFAULT_SAMPLE_RATE 44100 // in Hz
-#endif
-
 #define BTSCO_RATE_16KHZ 16000
 
 namespace android_audio_legacy
 {
 
-static int      s_device_open(const hw_module_t*, const char*, hw_device_t**);
-static int      s_device_close(hw_device_t*);
-static status_t s_init(alsa_device_t *, ALSAHandleList &);
-static status_t s_open(alsa_handle_t *);
-static status_t s_close(alsa_handle_t *);
-static status_t s_standby(alsa_handle_t *);
-static status_t s_route(alsa_handle_t *, uint32_t, int);
-static status_t s_start_voice_call(alsa_handle_t *);
-static status_t s_start_voip_call(alsa_handle_t *);
-static status_t s_start_fm(alsa_handle_t *);
-static void     s_set_voice_volume(int);
-static void     s_set_voip_volume(int);
-static void     s_set_mic_mute(int);
-static void     s_set_voip_mic_mute(int);
-static status_t s_set_fm_vol(int);
-static void     s_set_btsco_rate(int);
-static status_t s_set_lpa_vol(int);
-static void     s_enable_wide_voice(bool flag);
-static void     s_enable_fens(bool flag);
-static void     s_set_flags(uint32_t flags);
+ALSADevice::ALSADevice() {
+    mDevSettingsFlag = TTY_OFF;
+    btsco_samplerate = 8000;
+    int callMode = AudioSystem::MODE_NORMAL;
 
-static char mic_type[25];
-static char curRxUCMDevice[50];
-static char curTxUCMDevice[50];
-static int fluence_mode;
-static int fmVolume;
-static uint32_t mDevSettingsFlag = TTY_OFF;
-static int btsco_samplerate = 8000;
-
-static hw_module_methods_t s_module_methods = {
-    open            : s_device_open
-};
-
-extern "C" const hw_module_t HAL_MODULE_INFO_SYM = {
-    tag             : HARDWARE_MODULE_TAG,
-    version_major   : 1,
-    version_minor   : 0,
-    id              : ALSA_HARDWARE_MODULE_ID,
-    name            : "QCOM ALSA module",
-    author          : "QuIC Inc",
-    methods         : &s_module_methods,
-    dso             : 0,
-    reserved        : {0,},
-};
-
-static int s_device_open(const hw_module_t* module, const char* name,
-        hw_device_t** device)
-{
     char value[128];
-    alsa_device_t *dev;
-    dev = (alsa_device_t *) malloc(sizeof(*dev));
-    if (!dev) return -ENOMEM;
-
-    memset(dev, 0, sizeof(*dev));
-
-    /* initialize the procs */
-    dev->common.tag = HARDWARE_DEVICE_TAG;
-    dev->common.version = 0;
-    dev->common.module = (hw_module_t *) module;
-    dev->common.close = s_device_close;
-    dev->init = s_init;
-    dev->open = s_open;
-    dev->close = s_close;
-    dev->route = s_route;
-    dev->standby = s_standby;
-    dev->startVoiceCall = s_start_voice_call;
-    dev->startVoipCall = s_start_voip_call;
-    dev->startFm = s_start_fm;
-    dev->setVoiceVolume = s_set_voice_volume;
-    dev->setVoipVolume = s_set_voip_volume;
-    dev->setMicMute = s_set_mic_mute;
-    dev->setVoipMicMute = s_set_voip_mic_mute;
-    dev->setFmVolume = s_set_fm_vol;
-    dev->setBtscoRate = s_set_btsco_rate;
-    dev->setLpaVolume = s_set_lpa_vol;
-    dev->enableWideVoice = s_enable_wide_voice;
-    dev->enableFENS = s_enable_fens;
-    dev->setFlags = s_set_flags;
-
-    *device = &dev->common;
-
     property_get("persist.audio.handset.mic",value,"0");
     strlcpy(mic_type, value, sizeof(mic_type));
     property_get("persist.audio.fluence.mode",value,"0");
@@ -125,29 +46,20 @@ static int s_device_open(const hw_module_t* module, const char* name,
     }
     strlcpy(curRxUCMDevice, "None", sizeof(curRxUCMDevice));
     strlcpy(curTxUCMDevice, "None", sizeof(curTxUCMDevice));
-    LOGD("ALSA module opened");
 
-    return 0;
-}
+    mMixer = mixer_open("/dev/snd/controlC0");
 
-static int s_device_close(hw_device_t* device)
+    LOGD("ALSA Device opened");
+};
+
+ALSADevice::~ALSADevice()
 {
-    free(device);
-    return 0;
+    if (mMixer) mixer_close(mMixer);
 }
 
 // ----------------------------------------------------------------------------
 
-static const int DEFAULT_SAMPLE_RATE = ALSA_DEFAULT_SAMPLE_RATE;
-
-static void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode);
-static char *getUCMDevice(uint32_t devices, int input);
-static void disableDevice(alsa_handle_t *handle);
-
-static int callMode = AudioSystem::MODE_NORMAL;
-// ----------------------------------------------------------------------------
-
-int deviceName(alsa_handle_t *handle, unsigned flags, char **value)
+int ALSADevice::deviceName(alsa_handle_t *handle, unsigned flags, char **value)
 {
     int ret = 0;
     char ident[70];
@@ -163,7 +75,7 @@ int deviceName(alsa_handle_t *handle, unsigned flags, char **value)
     return ret;
 }
 
-status_t setHardwareParams(alsa_handle_t *handle)
+status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
 {
     struct snd_pcm_hw_params *params;
     unsigned long bufferSize, reqBuffSize;
@@ -217,7 +129,7 @@ status_t setHardwareParams(alsa_handle_t *handle)
     return NO_ERROR;
 }
 
-status_t setSoftwareParams(alsa_handle_t *handle)
+status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
 {
     struct snd_pcm_sw_params* params;
     struct pcm* pcm = handle->handle;
@@ -254,7 +166,7 @@ status_t setSoftwareParams(alsa_handle_t *handle)
     return NO_ERROR;
 }
 
-void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
+void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
 {
     bool inCallDevSwitch = false;
     char *rxDevice, *txDevice, ident[70];
@@ -319,7 +231,7 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
         strlcpy(curRxUCMDevice, rxDevice, sizeof(curRxUCMDevice));
         free(rxDevice);
         if (devices & AudioSystem::DEVICE_OUT_FM)
-            s_set_fm_vol(fmVolume);
+            setFmVolume(fmVolume);
     }
     if (txDevice != NULL) {
        if (strcmp(curTxUCMDevice, "None")) {
@@ -342,16 +254,7 @@ void switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
 
 // ----------------------------------------------------------------------------
 
-static status_t s_init(alsa_device_t *module, ALSAHandleList &list)
-{
-    LOGD("s_init: Initializing devices for ALSA module");
-
-    list.clear();
-
-    return NO_ERROR;
-}
-
-static status_t s_open(alsa_handle_t *handle)
+status_t ALSADevice::open(alsa_handle_t *handle)
 {
     char *devName;
     unsigned flags = 0;
@@ -363,7 +266,7 @@ static status_t s_open(alsa_handle_t *handle)
         return NO_ERROR;
     }
 
-    s_close(handle);
+    close(handle);
 
     LOGD("s_open: handle %p", handle);
 
@@ -373,8 +276,11 @@ static status_t s_open(alsa_handle_t *handle)
     // The PCM stream is opened in blocking mode, per ALSA defaults.  The
     // AudioFlinger seems to assume blocking mode too, so asynchronous mode
     // should not be used.
+    // ToDo: Add a condition check for HIFI2 use cases also
     if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC))) {
+        (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2))) {
         flags = PCM_OUT;
     } else {
         flags = PCM_IN;
@@ -397,22 +303,24 @@ static status_t s_open(alsa_handle_t *handle)
     }
 
     handle->handle->flags = flags;
+    LOGD("setting hardware parameters");
     err = setHardwareParams(handle);
 
     if (err == NO_ERROR) {
+        LOGD("setting software parameters");
         err = setSoftwareParams(handle);
     }
 
     if(err != NO_ERROR) {
         LOGE("Set HW/SW params failed: Closing the pcm stream");
-        s_standby(handle);
+        standby(handle);
     }
 
     free(devName);
     return NO_ERROR;
 }
 
-static status_t s_start_voip_call(alsa_handle_t *handle)
+status_t ALSADevice::startVoipCall(alsa_handle_t *handle)
 {
 
     char* devName;
@@ -421,7 +329,7 @@ static status_t s_start_voip_call(alsa_handle_t *handle)
     int err = NO_ERROR;
     uint8_t voc_pkt[VOIP_BUFFER_MAX_SIZE];
 
-    s_close(handle);
+    close(handle);
     flags = PCM_OUT;
     flags |= PCM_MONO;
     LOGV("s_open:s_start_voip_call  handle %p", handle);
@@ -501,13 +409,13 @@ static status_t s_start_voip_call(alsa_handle_t *handle)
      return NO_ERROR;
 }
 
-static status_t s_start_voice_call(alsa_handle_t *handle)
+status_t ALSADevice::startVoiceCall(alsa_handle_t *handle)
 {
     char* devName;
     unsigned flags = 0;
     int err = NO_ERROR;
 
-    LOGD("s_start_voice_call: handle %p", handle);
+    LOGD("startVoiceCall: handle %p", handle);
     // ASoC multicomponent requires a valid path (frontend/backend) for
     // the device to be opened
 
@@ -518,31 +426,31 @@ static status_t s_start_voice_call(alsa_handle_t *handle)
     }
     handle->handle = pcm_open(flags, (char*)devName);
     if (!handle->handle) {
-        LOGE("s_start_voicecall: could not open PCM device");
+        LOGE("startVoiceCall: could not open PCM device");
         goto Error;
     }
 
     handle->handle->flags = flags;
     err = setHardwareParams(handle);
     if(err != NO_ERROR) {
-        LOGE("s_start_voice_call: setHardwareParams failed");
+        LOGE("startVoiceCall: setHardwareParams failed");
         goto Error;
     }
 
     err = setSoftwareParams(handle);
     if(err != NO_ERROR) {
-        LOGE("s_start_voice_call: setSoftwareParams failed");
+        LOGE("startVoiceCall: setSoftwareParams failed");
         goto Error;
     }
 
     err = pcm_prepare(handle->handle);
     if(err != NO_ERROR) {
-        LOGE("s_start_voice_call: pcm_prepare failed");
+        LOGE("startVoiceCall: pcm_prepare failed");
         goto Error;
     }
 
     if (ioctl(handle->handle->fd, SNDRV_PCM_IOCTL_START)) {
-        LOGE("s_start_voice_call:SNDRV_PCM_IOCTL_START failed\n");
+        LOGE("startVoiceCall:SNDRV_PCM_IOCTL_START failed\n");
         goto Error;
     }
 
@@ -565,24 +473,24 @@ static status_t s_start_voice_call(alsa_handle_t *handle)
     handle->handle->flags = flags;
     err = setHardwareParams(handle);
     if(err != NO_ERROR) {
-        LOGE("s_start_voice_call: setHardwareParams failed");
+        LOGE("startVoiceCall: setHardwareParams failed");
         goto Error;
     }
 
     err = setSoftwareParams(handle);
     if(err != NO_ERROR) {
-        LOGE("s_start_voice_call: setSoftwareParams failed");
+        LOGE("startVoiceCall: setSoftwareParams failed");
         goto Error;
     }
 
     err = pcm_prepare(handle->handle);
     if(err != NO_ERROR) {
-        LOGE("s_start_voice_call: pcm_prepare failed");
+        LOGE("startVoiceCall: pcm_prepare failed");
         goto Error;
     }
 
     if (ioctl(handle->handle->fd, SNDRV_PCM_IOCTL_START)) {
-        LOGE("s_start_voice_call:SNDRV_PCM_IOCTL_START failed\n");
+        LOGE("startVoiceCall:SNDRV_PCM_IOCTL_START failed\n");
         goto Error;
     }
 
@@ -590,13 +498,13 @@ static status_t s_start_voice_call(alsa_handle_t *handle)
     return NO_ERROR;
 
 Error:
-    LOGE("s_start_voice_call: Failed to initialize ALSA device '%s'", devName);
+    LOGE("startVoiceCall: Failed to initialize ALSA device '%s'", devName);
     free(devName);
-    s_close(handle);
+    close(handle);
     return NO_INIT;
 }
 
-static status_t s_start_fm(alsa_handle_t *handle)
+status_t ALSADevice::startFm(alsa_handle_t *handle)
 {
     char *devName;
     unsigned flags = 0;
@@ -681,38 +589,34 @@ static status_t s_start_fm(alsa_handle_t *handle)
         goto Error;
     }
 
-    s_set_fm_vol(fmVolume);
+    setFmVolume(fmVolume);
     free(devName);
     return NO_ERROR;
 
 Error:
     free(devName);
-    s_close(handle);
+    close(handle);
     return NO_INIT;
 }
 
-static status_t s_set_fm_vol(int value)
+status_t ALSADevice::setFmVolume(int value)
 {
     status_t err = NO_ERROR;
-
-    ALSAControl control("/dev/snd/controlC0");
-    control.set("Internal FM RX Volume",value,0);
+    setMixerControl("Internal FM RX Volume",value,0);
     fmVolume = value;
 
     return err;
 }
 
-static status_t s_set_lpa_vol(int value)
+status_t ALSADevice::setLpaVolume(int value)
 {
     status_t err = NO_ERROR;
-
-    ALSAControl control("/dev/snd/controlC0");
-    control.set("LPA RX Volume",value,0);
+    setMixerControl("LPA RX Volume",value,0);
 
     return err;
 }
 
-static status_t s_start(alsa_handle_t *handle)
+status_t ALSADevice::start(alsa_handle_t *handle)
 {
     status_t err = NO_ERROR;
 
@@ -726,19 +630,19 @@ static status_t s_start(alsa_handle_t *handle)
     return err;
 }
 
-static status_t s_close(alsa_handle_t *handle)
+status_t ALSADevice::close(alsa_handle_t *handle)
 {
     int ret;
     status_t err = NO_ERROR;
      struct pcm *h = handle->rxHandle;
 
     handle->rxHandle = 0;
-    LOGD("s_close: handle %p h %p", handle, h);
+    LOGD("close: handle %p h %p", handle, h);
     if (h) {
-        LOGV("s_close rxHandle\n");
+        LOGV("close rxHandle\n");
         err = pcm_close(h);
         if(err != NO_ERROR) {
-            LOGE("s_close: pcm_close failed for rxHandle with err %d", err);
+            LOGE("close: pcm_close failed for rxHandle with err %d", err);
         }
     }
 
@@ -746,10 +650,10 @@ static status_t s_close(alsa_handle_t *handle)
     handle->handle = 0;
 
     if (h) {
-          LOGV("s_close handle h %p\n", h);
+          LOGV("close handle h %p\n", h);
         err = pcm_close(h);
         if(err != NO_ERROR) {
-            LOGE("s_close: pcm_close failed for handle with err %d", err);
+            LOGE("close: pcm_close failed for handle with err %d", err);
         }
         disableDevice(handle);
     } else if((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
@@ -761,12 +665,12 @@ static status_t s_close(alsa_handle_t *handle)
 }
 
 /*
-    this is same as s_close, but don't discard
+    this is same as close, but don't discard
     the device/mode info. This way we can still
     close the device, hit idle and power-save, reopen the pcm
     for the same device/mode after resuming
 */
-static status_t s_standby(alsa_handle_t *handle)
+status_t ALSADevice::standby(alsa_handle_t *handle)
 {
     int ret;
     status_t err = NO_ERROR;  
@@ -799,7 +703,7 @@ static status_t s_standby(alsa_handle_t *handle)
     return err;
 }
 
-static status_t s_route(alsa_handle_t *handle, uint32_t devices, int mode)
+status_t ALSADevice::route(alsa_handle_t *handle, uint32_t devices, int mode)
 {
     status_t status = NO_ERROR;
 
@@ -809,7 +713,7 @@ static status_t s_route(alsa_handle_t *handle, uint32_t devices, int mode)
     return status;
 }
 
-static void disableDevice(alsa_handle_t *handle)
+void ALSADevice::disableDevice(alsa_handle_t *handle)
 {
     char *useCase;
 
@@ -830,7 +734,7 @@ static void disableDevice(alsa_handle_t *handle)
         snd_use_case_set(handle->ucMgr, "_disdev", curRxUCMDevice);
 }
 
-char *getUCMDevice(uint32_t devices, int input)
+char* ALSADevice::getUCMDevice(uint32_t devices, int input)
 {
     if (!input) {
         if (!(mDevSettingsFlag & TTY_OFF) &&
@@ -980,64 +884,115 @@ char *getUCMDevice(uint32_t devices, int input)
     return NULL;
 }
 
-void s_set_voice_volume(int vol)
+void ALSADevice::setVoiceVolume(int vol)
 {
-    LOGD("s_set_voice_volume: volume %d", vol);
-    ALSAControl control("/dev/snd/controlC0");
-    control.set("Voice Rx Volume", vol, 0);
+    LOGD("setVoiceVolume: volume %d", vol);
+    setMixerControl("Voice Rx Volume", vol, 0);
 }
 
-void s_set_voip_volume(int vol)
+void ALSADevice::setVoipVolume(int vol)
 {
-    LOGD("s_set_voip_volume: volume %d", vol);
-    ALSAControl control("/dev/snd/controlC0");
-    control.set("Voip Rx Volume", vol, 0);
+    LOGD("setVoipVolume: volume %d", vol);
+    setMixerControl("Voip Rx Volume", vol, 0);
 }
-void s_set_mic_mute(int state)
+void ALSADevice::setMicMute(int state)
 {
-    LOGD("s_set_mic_mute: state %d", state);
-    ALSAControl control("/dev/snd/controlC0");
-    control.set("Voice Tx Mute", state, 0);
+    LOGD("setMicMute: state %d", state);
+    setMixerControl("Voice Tx Mute", state, 0);
 }
 
-void s_set_voip_mic_mute(int state)
+void ALSADevice::setVoipMicMute(int state)
 {
-    LOGD("s_set_voip_mic_mute: state %d", state);
-    ALSAControl control("/dev/snd/controlC0");
-    control.set("Voip Tx Mute", state, 0);
+    LOGD("setVoipMicMute: state %d", state);
+    setMixerControl("Voip Tx Mute", state, 0);
 }
 
-void s_set_btsco_rate(int rate)
+void ALSADevice::setBtscoRate(int rate)
 {
     btsco_samplerate = rate;
 }
 
-void s_enable_wide_voice(bool flag)
+void ALSADevice::enableWideVoice(bool flag)
 {
-    LOGD("s_enable_wide_voice: flag %d", flag);
-    ALSAControl control("/dev/snd/controlC0");
+    LOGD("enableWideVoice: flag %d", flag);
     if(flag == true) {
-        control.set("Widevoice Enable", 1, 0);
+        setMixerControl("Widevoice Enable", 1, 0);
     } else {
-        control.set("Widevoice Enable", 0, 0);
+        setMixerControl("Widevoice Enable", 0, 0);
     }
 }
 
-void s_enable_fens(bool flag)
+void ALSADevice::enableFENS(bool flag)
 {
-    LOGD("s_enable_fens: flag %d", flag);
-    ALSAControl control("/dev/snd/controlC0");
+    LOGD("enableFENS: flag %d", flag);
     if(flag == true) {
-        control.set("FENS Enable", 1, 0);
+        setMixerControl("FENS Enable", 1, 0);
     } else {
-        control.set("FENS Enable", 0, 0);
+        setMixerControl("FENS Enable", 0, 0);
     }
 }
 
-void s_set_flags(uint32_t flags)
+void ALSADevice::setFlags(uint32_t flags)
 {
-    LOGV("s_set_flags: flags %d", flags);
+    LOGV("setFlags: flags %d", flags);
     mDevSettingsFlag = flags;
+}
+
+status_t ALSADevice::getMixerControl(const char *name, unsigned int &value, int index)
+{
+    struct mixer_ctl *ctl;
+
+    if (!mMixer) {
+        LOGE("Control not initialized");
+        return NO_INIT;
+    }
+
+    ctl =  mixer_get_control(mMixer, name, index);
+    if (!ctl)
+        return BAD_VALUE;
+
+    mixer_ctl_get(ctl, &value);
+    return NO_ERROR;
+}
+
+status_t ALSADevice::setMixerControl(const char *name, unsigned int value, int index)
+{
+    struct mixer_ctl *ctl;
+    int ret = 0;
+    LOGD("set:: name %s value %d index %d", name, value, index);
+    if (!mMixer) {
+        LOGE("Control not initialized");
+        return NO_INIT;
+    }
+
+    // ToDo: Do we need to send index here? Right now it works with 0
+    ctl = mixer_get_control(mMixer, name, 0);
+    if(ctl == NULL) {
+        LOGE("Could not get the mixer control");
+        return BAD_VALUE;
+    }
+    ret = mixer_ctl_set(ctl, value);
+    return (ret < 0) ? BAD_VALUE : NO_ERROR;
+}
+
+status_t ALSADevice::setMixerControl(const char *name, const char *value)
+{
+    struct mixer_ctl *ctl;
+    int ret = 0;
+    LOGD("set:: name %s value %s", name, value);
+
+    if (!mMixer) {
+        LOGE("Control not initialized");
+        return NO_INIT;
+    }
+
+    ctl = mixer_get_control(mMixer, name, 0);
+    if(ctl == NULL) {
+        LOGE("Could not get the mixer control");
+        return BAD_VALUE;
+    }
+    ret = mixer_ctl_select(ctl, value);
+    return (ret < 0) ? BAD_VALUE : NO_ERROR;
 }
 
 }

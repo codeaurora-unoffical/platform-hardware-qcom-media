@@ -16,7 +16,7 @@
  */
 
 #define LOG_TAG "AudioPolicyManagerALSA"
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_NDDEBUG 0
 #include <utils/Log.h>
 #include "AudioPolicyManagerALSA.h"
@@ -149,7 +149,7 @@ uint32_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strategy, boo
                 // No combo device allowed with proxy device
                 device = 0;
             }
-    #ifdef WITH_A2DP
+#ifdef WITH_A2DP
             if (mA2dpOutput != 0) {
                 if (strategy == STRATEGY_SONIFICATION && !a2dpUsedForSonification()) {
                     break;
@@ -164,7 +164,17 @@ uint32_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strategy, boo
                     device2 = mAvailableOutputDevices & AudioSystem::DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER;
                 }
             }
-    #endif
+#else
+            if (device2 == 0) {
+                device2 = mAvailableOutputDevices & AudioSystem::DEVICE_OUT_BLUETOOTH_A2DP;
+            }
+            if (device2 == 0) {
+                device2 = mAvailableOutputDevices & AudioSystem::DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES;
+            }
+            if (device2 == 0) {
+                device2 = mAvailableOutputDevices & AudioSystem::DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER;
+            }
+#endif
             if (device2 == 0) {
                 device2 = mAvailableOutputDevices & AudioSystem::DEVICE_OUT_AUX_DIGITAL;
             }
@@ -246,13 +256,14 @@ status_t AudioPolicyManager::setDeviceConnectionState(AudioSystem::audio_devices
 
     // handle output devices
     if (AudioSystem::isOutputDevice(device)) {
-
+//#if 0
 #ifndef WITH_A2DP
         if (AudioSystem::isA2dpDevice(device)) {
             LOGE("setDeviceConnectionState() invalid device: %x", device);
             return BAD_VALUE;
         }
-#endif
+#endif 
+//#endif
 
         switch (state)
         {
@@ -560,7 +571,9 @@ void AudioPolicyManager::setPhoneState(int state)
 audio_io_handle_t AudioPolicyManager::getSession(AudioSystem::stream_type stream,
                                     uint32_t format,
                                     AudioSystem::output_flags flags,
-                                    int32_t sessionId)
+                                    int32_t sessionId,
+                                    uint32_t samplingRate,
+                                    uint32_t channels)
 {
     audio_io_handle_t output = 0;
     uint32_t latency = 0;
@@ -576,10 +589,12 @@ audio_io_handle_t AudioPolicyManager::getSession(AudioSystem::stream_type stream
     outputDesc->mFlags = (AudioSystem::output_flags)(flags | AudioSystem::OUTPUT_FLAG_DIRECT);
     outputDesc->mRefCount[stream] = 0;
     output = mpClientInterface->openSession(&outputDesc->mDevice,
-                                    &outputDesc->mFormat,
-                                    outputDesc->mFlags,
-                                    stream,
-                                    sessionId);
+                                            &outputDesc->mFormat,
+                                            outputDesc->mFlags,
+                                            stream,
+                                            sessionId,
+                                            samplingRate,
+                                            channels);
 
     // only accept an output with the requeted parameters
     if ((format != 0 && format != outputDesc->mFormat) || !output) {
@@ -851,10 +866,19 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
     mpClientInterface->setParameters(mHardwareOutput, param.toString(), delayMs);
     // update stream volumes according to new device
     AudioPolicyManagerBase::applyStreamVolumes(output, device, delayMs);
+#if 1
     if((mLPADecodeOutput != -1 &&
         mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
         AudioPolicyManagerBase::applyStreamVolumes(mLPADecodeOutput, device, delayMs);
     }
+#else
+    if(mLPADecodeOutput != -1) {
+        mpClientInterface->setParameters(mLPADecodeOutput, param.toString(), delayMs);
+        if(output != mLPADecodeOutput) {
+            AudioPolicyManagerBase::applyStreamVolumes(mLPADecodeOutput, device, delayMs);
+        }
+    }
+#endif
 
 #ifdef WITH_A2DP
     // if disconnecting SCO device, restore A2DP output

@@ -31,6 +31,7 @@
 extern "C" {
    #include <sound/asound.h>
    #include "alsa_audio.h"
+   // ToDo: For now we are depending on 8960, it should be made generic
    #include "msm8960_use_cases.h"
 }
 
@@ -74,8 +75,8 @@ class AudioHardwareALSA;
 #define TTY_MODE_KEY        "tty_mode"
 #define BT_SAMPLERATE_KEY   "bt_samplerate"
 #define BTHEADSET_VGS       "bt_headset_vgs"
-#define WIDEVOICE_KEY "wide_voice_enable"
-#define FENS_KEY "fens_enable"
+#define WIDEVOICE_KEY       "wide_voice_enable"
+#define FENS_KEY            "fens_enable"
 
 #define ANC_FLAG        0x00000001
 #define DMIC_FLAG       0x00000002
@@ -86,18 +87,28 @@ class AudioHardwareALSA;
 #define TTY_HCO         0x00000080
 #define TTY_CLEAR       0xFFFFFF0F
 
-struct alsa_device_t;
+#ifndef ALSA_DEFAULT_SAMPLE_RATE
+#define ALSA_DEFAULT_SAMPLE_RATE 44100 // in Hz
+#endif
+
+#define LPA_SESSION_ID -1
+#define NORMAL_PLAYBACK_SESSION_ID 1
+#define TUNNEL_AUDIO_SESSION_ID 2
+
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
+class ALSADevice;
+class ALSAControl;
 
 struct alsa_handle_t {
-    alsa_device_t *     module;
+    ALSADevice*         module;
     uint32_t            devices;
     char                useCase[MAX_STR_LEN];
     struct pcm *        handle;
     snd_pcm_format_t    format;
     uint32_t            channels;
     uint32_t            sampleRate;
+    int                 mode;            // Phone state i.e. incall/normal/incommunication
     unsigned int        latency;         // Delay in usec
     unsigned int        bufferSize;      // Size of sample buffer
     unsigned int        periodSize;
@@ -107,49 +118,55 @@ struct alsa_handle_t {
 
 typedef List<alsa_handle_t> ALSAHandleList;
 
-struct alsa_device_t {
-    hw_device_t common;
-
-    status_t (*init)(alsa_device_t *, ALSAHandleList &);
-    status_t (*open)(alsa_handle_t *);
-    status_t (*close)(alsa_handle_t *);
-    status_t (*standby)(alsa_handle_t *);
-    status_t (*route)(alsa_handle_t *, uint32_t, int);
-    status_t (*startVoiceCall)(alsa_handle_t *);
-    status_t (*startVoipCall)(alsa_handle_t *);
-    status_t (*startFm)(alsa_handle_t *);
-    void     (*setVoiceVolume)(int);
-    void     (*setVoipVolume)(int);
-    void     (*setMicMute)(int);
-    void     (*setVoipMicMute)(int);
-    status_t (*setFmVolume)(int);
-    void     (*setBtscoRate)(int);
-    status_t (*setLpaVolume)(int);
-    void     (*enableWideVoice)(bool);
-    void     (*enableFENS)(bool);
-    void     (*setFlags)(uint32_t);
-};
-
 // ----------------------------------------------------------------------------
 
-class ALSAMixer
+class ALSADevice
 {
 public:
-    ALSAMixer();
-    virtual                ~ALSAMixer();
+    ALSADevice();
+    virtual                ~ALSADevice();
 
-    bool                    isValid() { return 1;}
-    status_t                setMasterVolume(float volume);
-    status_t                setMasterGain(float gain);
+    //status_t    init(ALSADevice *module, ALSAHandleList &list);
+    status_t    open(alsa_handle_t *handle);
+    status_t    startVoipCall(alsa_handle_t *handle);
+    status_t    startVoiceCall(alsa_handle_t *handle);
+    status_t    startFm(alsa_handle_t *handle);
+    status_t    setFmVolume(int value);
+    status_t    setLpaVolume(int value);
+    status_t    start(alsa_handle_t *handle);
+    status_t    close(alsa_handle_t *handle);
+    status_t    standby(alsa_handle_t *handle);
+    status_t    route(alsa_handle_t *handle, uint32_t devices, int mode);
+    void        disableDevice(alsa_handle_t *handle);
+    char*       getUCMDevice(uint32_t devices, int input);
+    void        setVoiceVolume(int vol);
+    void        setVoipVolume(int vol);
+    void        setMicMute(int state);
+    void        setVoipMicMute(int state);
+    void        setBtscoRate(int rate);
+    void        enableWideVoice(bool flag);
+    void        enableFENS(bool flag);
+    void        setFlags(uint32_t flags);
 
-    status_t                setVolume(uint32_t device, float left, float right);
-    status_t                setGain(uint32_t device, float gain);
+private:
 
-    status_t                setCaptureMuteState(uint32_t device, bool state);
-    status_t                getCaptureMuteState(uint32_t device, bool *state);
-    status_t                setPlaybackMuteState(uint32_t device, bool state);
-    status_t                getPlaybackMuteState(uint32_t device, bool *state);
+    int         deviceName(alsa_handle_t *handle, unsigned flags, char **value);
+    status_t    setHardwareParams(alsa_handle_t *handle);
+    status_t    setSoftwareParams(alsa_handle_t *handle);
+    void        switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode);
+    status_t    getMixerControl(const char *name, unsigned int &value, int index);
+    status_t    setMixerControl(const char *name, unsigned int value, int index);
+    status_t    setMixerControl(const char *name, const char *value);
 
+    char        mic_type[25];
+    char        curRxUCMDevice[50];
+    char        curTxUCMDevice[50];
+    int         fluence_mode;
+    int         fmVolume;
+    uint32_t    mDevSettingsFlag;
+    int         btsco_samplerate;
+    int         callMode;
+    struct mixer*  mMixer;
 };
 
 class ALSAControl
@@ -223,6 +240,7 @@ public:
     virtual uint32_t    latency() const;
 
     virtual ssize_t     write(const void *buffer, size_t bytes);
+
     virtual status_t    dump(int fd, const Vector<String16>& args);
 
     status_t            setVolume(float left, float right);
@@ -246,9 +264,203 @@ public:
 
 private:
     uint32_t            mFrameCount;
+    alsa_handle_t *     mPcmRxHandle;
+    alsa_handle_t *     mSpdifRxHandle;
+    alsa_handle_t *     mCompreRxHandle;
 
 protected:
     AudioHardwareALSA *     mParent;
+};
+
+// ----------------------------------------------------------------------------
+
+class AudioSessionOutALSA : public AudioStreamOut
+{
+public:
+    AudioSessionOutALSA(AudioHardwareALSA *parent, 
+                        uint32_t   devices,
+                        int        format,
+                        uint32_t   channels,
+                        uint32_t   samplingRate,
+                        int        sessionId,
+                        status_t   *status);
+    virtual            ~AudioSessionOutALSA();
+
+    virtual uint32_t    sampleRate() const
+    {
+        return mSampleRate;
+    }
+
+    virtual size_t      bufferSize() const
+    {
+        return mBufferSize;
+    }
+
+    virtual uint32_t    channels() const 
+    {
+        return mChannels;
+    }
+
+    virtual int         format() const
+    {
+        return mFormat;
+    }
+
+    virtual uint32_t    latency() const;
+
+    virtual ssize_t     write(const void *buffer, size_t bytes);
+
+    virtual status_t    start(int64_t startTime);
+    virtual status_t    pause();
+    virtual status_t    flush();
+    virtual status_t    resume();
+    virtual status_t    stop();
+
+    virtual status_t    dump(int fd, const Vector<String16>& args);
+
+    status_t            setVolume(float left, float right);
+
+    virtual status_t    standby();
+
+    virtual status_t    setParameters(const String8& keyValuePairs);
+
+    virtual String8     getParameters(const String8& keys);
+
+    // return the number of audio frames written by the audio dsp to DAC since
+    // the output has exited standby
+    virtual status_t    getRenderPosition(uint32_t *dspFrames);
+
+private:
+    Mutex               mLock;
+    uint32_t            mFrameCount;
+    uint32_t            mSampleRate;
+    uint32_t            mChannels;
+    size_t              mBufferSize;
+    int                 mFormat;
+    int                 mDevices;
+    uint32_t            mStreamVol;
+    bool                mPowerLock;
+    bool                mRoutePcmAudio;
+    bool                mRouteCompreAudio;
+    bool                mRoutePcmToSpdif;
+    bool                mRouteCompreToSpdif;
+    bool                mRouteAudioToA2dp;
+    bool                mUseTunnelDecode;
+    bool                mCaptureFromProxy;
+    bool                mA2dpOutputStarted;
+    bool                mExitA2dpThread;
+
+    AudioHardwareALSA  *mParent;
+    alsa_handle_t *     mPcmRxHandle;
+    alsa_handle_t *     mPcmTxHandle;
+    alsa_handle_t *     mSpdifRxHandle;
+    alsa_handle_t *     mCompreRxHandle;
+    ALSADevice *        mALSADevice;
+    snd_use_case_mgr_t *mUcMgr;
+    void               *mMS11Decoder;
+    struct pcm         *mProxyPcmHandle;
+    audio_stream_out   *mA2dpStream;
+    audio_hw_device_t  *mA2dpDevice;
+    pthread_t           mA2dpThread;
+
+    status_t            openDevice(char *pUseCase, bool bIsUseCase, int devices);
+    status_t            closeDevice(alsa_handle_t *pDevice);
+    status_t            doRouting(int devices);
+    status_t            openProxyDevice();
+    status_t            openA2dpOutput();
+    status_t            closeA2dpOutput();
+    status_t            startA2dpOutput();
+    status_t            stopA2dpOutput();
+    static void*        a2dpThreadWrapper(void *context);
+    void                a2dpThreadFunc();
+};
+
+// ----------------------------------------------------------------------------
+
+class AudioBroadcastStreamALSA : public AudioBroadcastStream
+{
+public:
+    AudioBroadcastStreamALSA(AudioHardwareALSA *parent, 
+                             uint32_t  devices,
+                             int      *format,
+                             uint32_t *channels,
+                             uint32_t *sampleRate,
+                             uint32_t audioSource,
+                             status_t *status);
+
+    virtual            ~AudioBroadcastStreamALSA();
+
+    virtual uint32_t    sampleRate() const
+    {
+        return mSampleRate;
+    }
+
+    virtual size_t      bufferSize() const
+    {
+        return mBufferSize;
+    }
+
+    virtual uint32_t    channels() const
+    {
+        return mChannels;
+    }
+
+    virtual int         format() const
+    {
+        return mFormat;
+    }
+
+    virtual uint32_t    latency() const;
+
+    virtual ssize_t     write(const void *buffer, size_t bytes, int64_t timestamp, int audiotype);
+
+    virtual status_t    dump(int fd, const Vector<String16>& args);
+
+    virtual status_t    start(int64_t absTimeToStart);
+
+    virtual status_t    mute(bool mute);
+
+    status_t            setVolume(float left, float right);
+
+    virtual status_t    standby();
+
+    virtual status_t    setParameters(const String8& keyValuePairs);
+
+    virtual String8     getParameters(const String8& keys);
+
+    // return the number of audio frames written by the audio dsp to DAC since
+    // the output has exited standby
+    virtual status_t    getRenderPosition(uint32_t *dspFrames);
+
+private:
+    uint32_t            mFrameCount;
+    uint32_t            mSampleRate;
+    uint32_t            mChannels;
+    size_t              mBufferSize;
+    int                 mFormat;
+    int                 mDevices;
+    uint32_t            mSource;
+    uint32_t            mStreamVol;
+    bool                mRoutePcmStereo;
+    bool                mRouteCompressedAudio;
+    bool                mRouteAudioToSpdif;
+    bool                mSetupDSPLoopback;
+    bool                mPullAudioFromDSP;
+    bool                mOpenMS11Decoder;
+    // ALSA device handle to PCM 2.0 playback
+    alsa_handle_t      *mPcmRxHandle;
+    // ALSA device handle to PCM 5.1 capture from DSP
+    alsa_handle_t      *mPcmTxHandle;
+    // ALSA device handle to Compressed audio playback
+    alsa_handle_t      *mComprRxHandle;
+    // ALSA device handle to Compressed audio capture from DSP
+    alsa_handle_t      *mComprTxHandle;
+    // ALSA device handle to Compressed audio routing to SPDIF device
+    alsa_handle_t      *mSpdifHandle;
+    void               *mMS11Decoder;
+protected:
+    AudioHardwareALSA  *mParent;
+    bool                mPowerLock;
 };
 
 class AudioStreamInALSA : public AudioStreamIn, public ALSAStreamOps
@@ -372,24 +584,36 @@ public:
       *  session for LPA */
     virtual AudioStreamOut* openOutputSession(
             uint32_t devices,
-            int *format,
+            int      *format,
             status_t *status,
-            int sessionId);
+            int      sessionId,
+            uint32_t samplingRate, 
+            uint32_t channels);
     virtual void closeOutputSession(AudioStreamOut* out);
 
     /** This method creates and opens the audio hardware output stream */
     virtual AudioStreamOut* openOutputStream(
             uint32_t devices,
-            int *format=0,
+            int      *format=0,
             uint32_t *channels=0,
             uint32_t *sampleRate=0,
             status_t *status=0);
     virtual    void        closeOutputStream(AudioStreamOut* out);
 
+    /** This method creates and opens the audio hardware output stream */
+    virtual AudioBroadcastStream* openBroadcastStream(
+            uint32_t  devices,
+            int      *format=0,
+            uint32_t *channels=0,
+            uint32_t *sampleRate=0,
+            uint32_t audioSource=0,
+            status_t *status=0);
+    virtual    void        closeBroadcastStream(AudioBroadcastStream* out);
+
     /** This method creates and opens the audio hardware input stream */
     virtual AudioStreamIn* openInputStream(
             uint32_t devices,
-            int *format,
+            int      *format,
             uint32_t *channels,
             uint32_t *sampleRate,
             status_t *status,
@@ -410,17 +634,17 @@ protected:
     virtual status_t    dump(int fd, const Vector<String16>& args);
     void                doRouting(int device);
 
+    friend class AudioBroadcastStreamALSA;
+    friend class AudioSessionOutALSA;
     friend class AudioStreamOutALSA;
     friend class AudioStreamInALSA;
     friend class ALSAStreamOps;
 
-    alsa_device_t *     mALSADevice;
-
-    ALSAHandleList      mDeviceList;
-
-    Mutex                   mLock;
-
+    ALSADevice*         mALSADevice;
     snd_use_case_mgr_t *mUcMgr;
+    ALSAHandleList      mDeviceList;
+    Mutex               mLock;
+
 
     uint32_t            mCurDevice;
     /* The flag holds all the audio related device settings from
@@ -431,9 +655,9 @@ protected:
     uint32_t            mIncallMode;
 
     bool                mMicMute;
-    int mIsVoiceCallActive;
-    int mIsFmActive;
-    bool mBluetoothVGS;
+    int                 mIsVoiceCallActive;
+    int                 mIsFmActive;
+    bool                mBluetoothVGS;
 };
 
 // ----------------------------------------------------------------------------

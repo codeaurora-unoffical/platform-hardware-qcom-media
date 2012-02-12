@@ -61,57 +61,44 @@ AudioHardwareALSA::AudioHardwareALSA() :
 {
     FILE *fp;
     char cpuInfo[200];
-    hw_module_t *module;
-    int err = hw_get_module(ALSA_HARDWARE_MODULE_ID,
-            (hw_module_t const**)&module);
+    int err;
     int codec_rev = 2;
     LOGD("hw_get_module(ALSA_HARDWARE_MODULE_ID) returned err %d", err);
-    if (err == 0) {
-        hw_device_t* device;
-        err = module->methods->open(module, ALSA_HARDWARE_NAME, &device);
-        if (err == 0) {
-            mALSADevice = (alsa_device_t *)device;
-            mALSADevice->init(mALSADevice, mDeviceList);
-            mIsVoiceCallActive = 0;
-            mIsFmActive = 0;
-            mDevSettingsFlag = 0;
-            mDevSettingsFlag |= TTY_OFF;
-            mBluetoothVGS = false;
+    mALSADevice = new ALSADevice();
+    mDeviceList.clear();
+    mIsVoiceCallActive = 0;
+    mIsFmActive = 0;
+    mDevSettingsFlag = 0;
+    mDevSettingsFlag |= TTY_OFF;
+    mBluetoothVGS = false;
 
-
-            if((fp = fopen("/proc/cpuinfo","r")) == NULL) {
-                LOGE("Cannot open /proc/cpuinfo file to get CPU variant");
-            } else {
-                while((fgets(cpuInfo, sizeof(cpuInfo), fp) != NULL)) {
-                    if (strstr(cpuInfo, "CPU variant")) {
-                        LOGV("%s", cpuInfo);
-                        if (strstr(cpuInfo, "0x0")) {
-                            codec_rev = 1;
-                        }
-                        break;
-                    }
-                }
-                fclose(fp);
-            }
-
-            if (codec_rev == 1) {
-                    LOGV("Detected tabla 1.x sound card");
-                    snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm");
-            } else {
-                    LOGV("Detected tabla 2.x sound card");
-                    snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_2x");
-            }
-
-            if (mUcMgr < 0) {
-                LOGE("Failed to open ucm instance: %d", errno);
-            } else {
-                LOGI("ucm instance opened: %u", (unsigned)mUcMgr);
-            }
-        } else {
-            LOGE("ALSA Module could not be opened!!!");
-        }
+    if((fp = fopen("/proc/cpuinfo","r")) == NULL) {
+        LOGE("Cannot open /proc/cpuinfo file to get CPU variant");
     } else {
-        LOGE("ALSA Module not found!!!");
+        while((fgets(cpuInfo, sizeof(cpuInfo), fp) != NULL)) {
+            if (strstr(cpuInfo, "CPU variant")) {
+                LOGV("%s", cpuInfo);
+                if (strstr(cpuInfo, "0x0")) {
+                    codec_rev = 1;
+                }
+                break;
+            }
+        }
+        fclose(fp);
+    }
+
+    if (codec_rev == 1) {
+        LOGV("Detected tabla 1.x sound card");
+        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm");
+    } else {
+        LOGV("Detected tabla 2.x sound card");
+        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_2x");
+    }
+
+    if (mUcMgr < 0) {
+        LOGE("Failed to open ucm instance: %d", errno);
+    } else {
+        LOGI("ucm instance opened: %u", (unsigned)mUcMgr);
     }
 }
 
@@ -122,7 +109,7 @@ AudioHardwareALSA::~AudioHardwareALSA()
         snd_use_case_mgr_close(mUcMgr);
     }
     if (mALSADevice) {
-        mALSADevice->common.close(&mALSADevice->common);
+        delete mALSADevice;
     }
     for(ALSAHandleList::iterator it = mDeviceList.begin();
             it != mDeviceList.end(); ++it) {
@@ -175,7 +162,7 @@ status_t  AudioHardwareALSA::setFmVolume(float value)
 {
     status_t status = NO_ERROR;
 
-    int vol = android::AudioSystem::logToLinear( (value?(value+0.005):value) );
+    int vol = value * 100; //android::AudioSystem::logToLinear( (value?(value+0.005):value) );
 
     if (vol > 100)
         vol = 100;
@@ -485,9 +472,51 @@ void AudioHardwareALSA::doRouting(int device)
     } else {
         ALSAHandleList::iterator it = mDeviceList.end();
         it--;
+        // ToDo: to use snd_use_case_set_case API here
         mALSADevice->route(&(*it), (uint32_t)device, newMode);
     }
     mCurDevice = device;
+}
+
+AudioBroadcastStream *
+AudioHardwareALSA::openBroadcastStream(uint32_t  devices,
+                                       int      *format,
+                                       uint32_t *channels,
+                                       uint32_t *sampleRate,
+                                       uint32_t audioSource,
+                                       status_t *status)
+{
+    Mutex::Autolock autoLock(mLock);
+    status_t err = BAD_VALUE;
+    AudioBroadcastStreamALSA *out = 0;
+
+    // 1. Check for validity of the output devices
+    if(devices == 0) {
+        LOGE("openBroadcastStream:: No output device specified");
+        if (status) *status = err;
+        return out;
+    }
+#if 0
+    // 2. Check if the output devices contain SPDIF also
+    if(devices & AudioSystem::DEVICE_OUT_SPDIF && mIsSpdifDeviceBusy) {
+        LOGW("SPDIF device is busy, removing the SPDIF from the list ");
+        devices &= ~AudioSystem::DEVICE_OUT_SPDIF;
+    }        
+#endif
+    out = new AudioBroadcastStreamALSA(this, devices, format, channels, 
+                                       sampleRate, audioSource, &err);
+    if(err != OK) {
+        delete out;
+        out = NULL;
+    }
+    if (status) *status = err;
+    return out;
+}
+
+void
+AudioHardwareALSA::closeBroadcastStream(AudioBroadcastStream* out)
+{
+    delete out;
 }
 
 AudioStreamOut *
@@ -581,9 +610,7 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
       }
       if (status) *status = err;
       return out;
-    } else
-    {
-
+    } else {
       alsa_handle_t alsa_handle;
       unsigned long bufferSize = DEFAULT_BUFFER_SIZE;
 
@@ -642,53 +669,21 @@ AudioStreamOut *
 AudioHardwareALSA::openOutputSession(uint32_t devices,
                                      int *format,
                                      status_t *status,
-                                     int sessionId)
+                                     int sessionId,
+                                     uint32_t samplingRate, 
+                                     uint32_t channels)
 {
     Mutex::Autolock autoLock(mLock);
     LOGD("openOutputSession");
-    AudioStreamOutALSA *out = 0;
     status_t err = BAD_VALUE;
-
-    alsa_handle_t alsa_handle;
-    unsigned long bufferSize = DEFAULT_BUFFER_SIZE;
-
-    for (size_t b = 1; (bufferSize & ~b) != 0; b <<= 1)
-        bufferSize &= ~b;
-
-    alsa_handle.module = mALSADevice;
-    alsa_handle.bufferSize = bufferSize;
-    alsa_handle.devices = devices;
-    alsa_handle.handle = 0;
-    alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
-    alsa_handle.channels = DEFAULT_CHANNEL_MODE;
-    alsa_handle.sampleRate = DEFAULT_SAMPLING_RATE;
-    alsa_handle.latency = VOICE_LATENCY;
-    alsa_handle.rxHandle = 0;
-    alsa_handle.ucMgr = mUcMgr;
-
-    char *use_case;
-    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-    if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
-        strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER, sizeof(alsa_handle.useCase));
-    } else {
-        strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_LPA, sizeof(alsa_handle.useCase));
+    AudioSessionOutALSA *out = new AudioSessionOutALSA(this, devices, *format, channels,
+                                                       samplingRate, sessionId, &err);
+    if(err != NO_ERROR) {
+        delete out;
+        out = NULL;
     }
-    free(use_case);
-    mDeviceList.push_back(alsa_handle);
-    ALSAHandleList::iterator it = mDeviceList.end();
-    it--;
-    LOGD("useCase %s", it->useCase);
-    mALSADevice->route(&(*it), devices, mode());
-    if(!strcmp(it->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) {
-        snd_use_case_set(mUcMgr, "_verb", SND_USE_CASE_VERB_HIFI_LOW_POWER);
-    } else {
-        snd_use_case_set(mUcMgr, "_enamod", SND_USE_CASE_MOD_PLAY_LPA);
-    }
-    err = mALSADevice->open(&(*it));
-    out = new AudioStreamOutALSA(this, &(*it));
-
     if (status) *status = err;
-       return out;
+    return out;
 }
 
 void
