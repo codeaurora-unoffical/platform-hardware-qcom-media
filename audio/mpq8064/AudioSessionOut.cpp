@@ -68,15 +68,24 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         LOGE("Invalid number of channels %d", channels);
         return;
     }
-
     // Default initilization
     mParent         = parent;
     mALSADevice     = mParent->mALSADevice;
     mUcMgr          = mParent->mUcMgr;
     mFrameCount     = 0;
     mFormat         = format;
-    mSampleRate     = samplingRate;
-    mChannels       = channels;
+    if(mFormat == AUDIO_FORMAT_AC3 || format == AUDIO_FORMAT_AC3_PLUS) {
+        mSampleRate     = 48000;
+        mChannels       = 2;
+    } else {
+        if(samplingRate > 48000) {
+            LOGE("Sample rate >48000, opening the driver with 48000Hz");
+            mSampleRate     = 48000;
+        } else {
+            mSampleRate     = samplingRate;
+        }
+        mChannels       = channels;
+    }
     mDevices        = devices;
     mBufferSize     = 0;
     *status         = BAD_VALUE;
@@ -88,12 +97,15 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mRouteCompreToSpdif = false;
     mRouteAudioToA2dp   = false;
     mA2dpOutputStarted  = false;
+    mOpenMS11Decoder    = false;
 
     mPcmRxHandle        = NULL;
     mPcmTxHandle        = NULL;
     mSpdifRxHandle      = NULL;
     mCompreRxHandle     = NULL;
     mProxyPcmHandle     = NULL;
+    mMS11Decoder        = NULL;
+    mBitstreamSM        = NULL;
 
     if(mDevices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
         mCaptureFromProxy = true;
@@ -103,10 +115,39 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         //mDevices |= AudioSystem::DEVICE_OUT_PROXY;
         mDevices = AudioSystem::DEVICE_OUT_PROXY;
     }
+
     if(format == AUDIO_FORMAT_AAC || format == AUDIO_FORMAT_HE_AAC_V1 ||
        format == AUDIO_FORMAT_HE_AAC_V2 || format == AUDIO_FORMAT_AC3 ||
        format == AUDIO_FORMAT_AC3_PLUS) {
         // Instantiate MS11 decoder for single decode use case
+        int32_t format_ms11;
+        mMS11Decoder = new SoftMS11;
+        if(mMS11Decoder->initializeMS11FunctionPointers() == false) {
+            LOGE("Could not resolve all symbols Required for MS11");
+            delete mMS11Decoder;
+            return;
+        }
+        mBitstreamSM = new AudioBitstreamSM;
+        if(false == mBitstreamSM->initBitstreamPtr()) {
+            LOGE("Unable to allocate Memory for i/p and o/p buffering for MS11");
+            delete mMS11Decoder;
+            delete mBitstreamSM;
+            return;
+        }
+        if(format == AUDIO_FORMAT_AAC || format == AUDIO_FORMAT_HE_AAC_V1 ||
+           format == AUDIO_FORMAT_HE_AAC_V2)
+            format_ms11 = FORMAT_DOLBY_PULSE_MAIN;
+        else
+            format_ms11 = FORMAT_DOLBY_DIGITAL_PLUS_MAIN;
+        if(mMS11Decoder->setUseCaseAndOpenStream(format_ms11,channels,samplingRate)) {
+            LOGE("SetUseCaseAndOpen MS11 failed");
+            delete mMS11Decoder;
+            delete mBitstreamSM;
+            return;
+        }
+        mOpenMS11Decoder= true; // indicates if MS11 decoder is instantiated
+        aacConfigDataSet = false; // flags if AAC config to be set(which is sent in first buffer)
+
         if(mDevices & ~AudioSystem::DEVICE_OUT_SPDIF) {
             mRoutePcmAudio = true;
         }
@@ -126,6 +167,22 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         }
         if(channels > 2 && channels <= 6) {
             // Instantiate MS11 decoder for downmix and re-encode
+            mMS11Decoder = new SoftMS11;
+            if(mMS11Decoder->initializeMS11FunctionPointers() == false) {
+                LOGE("Could not resolve all symbols Required for MS11");
+                return;
+            }
+            mBitstreamSM = new AudioBitstreamSM;
+            if(false == mBitstreamSM->initBitstreamPtr()) {
+                LOGE("Unable to allocate Memory for i/p and o/p buffering for MS11");
+                return;
+            }
+            if(mMS11Decoder->setUseCaseAndOpenStream(FORMAT_EXTERNAL_PCM,channels,samplingRate)) {
+                LOGE("SetUseCaseAndOpen MS11 failed");
+               return;
+            }
+            mOpenMS11Decoder=true;
+
             if(devices & AudioSystem::DEVICE_OUT_SPDIF) {
                 mRouteCompreToSpdif = true;
             }
@@ -224,6 +281,10 @@ AudioSessionOutALSA::~AudioSessionOutALSA()
         stopA2dpOutput();
         closeA2dpOutput();
     }
+    if(mOpenMS11Decoder == true) {
+        delete mMS11Decoder;
+        delete mBitstreamSM;
+    }
 }
 
 status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
@@ -298,54 +359,150 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         acquire_wake_lock (PARTIAL_WAKE_LOCK, "AudioSessionOutLock");
         mPowerLock = true;
     }
-
     snd_pcm_sframes_t n;
     size_t            sent = 0;
     status_t          err;
-
     // 1. Check if MS11 decoder instance is present and if present we need to
     //    preserve the data and supply it to MS 11 decoder.
     if(mMS11Decoder != NULL) {
-    }
+        // If MS11, the first buffer in AAC format has the AAC config data.
 
-    // 2. Get the output data from MS11 decoder and write to PCM driver
-    if(mPcmRxHandle && mRoutePcmAudio) {
-        int write_pending = bytes;
-        period_size = mPcmRxHandle->periodSize;
-        do {
-            if (write_pending < period_size) {
-                LOGE("write:: We should not be here !!!");
-                write_pending = period_size;
+        if(mFormat == AUDIO_FORMAT_AAC || mFormat == AUDIO_FORMAT_HE_AAC_V1 ||
+           mFormat == AUDIO_FORMAT_HE_AAC_V2) {
+            if(aacConfigDataSet == false) {
+                if(mMS11Decoder->setAACConfig((unsigned char *)buffer, bytes) == true);
+                    aacConfigDataSet = true;
+                return bytes;
             }
-            LOGE("Calling pcm_write");
-            n = pcm_write(mPcmRxHandle->handle,
-                     (char *)buffer + sent,
-                      period_size);
-            LOGE("pcm_write returned with %d", n);
-            if (n == -EBADFD) {
-                // Somehow the stream is in a bad state. The driver probably
-                // has a bug and snd_pcm_recover() doesn't seem to handle this.
-                mPcmRxHandle->module->open(mPcmRxHandle);
-            }
-            else if (n < 0) {
-                // Recovery is part of pcm_write. TODO split is later.
-                LOGE("pcm_write returned n < 0");
-                return static_cast<ssize_t>(n);
-            }
-            else {
-                mFrameCount += n;
-                sent += static_cast<ssize_t>((period_size));
-                write_pending -= period_size;
-            }
-        } while ((mPcmRxHandle->handle) && (sent < bytes));
+        }
 
-        if(mRouteAudioToA2dp && !mA2dpOutputStarted) {
-            startA2dpOutput();
-            mA2dpOutputStarted = true;
+        bool    continueDecode=false;
+        size_t  bytesConsumedInDecode;
+        size_t  copyBytesMS11;
+        size_t  minBytesReqToDecode;
+        char    *bufPtr;
+        uint32_t outSampleRate=mSampleRate,outChannels=mChannels;
+        // If format is PCM, the minimum bytes to decode is 1536 per channel. Otherwise 0.
+        if (mFormat == AUDIO_FORMAT_PCM_16_BIT)
+            minBytesReqToDecode = PCM_BLOCK_PER_CHANNEL_MS11*mChannels-1;
+        else
+            minBytesReqToDecode = 0;
+        mBitstreamSM->copyBitsreamToInternalBuffer((char *)buffer, bytes);
+
+        do
+        {
+            // flag indicating if the decoding has to be continued so as to
+            // get all the output held up with MS11. Examples, AAC can have an
+            // output frame of 4096 bytes. While the output of MS11 is 1536, the
+            // decoder has to be called more than twice to get the reside samples.
+            continueDecode=false;
+            if(mBitstreamSM->sufficientBitstreamToDecode(minBytesReqToDecode) == true)
+            {
+                bufPtr = mBitstreamSM->getInputBufferPtr();
+                copyBytesMS11 = mBitstreamSM->bitStreamBufSize();
+
+                mMS11Decoder->copyBitstreamToMS11InpBuf(bufPtr,copyBytesMS11);
+                bytesConsumedInDecode = mMS11Decoder->streamDecode(&outSampleRate,&outChannels);
+                bufPtr=mBitstreamSM->getOutputBufferWritePtr(PCM_2CH_OUT);
+                copyBytesMS11 = mMS11Decoder->copyOutputFromMS11Buf(PCM_2CH_OUT,bufPtr);
+
+                mBitstreamSM->copyResidueBitstreamToStart(bytesConsumedInDecode);
+                // Note: Set the output Buffer to start for for changein sample rate and channel
+                // This has to be done.
+
+                mBitstreamSM->setOutputBufferWritePtr(PCM_2CH_OUT,copyBytesMS11);
+                // If output samples size is zero, donot continue and wait for next
+                // write for decode
+                if(copyBytesMS11)
+                    continueDecode = true;
+            }
+            // Close and open the driver again if the output sample rate change is observed
+            // in decode.
+            if(mPcmRxHandle && mRoutePcmAudio) {
+                if( (mSampleRate != outSampleRate) || (mChannels != outChannels)) {
+                    uint32_t devices;
+                    status_t status = closeDevice(mPcmRxHandle);
+                    mSampleRate = outSampleRate;
+                    mChannels = outChannels;
+                    if(!mRoutePcmToSpdif) {
+                        devices = mDevices & ~AudioSystem::DEVICE_OUT_SPDIF;
+                    }
+                    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+                    if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+                        status = openDevice(SND_USE_CASE_VERB_HIFI2, true, devices);
+                    } else {
+                        status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
+                    }
+                    free(use_case);
+                    if(status != NO_ERROR) {
+                        LOGE("Error opening the driver");
+                        break;
+                    }
+                    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+                    mPcmRxHandle = &(*it);
+                }
+            }
+            if(mPcmRxHandle && mRoutePcmAudio) {
+                period_size = mPcmRxHandle->periodSize;
+                while(mBitstreamSM->sufficientSamplesToRender(PCM_2CH_OUT,period_size) == true) {
+                    n = pcm_write(mPcmRxHandle->handle,
+                             mBitstreamSM->getOutputBufferPtr(PCM_2CH_OUT),
+                              period_size);
+                    LOGE("pcm_write returned with %d", n);
+                    if (n == -EBADFD) {
+                        // Somehow the stream is in a bad state. The driver probably
+                        // has a bug and snd_pcm_recover() doesn't seem to handle this.
+                        mPcmRxHandle->module->open(mPcmRxHandle);
+                    } else if (n < 0) {
+                        // Recovery is part of pcm_write. TODO split is later.
+                        LOGE("pcm_write returned n < 0");
+                        return static_cast<ssize_t>(n);
+                    } else {
+                        mFrameCount++;
+                        sent += static_cast<ssize_t>((period_size));
+                        mBitstreamSM->copyResidueOutputToStart(PCM_2CH_OUT,period_size);
+                    }
+                }
+            }
+	} while( (continueDecode == true) && (mBitstreamSM->sufficientBitstreamToDecode(minBytesReqToDecode) == true));
+    } else {
+        // 2. Get the output data from MS11 decoder and write to PCM driver
+        if(mPcmRxHandle && mRoutePcmAudio) {
+            int write_pending = bytes;
+            period_size = mPcmRxHandle->periodSize;
+            do {
+                if (write_pending < period_size) {
+                    LOGE("write:: We should not be here !!!");
+                    write_pending = period_size;
+                }
+                LOGE("Calling pcm_write");
+                n = pcm_write(mPcmRxHandle->handle,
+                         (char *)buffer + sent,
+                          period_size);
+                LOGE("pcm_write returned with %d", n);
+                if (n == -EBADFD) {
+                    // Somehow the stream is in a bad state. The driver probably
+                    // has a bug and snd_pcm_recover() doesn't seem to handle this.
+                    mPcmRxHandle->module->open(mPcmRxHandle);
+                }
+                else if (n < 0) {
+                    // Recovery is part of pcm_write. TODO split is later.
+                    LOGE("pcm_write returned n < 0");
+                    return static_cast<ssize_t>(n);
+                }
+                else {
+                    mFrameCount++;
+                    sent += static_cast<ssize_t>((period_size));
+                    write_pending -= period_size;
+                }
+            } while ((mPcmRxHandle->handle) && (sent < bytes));
+            if(mRouteAudioToA2dp && !mA2dpOutputStarted) {
+                startA2dpOutput();
+                mA2dpOutputStarted = true;
+            }
         }
     }
-
-    return bytes;
+    return sent;
 }
 
 status_t AudioSessionOutALSA::start(int64_t startTime)
@@ -394,6 +551,8 @@ status_t AudioSessionOutALSA::flush()
                                                  SNDRV_PCM_SYNC_PTR_AVAIL_MIN);
         sync_ptr(mPcmRxHandle->handle);
     }
+    if(mOpenMS11Decoder == true)
+        mBitstreamSM->resetBitstreamPtr();
     LOGD("AudioSessionOutALSA::flush X");
     return NO_ERROR;
 }
@@ -434,7 +593,9 @@ status_t AudioSessionOutALSA::stop()
     mRouteCompreToSpdif = false;
     mUseTunnelDecode = false;
     mCaptureFromProxy = false;
-    
+    mOpenMS11Decoder = false;
+    aacConfigDataSet = false;
+
     return NO_ERROR;
 }
 
@@ -457,7 +618,8 @@ status_t AudioSessionOutALSA::standby()
     }
 
     mFrameCount = 0;
-
+    if(mOpenMS11Decoder == true)
+        mBitstreamSM->resetBitstreamPtr();
     return NO_ERROR;
 }
 

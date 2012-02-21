@@ -9,6 +9,7 @@ LOCAL_CFLAGS := -D_POSIX_SOURCE
 
 LOCAL_SRC_FILES := \
   AudioHardwareALSA.cpp 	\
+  AudioBitstreamSM.cpp          \
   AudioStreamOutALSA.cpp 	\
   AudioBroadcastStream.cpp 	\
   AudioSessionOut.cpp 	\
@@ -27,7 +28,8 @@ LOCAL_SHARED_LIBRARIES := \
     libhardware \
     libc        \
     libpower    \
-    libalsa-intf
+    libalsa-intf \
+    lib_dlb_msd
 
 LOCAL_C_INCLUDES := $(TARGET_OUT_HEADERS)/mm-audio/audio-alsa
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/audcal
@@ -36,6 +38,8 @@ LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/libalsa-intf
 LOCAL_C_INCLUDES += hardware/libhardware/include
 LOCAL_C_INCLUDES += hardware/libhardware_legacy/include
 LOCAL_C_INCLUDES += system/core/include
+LOCAL_C_INCLUDES += vendor/qcom/proprietary/mm-audio/audio-codecs/ms11
+LOCAL_C_INCLUDES += vendor/qcom/proprietary/mm-audio/audio-codecs/ms11/exec_layer
 
 LOCAL_C_INCLUDES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
@@ -78,3 +82,4 @@ LOCAL_C_INCLUDES := hardware/libhardware_legacy/audio
 include $(BUILD_SHARED_LIBRARY)
 
 endif
+include $(call all-makefiles-under,$(LOCAL_PATH))

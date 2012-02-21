@@ -36,13 +36,15 @@ extern "C" {
 }
 
 #include <hardware/hardware.h>
+#include "SoftMS11.h"
 
 namespace android_audio_legacy
 {
 using android::List;
 using android::Mutex;
 class AudioHardwareALSA;
-
+class SoftMS11;
+class AudioBitstreamSM;
 /**
  * The id of ALSA module
  */
@@ -86,6 +88,17 @@ class AudioHardwareALSA;
 #define TTY_VCO         0x00000040
 #define TTY_HCO         0x00000080
 #define TTY_CLEAR       0xFFFFFF0F
+
+#define SAMPLES_PER_CHANNEL             1024*2
+#define MAX_INPUT_CHANNELS_SUPPORTED    8
+#define FACTOR_FOR_BUFFERING            2
+#define STEREO_CHANNELS                 2
+#define MAX_OUTPUT_CHANNELS_SUPPORTED   6
+#define PCM_BLOCK_PER_CHANNEL_MS11      1536*2
+
+#define PCM_2CH_OUT                 0
+#define PCM_MCH_OUT                 1
+#define DDRE_OUT                    2
 
 #ifndef ALSA_DEFAULT_SAMPLE_RATE
 #define ALSA_DEFAULT_SAMPLE_RATE 44100 // in Hz
@@ -349,6 +362,7 @@ private:
     bool                mCaptureFromProxy;
     bool                mA2dpOutputStarted;
     bool                mExitA2dpThread;
+    bool                mOpenMS11Decoder;
 
     AudioHardwareALSA  *mParent;
     alsa_handle_t *     mPcmRxHandle;
@@ -357,11 +371,12 @@ private:
     alsa_handle_t *     mCompreRxHandle;
     ALSADevice *        mALSADevice;
     snd_use_case_mgr_t *mUcMgr;
-    void               *mMS11Decoder;
     struct pcm         *mProxyPcmHandle;
     audio_stream_out   *mA2dpStream;
     audio_hw_device_t  *mA2dpDevice;
     pthread_t           mA2dpThread;
+    SoftMS11           *mMS11Decoder;
+    AudioBitstreamSM   *mBitstreamSM;
 
     status_t            openDevice(char *pUseCase, bool bIsUseCase, int devices);
     status_t            closeDevice(alsa_handle_t *pDevice);
@@ -373,6 +388,7 @@ private:
     status_t            stopA2dpOutput();
     static void*        a2dpThreadWrapper(void *context);
     void                a2dpThreadFunc();
+    bool                aacConfigDataSet;
 };
 
 // ----------------------------------------------------------------------------
@@ -658,6 +674,38 @@ protected:
     int                 mIsVoiceCallActive;
     int                 mIsFmActive;
     bool                mBluetoothVGS;
+};
+
+class AudioBitstreamSM
+{
+public:
+    AudioBitstreamSM();
+    ~AudioBitstreamSM();
+    bool    initBitstreamPtr();
+    void    resetBitstreamPtr();
+    void    copyBitsreamToInternalBuffer(char *, size_t);
+    bool    sufficientBitstreamToDecode(size_t);
+    bool    sufficientSamplesToRender(int, int);
+    char*   getInputBufferPtr();
+    char*   getOutputBufferPtr(int);
+    size_t  bitStreamBufSize();
+    void    copyResidueBitstreamToStart(size_t);
+    void    copyResidueOutputToStart(int, size_t);
+    char*   getOutputBufferWritePtr(int);
+    void    setOutputBufferWritePtr(int, size_t);
+private:
+    // Buffer pointers for input and output to MS11
+    char               *ms11InputBuffer;
+    char               *ms11InputBufferWritePtr;
+
+    char               *ms11DDEncOutputBuffer;
+    char               *ms11DDEncOutputBufferWritePtr;
+
+    char               *ms11PCM2ChOutputBuffer;
+    char               *ms11PCM2ChOutputBufferWritePtr;
+
+    char               *ms11PCM6ChOutputBuffer;
+    char               *ms11PCM6ChOutputBufferWritePtr;
 };
 
 // ----------------------------------------------------------------------------
