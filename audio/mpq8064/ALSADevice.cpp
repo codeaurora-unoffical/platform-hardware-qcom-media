@@ -1232,7 +1232,6 @@ int32_t ALSADevice::get_linearpcm_channel_status(uint32_t sampleRate,
     return status;
 }
 
-
 int32_t ALSADevice::get_compressed_channel_status(void *audio_stream_data,
                                                   uint32_t audio_frame_size,
                                                   unsigned char *channel_status,
@@ -1250,6 +1249,30 @@ int32_t ALSADevice::get_compressed_channel_status(void *audio_stream_data,
     }
     get_channel_status(channel_status, codec_type);
     return 0;
+}
+
+status_t ALSADevice::setPcmVolume(int value)
+{
+    status_t err = NO_ERROR;
+
+    err = setMixerControl("HIFI2 RX Volume",value,0);
+    if(err) {
+        LOGE("setPcmVolume - HIFI2 error = %d",err);
+    }
+
+    return err;
+}
+
+status_t ALSADevice::setCompressedVolume(int value)
+{
+    status_t err = NO_ERROR;
+
+    err = setMixerControl("COMPRESSED RX Volume",value,0);
+    if(err) {
+        LOGE("setCompressedVolume = error = %d",err);
+    }
+
+    return err;
 }
 
 }

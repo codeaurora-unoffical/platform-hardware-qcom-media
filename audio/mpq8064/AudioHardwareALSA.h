@@ -179,6 +179,8 @@ public:
                                               unsigned char *channel_status,
                                               enum audio_parser_code_type codec_type);
 
+    status_t    setPcmVolume(int);
+    status_t    setCompressedVolume(int);
 private:
 
     int         deviceName(alsa_handle_t *handle, unsigned flags, char **value);

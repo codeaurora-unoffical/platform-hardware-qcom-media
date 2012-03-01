@@ -358,21 +358,34 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
     float volume;
     status_t status = NO_ERROR;
 
+    volume = (left + right) / 2;
+    if (volume < 0.0) {
+        LOGW("AudioSessionOutALSA::setVolume(%f) under 0.0, assuming 0.0\n", volume);
+        volume = 0.0;
+    } else if (volume > 1.0) {
+        LOGW("AudioSessionOutALSA::setVolume(%f) over 1.0, assuming 1.0\n", volume);
+        volume = 1.0;
+    }
+    mStreamVol = lrint((volume * 100.0)+0.5);
+
+    LOGD("Setting stream volume to %d (available range is 0 to 100)\n", mStreamVol);
+    LOGE("ToDo: Implement volume setting for broadcast stream");
     if(mPcmRxHandle) {
-        volume = (left + right) / 2;
-        if (volume < 0.0) {
-            LOGW("AudioSessionOutALSA::setVolume(%f) under 0.0, assuming 0.0\n", volume);
-            volume = 0.0;
-        } else if (volume > 1.0) {
-            LOGW("AudioSessionOutALSA::setVolume(%f) over 1.0, assuming 1.0\n", volume);
-            volume = 1.0;
+        if(!strcmp(mPcmRxHandle->useCase, SND_USE_CASE_VERB_HIFI2) ||
+                !strcmp(mPcmRxHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2)) {
+            LOGD("setPCM 1 Volume(%f)\n", volume);
+            LOGD("Setting PCM volume to %d (available range is 0 to 100)\n", mStreamVol);
+            status = mPcmRxHandle->module->setPcmVolume(mStreamVol);
         }
-        mStreamVol = lrint((volume * 100.0)+0.5);
-
-        LOGD("Setting stream volume to %d (available range is 0 to 100)\n", mStreamVol);
-        LOGE("ToDo: Implement volume setting for broadcast stream");
-        //mALSADevice->setStreamVolume(mPcmRxHandle, mStreamVol);
-
+        return status;
+    }
+    else if(mCompreRxHandle || mSessionId == 2) {
+        if(!strcmp(mCompreRxHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
+                !strcmp(mCompreRxHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL)) {
+            LOGD("set compressed Volume(%f)\n", volume);
+            LOGD("Setting Compressed volume to %d (available range is 0 to 100)\n", mStreamVol);
+            status = mCompreRxHandle->module->setCompressedVolume(mStreamVol);
+        }
         return status;
     }
     return INVALID_OPERATION;
