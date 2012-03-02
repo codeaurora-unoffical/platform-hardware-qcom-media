@@ -47,13 +47,6 @@ public:
 
         virtual uint32_t getDeviceForStrategy(routing_strategy strategy, bool fromCache = true);
         virtual void setForceUse(AudioSystem::force_use usage, AudioSystem::forced_config config);
-        virtual bool needsDirectOuput(AudioSystem::stream_type stream,
-                                    uint32_t samplingRate,
-                                    uint32_t format,
-                                    uint32_t channels,
-                                    AudioSystem::output_flags flags,
-                                    uint32_t device);
-
 protected:
         fm_modes fmMode;
 

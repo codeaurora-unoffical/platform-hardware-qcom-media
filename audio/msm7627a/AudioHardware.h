@@ -1,6 +1,6 @@
 /*
 ** Copyright 2008, The Android Open-Source Project
-** Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+** Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 extern "C" {
 #include <linux/msm_audio.h>
 #include <linux/msm_audio_voicememo.h>
+#include <linux/msm_audio_mvs.h>
 }
 
 namespace android_audio_legacy {
@@ -153,6 +154,11 @@ enum tty_modes {
 #define AUDIO_HW_IN_CHANNELS (AudioSystem::CHANNEL_IN_MONO) // Default audio input channel mask
 #define AUDIO_HW_IN_BUFFERSIZE 2048                 // Default audio input buffer size
 #define AUDIO_HW_IN_FORMAT (AudioSystem::PCM_16_BIT)  // Default audio input sample format
+#define AUDIO_HW_VOIP_BUFFERSIZE_8K 320
+#define AUDIO_HW_VOIP_BUFFERSIZE_16K 640
+#define AUDIO_HW_VOIP_SAMPLERATE_8K 8000
+#define AUDIO_HW_VOIP_SAMPLERATE_16K 16000
+
 // ----------------------------------------------------------------------------
 using android_audio_legacy::AudioHardwareBase;
 using android_audio_legacy::AudioStreamOut;
@@ -163,6 +169,8 @@ class AudioHardware : public  AudioHardwareBase
 {
     class AudioStreamOutMSM72xx;
     class AudioStreamInMSM72xx;
+    class AudioStreamOutDirect;
+    class AudioStreamInVoip;
 
 public:
                         AudioHardware();
@@ -223,6 +231,7 @@ private:
     status_t    enableFM();
     status_t    disableFM();
     AudioStreamInMSM72xx*   getActiveInput_l();
+    AudioStreamInVoip* getActiveVoipInput_l();
 
     class AudioStreamOutMSM72xx : public AudioStreamOut {
     public:
@@ -256,6 +265,44 @@ private:
                 int         mRetryCount;
                 bool        mStandby;
                 uint32_t    mDevices;
+    };
+
+    class AudioStreamOutDirect : public AudioStreamOut {
+    public:
+                            AudioStreamOutDirect();
+        virtual             ~AudioStreamOutDirect();
+                status_t    set(AudioHardware* mHardware,
+                                uint32_t devices,
+                                int *pFormat,
+                                uint32_t *pChannels,
+                                uint32_t *pRate);
+        virtual uint32_t    sampleRate() const { return 8000; }
+        // must be 32-bit aligned - driver only seems to like 4800
+        virtual size_t      bufferSize() const { return 320; }
+        virtual uint32_t    channels() const {LOGD(" AudioStreamOutDirect: channels\n"); return mChannels; }
+        virtual int         format() const {return AudioSystem::PCM_16_BIT; }
+        virtual uint32_t    latency() const { return (1000*AUDIO_HW_NUM_OUT_BUF*(bufferSize()/frameSize()))/sampleRate()+AUDIO_HW_OUT_LATENCY_MS; }
+        virtual status_t    setVolume(float left, float right) { return INVALID_OPERATION; }
+        virtual ssize_t     write(const void* buffer, size_t bytes);
+        virtual status_t    standby();
+        virtual status_t    dump(int fd, const Vector<String16>& args);
+                bool        checkStandby();
+        virtual status_t    setParameters(const String8& keyValuePairs);
+        virtual String8     getParameters(const String8& keys);
+                uint32_t    devices() { return mDevices; }
+        virtual status_t    getRenderPosition(uint32_t *dspFrames);
+
+    private:
+                AudioHardware* mHardware;
+                int         mFd;
+                int         mRetryCount;
+                int         mStartCount;
+                bool        mStandby;
+                uint32_t    mDevices;
+                uint32_t    mChannels;
+                uint32_t    mSampleRate;
+                size_t      mBufferSize;
+                int         mFormat;
     };
 
     class AudioStreamInMSM72xx : public AudioStreamIn {
@@ -304,6 +351,50 @@ private:
                 bool        mFirstread;
                 static int InstanceCount;
     };
+    class AudioStreamInVoip : public AudioStreamInMSM72xx {
+    public:
+        enum input_state {
+            AUDIO_INPUT_CLOSED,
+            AUDIO_INPUT_OPENED,
+            AUDIO_INPUT_STARTED
+        };
+
+                            AudioStreamInVoip();
+        virtual             ~AudioStreamInVoip();
+                status_t    set(AudioHardware* mHardware,
+                                uint32_t devices,
+                                int *pFormat,
+                                uint32_t *pChannels,
+                                uint32_t *pRate,
+                                AudioSystem::audio_in_acoustics acoustics);
+        virtual size_t      bufferSize() const { return 320; }
+        virtual uint32_t    channels() const {LOGD(" AudioStreamInVoip: channels %d \n",mChannels); return mChannels; }
+        virtual int         format() const { return AUDIO_HW_IN_FORMAT; }
+        virtual uint32_t    sampleRate() const { return 8000; }
+        virtual status_t    setGain(float gain) { return INVALID_OPERATION; }
+        virtual ssize_t     read(void* buffer, ssize_t bytes);
+        virtual status_t    dump(int fd, const Vector<String16>& args);
+        virtual status_t    standby();
+        virtual status_t    setParameters(const String8& keyValuePairs);
+        virtual String8     getParameters(const String8& keys);
+        virtual unsigned int  getInputFramesLost() const { return 0; }
+                uint32_t    devices() { return mDevices; }
+                int         state() const { return mState; }
+
+    private:
+                AudioHardware* mHardware;
+                int         mFd;
+                int         mState;
+                int         mRetryCount;
+                int         mFormat;
+                uint32_t    mChannels;
+                uint32_t    mSampleRate;
+                size_t      mBufferSize;
+                AudioSystem::audio_in_acoustics mAcoustics;
+                uint32_t    mDevices;
+                bool        mFirstread;
+                uint32_t    mFmRec;
+    };
 
             static const uint32_t inputSamplingRates[];
             bool        mInit;
@@ -314,7 +405,9 @@ private:
             bool        mBluetoothVGS;
             uint32_t    mBluetoothId;
             AudioStreamOutMSM72xx*  mOutput;
+            AudioStreamOutDirect*  mDirectOutput;
             SortedVector <AudioStreamInMSM72xx*>   mInputs;
+            SortedVector <AudioStreamInVoip*>   mVoipInputs;
 
             msm_snd_endpoint *mSndEndpoints;
             int mNumSndEndpoints;
@@ -322,6 +415,9 @@ private:
             int m7xsnddriverfd;
             bool        mDualMicEnabled;
             int         mTtyMode;
+            int mVoipFd;
+            int mNumVoipStreams;
+            int mVoipCallMode;
 
      friend class AudioStreamInMSM72xx;
             Mutex       mLock;
