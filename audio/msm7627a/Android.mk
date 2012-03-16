@@ -23,6 +23,10 @@ ifeq ($(call is-android-codename-in-list,ICECREAM_SANDWICH),true)
   LOCAL_CFLAGS += -DREG_KERNEL_UPDATE
 endif
 
+ifeq ($(strip $(BOARD_USES_SRS_TRUEMEDIA)),true)
+LOCAL_CFLAGS += -DSRS_PROCESSING
+endif
+
 LOCAL_SHARED_LIBRARIES := \
     libcutils       \
     libutils        \
