@@ -198,6 +198,12 @@ public:
                                 uint32_t *sampleRate=0,
                                 status_t *status=0);
 
+    virtual AudioStreamOut* openOutputSession(
+                                uint32_t devices,
+                                int *format=0,
+                                status_t *status=0,
+                                int sessionId=-1);
+
     virtual AudioStreamIn* openInputStream(
 
                                 uint32_t devices,
@@ -351,6 +357,39 @@ private:
                 bool        mFirstread;
                 static int InstanceCount;
     };
+    class AudioSessionOutMSM7xxx : public AudioStreamOut {
+    public:
+                            AudioSessionOutMSM7xxx();
+        virtual             ~AudioSessionOutMSM7xxx();
+                status_t    set(AudioHardware* mHardware,
+                                uint32_t devices,
+                                int *pFormat,
+                                int32_t sessionId);
+        virtual uint32_t    sampleRate() const { return 44100; }
+        // must be 32-bit aligned - driver only seems to like 4800
+        virtual size_t      bufferSize() const { return 4800; }
+        virtual uint32_t    channels() const { return AudioSystem::CHANNEL_OUT_STEREO; }
+        virtual int         format() const { return AudioSystem::MP3; }
+        virtual uint32_t    latency() const { return 0; }
+        virtual status_t    setVolume(float left, float right);
+        virtual ssize_t     write(const void* buffer, size_t bytes) {return 0;};
+        virtual status_t    standby();
+        virtual status_t    dump(int fd, const Vector<String16>& args) {return 0;};
+                bool        checkStandby();
+        virtual status_t    setParameters(const String8& keyValuePairs);
+        virtual String8     getParameters(const String8& keys);
+                uint32_t    devices() { return mDevices; }
+        virtual status_t    getRenderPosition(uint32_t *dspFrames);
+
+    private:
+                AudioHardware* mHardware;
+                int         mStartCount;
+                int         mRetryCount;
+                bool        mStandby;
+                uint32_t    mDevices;
+                int         mLPADriverFd;
+    };
+
     class AudioStreamInVoip : public AudioStreamInMSM72xx {
     public:
         enum input_state {

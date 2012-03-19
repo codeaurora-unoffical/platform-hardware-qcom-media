@@ -37,7 +37,11 @@ class AudioPolicyManager: public AudioPolicyManagerBase
 
 public:
                 AudioPolicyManager(AudioPolicyClientInterface *clientInterface)
-                : AudioPolicyManagerBase(clientInterface),fmMode(FM_NONE){}
+                : AudioPolicyManagerBase(clientInterface),fmMode(FM_NONE){
+                  mLPADecodeOutput = -1;
+                  mLPAMuted = false;
+                  mLPAStreamType = AudioSystem::DEFAULT;
+                }
 
         virtual ~AudioPolicyManager() {}
 
@@ -46,6 +50,13 @@ public:
                                                           const char *device_address);
 
         virtual uint32_t getDeviceForStrategy(routing_strategy strategy, bool fromCache = true);
+        virtual audio_io_handle_t getSession(AudioSystem::stream_type stream,
+                                            uint32_t format,
+                                            AudioSystem::output_flags flags,
+                                            int32_t  sessionId);
+        virtual void pauseSession(audio_io_handle_t output, AudioSystem::stream_type stream);
+        virtual void resumeSession(audio_io_handle_t output, AudioSystem::stream_type stream);
+        virtual void releaseSession(audio_io_handle_t output);
         virtual void setForceUse(AudioSystem::force_use usage, AudioSystem::forced_config config);
 protected:
         fm_modes fmMode;
@@ -65,8 +76,14 @@ protected:
    virtual void setOutputDevice(audio_io_handle_t output,uint32_t device,bool force = false,int delayMs = 0);
    virtual status_t startOutput(audio_io_handle_t output,AudioSystem::stream_type stream,int session = 0);
    virtual status_t stopOutput(audio_io_handle_t output,AudioSystem::stream_type stream,int session = 0);
+   void setStreamMute(int stream, bool on, audio_io_handle_t output, int delayMs = 0);
    virtual void setFmMode(fm_modes mode) {  fmMode = mode; }
    virtual fm_modes getFMMode() const {  return fmMode; }
+   audio_io_handle_t mLPADecodeOutput;           // active output handler
+   audio_io_handle_t mLPAActiveOuput;           // LPA Output Handler during inactive state
+   bool    mLPAMuted;
+   AudioSystem::stream_type  mLPAStreamType;
+   AudioSystem::stream_type  mLPAActiveStreamType;
 
 
 };
