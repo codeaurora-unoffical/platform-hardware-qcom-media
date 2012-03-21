@@ -513,6 +513,7 @@ static int adev_open_output_session(struct audio_hw_device *dev,
     out->stream.common.get_parameters = out_get_parameters;
     out->stream.set_volume = out_set_volume;
     out->stream.write = out_write;
+    out->stream.get_render_position = out_get_render_position;
     out->stream.start = out_start;
     out->stream.pause = out_pause;
     out->stream.flush = out_flush;

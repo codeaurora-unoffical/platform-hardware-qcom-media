@@ -60,7 +60,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mALSADevice(0),mVoipStreamCount(0),mVoipMicMute(false)
 {
     FILE *fp;
-    char cpuInfo[200];
+    char soundCardInfo[200];
     int err;
     int codec_rev = 2;
     LOGD("hw_get_module(ALSA_HARDWARE_MODULE_ID) returned err %d", err);
@@ -72,15 +72,13 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mDevSettingsFlag |= TTY_OFF;
     mBluetoothVGS = false;
 
-    if((fp = fopen("/proc/cpuinfo","r")) == NULL) {
-        LOGE("Cannot open /proc/cpuinfo file to get CPU variant");
+    if((fp = fopen("/proc/asound/cards","r")) == NULL) {
+        LOGE("Cannot open /proc/asound/cards file to get sound card info");
     } else {
-        while((fgets(cpuInfo, sizeof(cpuInfo), fp) != NULL)) {
-            if (strstr(cpuInfo, "CPU variant")) {
-                LOGV("%s", cpuInfo);
-                if (strstr(cpuInfo, "0x0")) {
-                    codec_rev = 1;
-                }
+        while((fgets(soundCardInfo, sizeof(soundCardInfo), fp) != NULL)) {
+            LOGV("SoundCardInfo %s", soundCardInfo);
+            if (strstr(soundCardInfo, "msm8960-tabla1x-snd-card")) {
+                codec_rev = 1;
                 break;
             }
         }

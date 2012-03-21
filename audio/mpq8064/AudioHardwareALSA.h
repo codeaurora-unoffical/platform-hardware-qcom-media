@@ -33,6 +33,9 @@ extern "C" {
    #include "alsa_audio.h"
    // ToDo: For now we are depending on 8960, it should be made generic
    #include "msm8960_use_cases.h"
+   #include "audio_parsers.h"
+   void set_bits(unsigned char *input, unsigned char num_bits_reqd,
+       unsigned char value, unsigned char *hdr_bit_index);
 }
 
 #include <hardware/hardware.h>
@@ -95,6 +98,7 @@ class AudioBitstreamSM;
 #define STEREO_CHANNELS                 2
 #define MAX_OUTPUT_CHANNELS_SUPPORTED   6
 #define PCM_BLOCK_PER_CHANNEL_MS11      1536*2
+#define AAC_BLOCK_PER_CHANNEL_MS11      768
 
 #define PCM_2CH_OUT                 0
 #define PCM_MCH_OUT                 1
@@ -104,9 +108,10 @@ class AudioBitstreamSM;
 #define ALSA_DEFAULT_SAMPLE_RATE 44100 // in Hz
 #endif
 
-#define LPA_SESSION_ID -1
-#define NORMAL_PLAYBACK_SESSION_ID 1
-#define TUNNEL_AUDIO_SESSION_ID 2
+#define NORMAL_PLAYBACK_SESSION_ID 0
+#define LPA_SESSION_ID 1
+#define TUNNEL_SESSION_ID 2
+#define MPQ_SESSION_ID 3
 
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
@@ -131,6 +136,11 @@ struct alsa_handle_t {
 
 typedef List<alsa_handle_t> ALSAHandleList;
 
+struct use_case_t {
+    char                useCase[MAX_STR_LEN];
+};
+typedef List<use_case_t> ALSAUseCaseList;
+
 // ----------------------------------------------------------------------------
 
 class ALSADevice
@@ -150,6 +160,7 @@ public:
     status_t    close(alsa_handle_t *handle);
     status_t    standby(alsa_handle_t *handle);
     status_t    route(alsa_handle_t *handle, uint32_t devices, int mode);
+    status_t    setChannelStatus(unsigned char *channelStatus);
     void        disableDevice(alsa_handle_t *handle);
     char*       getUCMDevice(uint32_t devices, int input);
     void        setVoiceVolume(int vol);
@@ -160,6 +171,13 @@ public:
     void        enableWideVoice(bool flag);
     void        enableFENS(bool flag);
     void        setFlags(uint32_t flags);
+    int         getUseCaseType(const char *useCase);
+    int32_t     get_linearpcm_channel_status(uint32_t sampleRate,
+                                             unsigned char *channel_status);
+    int32_t     get_compressed_channel_status(void *audio_stream_data,
+                                              uint32_t audio_frame_size,
+                                              unsigned char *channel_status,
+                                              enum audio_parser_code_type codec_type);
 
 private:
 
@@ -180,6 +198,7 @@ private:
     int         btsco_samplerate;
     int         callMode;
     struct mixer*  mMixer;
+    ALSAUseCaseList mUseCaseList;
 };
 
 class ALSAControl
@@ -363,6 +382,11 @@ private:
     bool                mA2dpOutputStarted;
     bool                mExitA2dpThread;
     bool                mOpenMS11Decoder;
+    uint32_t            mSessionId;
+    size_t              mMinBytesReqToDecode;
+    bool                mAacConfigDataSet;
+    unsigned char       mChannelStatus[24];
+    bool                mChannelStatusSet;
 
     AudioHardwareALSA  *mParent;
     alsa_handle_t *     mPcmRxHandle;
@@ -388,7 +412,6 @@ private:
     status_t            stopA2dpOutput();
     static void*        a2dpThreadWrapper(void *context);
     void                a2dpThreadFunc();
-    bool                aacConfigDataSet;
 };
 
 // ----------------------------------------------------------------------------
@@ -683,16 +706,17 @@ public:
     ~AudioBitstreamSM();
     bool    initBitstreamPtr();
     void    resetBitstreamPtr();
-    void    copyBitsreamToInternalBuffer(char *, size_t);
-    bool    sufficientBitstreamToDecode(size_t);
-    bool    sufficientSamplesToRender(int, int);
+    void    copyBitsreamToInternalBuffer(char *bufPtr, size_t bytes);
+    bool    sufficientBitstreamToDecode(size_t minThreshBytesToDecode);
+    bool    sufficientSamplesToRender(int format, int minSizeReqdToRender);
     char*   getInputBufferPtr();
-    char*   getOutputBufferPtr(int);
+    char*   getOutputBufferPtr (int format);
     size_t  bitStreamBufSize();
-    void    copyResidueBitstreamToStart(size_t);
-    void    copyResidueOutputToStart(int, size_t);
-    char*   getOutputBufferWritePtr(int);
-    void    setOutputBufferWritePtr(int, size_t);
+    void    copyResidueBitstreamToStart(size_t bytesConsumedInDecode);
+    void    copyResidueOutputToStart(int format, size_t samplesRendered);
+    char*   getOutputBufferWritePtr(int format);
+    void    setOutputBufferWritePtr(int format, size_t outputPCMSample);
+    void    appendSilenceToBitstreamInternalBuffer(size_t bytes, unsigned char);
 private:
     // Buffer pointers for input and output to MS11
     char               *ms11InputBuffer;

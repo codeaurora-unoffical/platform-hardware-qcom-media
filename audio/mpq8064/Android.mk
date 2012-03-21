@@ -29,12 +29,14 @@ LOCAL_SHARED_LIBRARIES := \
     libc        \
     libpower    \
     libalsa-intf \
-    lib_dlb_msd
+    lib_dlb_msd \
+    libaudioparsers
 
 LOCAL_C_INCLUDES := $(TARGET_OUT_HEADERS)/mm-audio/audio-alsa
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/audcal
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/audio-acdb-util
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/libalsa-intf
+LOCAL_C_INCLUDES += vendor/qcom/proprietary/mm-audio/audio-parsers/inc
 LOCAL_C_INCLUDES += hardware/libhardware/include
 LOCAL_C_INCLUDES += hardware/libhardware_legacy/include
 LOCAL_C_INCLUDES += system/core/include

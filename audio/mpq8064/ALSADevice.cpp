@@ -26,6 +26,8 @@
 #include <media/AudioRecord.h>
 
 #define BTSCO_RATE_16KHZ 16000
+#define USECASE_TYPE_RX 1
+#define USECASE_TYPE_TX 2
 
 namespace android_audio_legacy
 {
@@ -168,8 +170,12 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
 
 void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
 {
+    const char **mods_list;
+    use_case_t useCaseNode;
+    unsigned usecase_type = 0;
     bool inCallDevSwitch = false;
-    char *rxDevice, *txDevice, ident[70];
+    char *rxDevice, *txDevice, ident[70], *use_case = NULL;
+    int err = 0, index, mods_size;
     LOGV("%s: device %d", __FUNCTION__, devices);
 
     if ((mode == AudioSystem::MODE_IN_CALL)  || (mode == AudioSystem::MODE_IN_COMMUNICATION)) {
@@ -215,41 +221,91 @@ void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t 
             (mode == AudioSystem::MODE_IN_CALL))
             inCallDevSwitch = true;
     }
+
+    snd_use_case_get(handle->ucMgr, "_verb", (const char **)&use_case);
+    mods_size = snd_use_case_get_list(handle->ucMgr, "_enamods", &mods_list);
     if (rxDevice != NULL) {
-        if (strcmp(curRxUCMDevice, "None")) {
-            if ((!strcmp(rxDevice, curRxUCMDevice)) && (inCallDevSwitch != true)){
-                LOGV("Required device is already set, ignoring device enable");
-                snd_use_case_set(handle->ucMgr, "_enadev", rxDevice);
-            } else {
-                strlcpy(ident, "_swdev/", sizeof(ident));
-                strlcat(ident, curRxUCMDevice, sizeof(ident));
-                snd_use_case_set(handle->ucMgr, ident, rxDevice);
+        if ((strcmp(curRxUCMDevice, "None")) &&
+	        ((strcmp(rxDevice, curRxUCMDevice)) || (inCallDevSwitch == true))) {
+            if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+	            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+                usecase_type = getUseCaseType(use_case);
+                if (usecase_type & USECASE_TYPE_RX) {
+                    LOGD("Deroute use case %s type is %d\n", use_case, usecase_type);
+                    strlcpy(useCaseNode.useCase, use_case, MAX_STR_LEN);
+                    snd_use_case_set(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE);
+                    mUseCaseList.push_front(useCaseNode);
+                }
             }
-        } else {
-            snd_use_case_set(handle->ucMgr, "_enadev", rxDevice);
+            if (mods_size) {
+                for(index = 0; index < mods_size; index++) {
+                    usecase_type = getUseCaseType(mods_list[index]);
+                    if (usecase_type & USECASE_TYPE_RX) {
+                        LOGD("Deroute use case %s type is %d\n", mods_list[index], usecase_type);
+                        strlcpy(useCaseNode.useCase, mods_list[index], MAX_STR_LEN);
+                        snd_use_case_set(handle->ucMgr, "_dismod", mods_list[index]);
+                        mUseCaseList.push_back(useCaseNode);
+                    }
+                }
+            }
+            snd_use_case_set(handle->ucMgr, "_disdev", curRxUCMDevice);
         }
-        strlcpy(curRxUCMDevice, rxDevice, sizeof(curRxUCMDevice));
-        free(rxDevice);
-        if (devices & AudioSystem::DEVICE_OUT_FM)
-            setFmVolume(fmVolume);
     }
     if (txDevice != NULL) {
-       if (strcmp(curTxUCMDevice, "None")) {
-           if ((!strcmp(txDevice, curTxUCMDevice)) && (inCallDevSwitch != true)){
-                LOGV("Required device is already set, ignoring device enable");
-                snd_use_case_set(handle->ucMgr, "_enadev", txDevice);
-            } else {
-                strlcpy(ident, "_swdev/", sizeof(ident));
-                strlcat(ident, curTxUCMDevice, sizeof(ident));
-                snd_use_case_set(handle->ucMgr, ident, txDevice);
+        if ((strcmp(curTxUCMDevice, "None")) &&
+            ((strcmp(txDevice, curTxUCMDevice)) || (inCallDevSwitch == true))) {
+            if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+	                strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+                usecase_type = getUseCaseType(use_case);
+                if ((usecase_type & USECASE_TYPE_TX) && (!(usecase_type & USECASE_TYPE_RX))) {
+                   LOGD("Deroute use case %s type is %d\n", use_case, usecase_type);
+                   strlcpy(useCaseNode.useCase, use_case, MAX_STR_LEN);
+                   snd_use_case_set(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE);
+                   mUseCaseList.push_front(useCaseNode);
+                }
             }
-        } else {
-            snd_use_case_set(handle->ucMgr, "_enadev", txDevice);
-        }
-        strlcpy(curTxUCMDevice, txDevice, sizeof(curTxUCMDevice));
-        free(txDevice);
+            if (mods_size) {
+                for(index = 0; index < mods_size; index++) {
+                    usecase_type = getUseCaseType(mods_list[index]);
+                    if ((usecase_type & USECASE_TYPE_TX) && (!(usecase_type & USECASE_TYPE_RX))) {
+                        LOGD("Deroute use case %s type is %d\n", mods_list[index], usecase_type);
+                        strlcpy(useCaseNode.useCase, mods_list[index], MAX_STR_LEN);
+                        snd_use_case_set(handle->ucMgr, "_dismod", mods_list[index]);
+                        mUseCaseList.push_back(useCaseNode);
+                    }
+                }
+            }
+            snd_use_case_set(handle->ucMgr, "_disdev", curTxUCMDevice);
+       }
     }
+    if (rxDevice != NULL) {
+        snd_use_case_set(handle->ucMgr, "_enadev", rxDevice);
+        strlcpy(curRxUCMDevice, rxDevice, sizeof(curRxUCMDevice));
+        if (devices & AudioSystem::DEVICE_OUT_FM)
+            setFmVolume(fmVolume);
+        free(rxDevice);
+    }
+    if (txDevice != NULL) {
+       snd_use_case_set(handle->ucMgr, "_enadev", txDevice);
+       strlcpy(curTxUCMDevice, txDevice, sizeof(curTxUCMDevice));
+       free(txDevice);
+    }
+    for(ALSAUseCaseList::iterator it = mUseCaseList.begin(); it != mUseCaseList.end(); ++it) {
+        LOGE("Route use case %s\n", it->useCase);
+
+        if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+            strlen(SND_USE_CASE_VERB_INACTIVE))) && (!strncmp(use_case, it->useCase, MAX_UC_LEN))) {
+            snd_use_case_set(handle->ucMgr, "_verb", it->useCase);
+        } else {
+            snd_use_case_set(handle->ucMgr, "_enamod", it->useCase);
+        }
+    }
+    if (!mUseCaseList.empty())
+        mUseCaseList.clear();
+    if (use_case != NULL)
+        free(use_case);
     LOGD("switchDevice: curTxUCMDevivce %s curRxDevDevice %s", curTxUCMDevice, curRxUCMDevice);
+
 }
 
 // ----------------------------------------------------------------------------
@@ -599,6 +655,17 @@ Error:
     return NO_INIT;
 }
 
+status_t ALSADevice::setChannelStatus(unsigned char *channelStatus)
+{
+    struct snd_aes_iec958 iec958;
+    status_t err = NO_ERROR;
+    memcpy(iec958.status, channelStatus,24);
+    unsigned int ptr = (unsigned int)&iec958;
+    setMixerControl("IEC958 Playback PCM Stream",ptr,0);
+
+    return err;
+}
+
 status_t ALSADevice::setFmVolume(int value)
 {
     status_t err = NO_ERROR;
@@ -713,25 +780,101 @@ status_t ALSADevice::route(alsa_handle_t *handle, uint32_t devices, int mode)
     return status;
 }
 
+int  ALSADevice::getUseCaseType(const char *useCase)
+{
+    LOGE("use case is %s\n", useCase);
+    if (!strncmp(useCase, SND_USE_CASE_VERB_HIFI,
+           strlen(SND_USE_CASE_VERB_HIFI)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
+           strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI2,
+           strlen(SND_USE_CASE_VERB_HIFI2)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_DIGITAL_RADIO,
+           strlen(SND_USE_CASE_VERB_DIGITAL_RADIO)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
+           strlen(SND_USE_CASE_MOD_PLAY_MUSIC)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_LPA,
+           strlen(SND_USE_CASE_MOD_PLAY_LPA)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+           strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_FM,
+           strlen(SND_USE_CASE_MOD_PLAY_FM))) {
+        return USECASE_TYPE_RX;
+    } else if (!strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC,
+           strlen(SND_USE_CASE_VERB_HIFI_REC)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_FM_REC,
+           strlen(SND_USE_CASE_VERB_FM_REC)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_FM_A2DP_REC,
+           strlen(SND_USE_CASE_VERB_FM_A2DP_REC)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC,
+           strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_FM,
+           strlen(SND_USE_CASE_MOD_CAPTURE_FM)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_A2DP_FM,
+           strlen(SND_USE_CASE_MOD_CAPTURE_A2DP_FM))) {
+        return USECASE_TYPE_TX;
+    } else if (!strncmp(useCase, SND_USE_CASE_VERB_VOICECALL,
+           strlen(SND_USE_CASE_VERB_VOICECALL)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+           strlen(SND_USE_CASE_VERB_IP_VOICECALL)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_DL_REC,
+           strlen(SND_USE_CASE_VERB_DL_REC)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_UL_DL_REC,
+           strlen(SND_USE_CASE_VERB_UL_DL_REC)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOICE,
+           strlen(SND_USE_CASE_MOD_PLAY_VOICE)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+           strlen(SND_USE_CASE_MOD_PLAY_VOIP)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_DL,
+           strlen(SND_USE_CASE_MOD_CAPTURE_VOICE_DL)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL,
+           strlen(SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL))) {
+        return (USECASE_TYPE_RX | USECASE_TYPE_TX);
+  } else {
+       LOGE("unknown use case %s\n", useCase);
+        return 0;
+  }
+}
+
 void ALSADevice::disableDevice(alsa_handle_t *handle)
 {
+    unsigned usecase_type = 0;
+    int i, mods_size;
     char *useCase;
-
+    const char **mods_list;
     snd_use_case_get(handle->ucMgr, "_verb", (const char **)&useCase);
     if (useCase != NULL) {
-        if (!strcmp(useCase, handle->useCase)) {
+        if (!strncmp(useCase, handle->useCase, MAX_UC_LEN)) {
             snd_use_case_set(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE);
         } else {
             snd_use_case_set(handle->ucMgr, "_dismod", handle->useCase);
         }
+        free(useCase);
+        snd_use_case_get(handle->ucMgr, "_verb", (const char **)&useCase);
+        if (strncmp(useCase, SND_USE_CASE_VERB_INACTIVE,
+               strlen(SND_USE_CASE_VERB_INACTIVE)))
+            usecase_type |= getUseCaseType(useCase);
+        mods_size = snd_use_case_get_list(handle->ucMgr, "_enamods", &mods_list);
+        LOGE("Number of modifiers %d\n", mods_size);
+        if (mods_size) {
+            for(i = 0; i < mods_size; i++) {
+                LOGE("index %d modifier %s\n", i, mods_list[i]);
+                usecase_type |= getUseCaseType(mods_list[i]);
+            }
+        }
+        LOGE("usecase_type is %d\n", usecase_type);
+        if (!(usecase_type & USECASE_TYPE_TX) && (strncmp(curTxUCMDevice, "None", 4)))
+            snd_use_case_set(handle->ucMgr, "_disdev", curTxUCMDevice);
+        if (!(usecase_type & USECASE_TYPE_RX) && (strncmp(curRxUCMDevice, "None", 4)))
+            snd_use_case_set(handle->ucMgr, "_disdev", curRxUCMDevice);
     } else {
         LOGE("Invalid state, no valid use case found to disable");
     }
     free(useCase);
-    if (strcmp(curTxUCMDevice, "None"))
-        snd_use_case_set(handle->ucMgr, "_disdev", curTxUCMDevice);
-    if (strcmp(curRxUCMDevice, "None"))
-        snd_use_case_set(handle->ucMgr, "_disdev", curRxUCMDevice);
 }
 
 char* ALSADevice::getUCMDevice(uint32_t devices, int input)
@@ -750,6 +893,15 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
              } else if (mDevSettingsFlag & TTY_HCO) {
                  return strdup(SND_USE_CASE_DEV_EARPIECE); /* HANDSET RX */
              }
+        } else if( (devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
+                   (devices & AudioSystem::DEVICE_OUT_SPDIF) &&
+                   ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
+                    (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE) ) ) {
+            if (mDevSettingsFlag & ANC_FLAG) {
+                return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER_ANC_HEADSET);
+            } else {
+                return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER_HEADSET);
+            }
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
             ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
             (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE))) {
@@ -758,6 +910,10 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
             } else {
                 return strdup(SND_USE_CASE_DEV_SPEAKER_HEADSET); /* COMBO SPEAKER+HEADSET RX */
             }
+        } else if ((devices & AudioSystem::DEVICE_OUT_SPDIF) &&
+                   ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET)||
+                    (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE)) ) {
+            return strdup(SND_USE_CASE_DEV_SPDIF_ANC_HEADSET);
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
             ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET) ||
             (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE))) {
@@ -765,10 +921,24 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
                  (devices & AudioSystem::DEVICE_OUT_FM_TX)) {
             return strdup(SND_USE_CASE_DEV_SPEAKER_FM_TX); /* COMBO SPEAKER+FM_TX RX */
+        } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
+                 (devices & AudioSystem::DEVICE_OUT_SPDIF)) {
+            return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER); /* COMBO SPEAKER+FM_TX RX */
+        } else if ((devices & AudioSystem::DEVICE_OUT_EARPIECE) &&
+                 (devices & AudioSystem::DEVICE_OUT_SPDIF)) {
+            return strdup(SND_USE_CASE_DEV_SPDIF_HANDSET); /* COMBO SPEAKER+FM_TX RX */
         } else if (devices & AudioSystem::DEVICE_OUT_EARPIECE) {
             return strdup(SND_USE_CASE_DEV_EARPIECE); /* HANDSET RX */
         } else if (devices & AudioSystem::DEVICE_OUT_SPEAKER) {
             return strdup(SND_USE_CASE_DEV_SPEAKER); /* SPEAKER RX */
+        } else if ((devices & AudioSystem::DEVICE_OUT_SPDIF) &&
+                   ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
+                    (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE))) {
+            if (mDevSettingsFlag & ANC_FLAG) {
+                return strdup(SND_USE_CASE_DEV_SPDIF_ANC_HEADSET);
+            } else {
+                return strdup(SND_USE_CASE_DEV_SPDIF_HEADSET);
+            }
         } else if ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
                    (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE)) {
             if (mDevSettingsFlag & ANC_FLAG) {
@@ -792,12 +962,17 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
                    (devices & AudioSystem::DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER)) {
             /* Nothing to be done, use current active device */
             return strdup(curRxUCMDevice);
+        } else if ((devices & AudioSystem::DEVICE_OUT_SPDIF) &&
+                   (devices & AudioSystem::DEVICE_OUT_SPEAKER)) {
+            return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER);
         } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
             return strdup(SND_USE_CASE_DEV_HDMI); /* HDMI RX */
         } else if (devices & AudioSystem::DEVICE_OUT_PROXY) {
             return strdup(SND_USE_CASE_DEV_PROXY_RX); /* PROXY RX */
         } else if (devices & AudioSystem::DEVICE_OUT_FM_TX) {
             return strdup(SND_USE_CASE_DEV_FM_TX); /* FM Tx */
+        } else if (devices & AudioSystem::DEVICE_OUT_SPDIF) {
+            return strdup(SND_USE_CASE_DEV_SPDIF);
         } else if (devices & AudioSystem::DEVICE_OUT_DEFAULT) {
             return strdup(SND_USE_CASE_DEV_SPEAKER); /* SPEAKER RX */
         } else {
@@ -993,6 +1168,88 @@ status_t ALSADevice::setMixerControl(const char *name, const char *value)
     }
     ret = mixer_ctl_select(ctl, value);
     return (ret < 0) ? BAD_VALUE : NO_ERROR;
+}
+
+int32_t ALSADevice::get_linearpcm_channel_status(uint32_t sampleRate,
+                                                 unsigned char *channel_status)
+{
+    int32_t status = 0;
+    unsigned char bit_index;
+    memset(channel_status,0,24);
+    bit_index = 0;
+    /* block start bit in preamble bit 3 */
+    set_bits(channel_status, 1, 1, &bit_index);
+
+    //linear pcm
+    bit_index = 1;
+    set_bits(channel_status, 1, 0, &bit_index);
+
+    bit_index = 24;
+    switch (sampleRate) {
+        case 8000:
+           set_bits(channel_status, 4, 0x09, &bit_index);
+           break;
+        case 11025:
+           set_bits(channel_status, 4, 0x0A, &bit_index);
+           break;
+        case 12000:
+           set_bits(channel_status, 4, 0x0B, &bit_index);
+           break;
+        case 16000:
+           set_bits(channel_status, 4, 0x0E, &bit_index);
+           break;
+        case 22050:
+           set_bits(channel_status, 4, 0x02, &bit_index);
+           break;
+        case 24000:
+           set_bits(channel_status, 4, 0x06, &bit_index);
+           break;
+        case 32000: // 1100 in 24..27
+           set_bits(channel_status, 4, 0x0C, &bit_index);
+           break;
+        case 44100: // 0000 in 24..27
+           break;
+        case 48000: // 0100 in 24..27
+            set_bits(channel_status, 4, 0x04, &bit_index);
+            break;
+        case 88200: // 0001 in 24..27
+           set_bits(channel_status, 4, 0x01, &bit_index);
+           break;
+        case 96000: // 0101 in 24..27
+            set_bits(channel_status, 4, 0x05, &bit_index);
+            break;
+        case 176400: // 0011 in 24..27
+            set_bits(channel_status, 4, 0x03, &bit_index);
+            break;
+        case 192000: // 0111 in 24..27
+            set_bits(channel_status, 4, 0x07, &bit_index);
+            break;
+        default:
+            LOGV("Invalid sample_rate %u\n", sampleRate);
+            status = -1;
+            break;
+    }
+    return status;
+}
+
+
+int32_t ALSADevice::get_compressed_channel_status(void *audio_stream_data,
+                                                  uint32_t audio_frame_size,
+                                                  unsigned char *channel_status,
+                                                  enum audio_parser_code_type codec_type)
+                                                  // codec_type - AUDIO_PARSER_CODEC_AC3
+                                                  //            - AUDIO_PARSER_CODEC_DTS
+{
+    unsigned char *streamPtr;
+    streamPtr = (unsigned char *)audio_stream_data;
+
+    if(init_audio_parser(streamPtr, audio_frame_size, codec_type) == -1)
+    {
+        LOGE("init audio parser failed");
+        return -1;
+    }
+    get_channel_status(channel_status, codec_type);
+    return 0;
 }
 
 }

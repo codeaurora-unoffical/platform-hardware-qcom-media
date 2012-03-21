@@ -124,8 +124,25 @@ The incoming bitstream is appended to existing bitstream
 */
 void AudioBitstreamSM::copyBitsreamToInternalBuffer(char *bufPtr, size_t bytes)
 {
+    int32_t bufLen = SAMPLES_PER_CHANNEL*MAX_INPUT_CHANNELS_SUPPORTED*FACTOR_FOR_BUFFERING;
+    // flush the input buffer if input is not consumed
+    if( (ms11InputBufferWritePtr+bytes) > (ms11InputBuffer+bufLen) ) {
+        LOGE("Input bitstream is not consumed");
+        ms11InputBufferWritePtr = ms11InputBuffer;
+    }
+
     memcpy(ms11InputBufferWritePtr, bufPtr, bytes);
     ms11InputBufferWritePtr += bytes;
+}
+
+/*
+Append zeros to the bitstream, so that the entire bitstream in ADIF is pushed
+out for decoding
+*/
+void AudioBitstreamSM::appendSilenceToBitstreamInternalBuffer(uint32_t bytes, unsigned char value)
+{
+    for(int i=0; i< bytes; i++)
+        *ms11InputBufferWritePtr++ = value;
 }
 
 /*
