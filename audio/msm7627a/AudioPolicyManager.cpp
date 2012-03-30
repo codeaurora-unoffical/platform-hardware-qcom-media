@@ -96,6 +96,11 @@ void AudioPolicyManager::setPhoneState(int state)
 
     // check for device and output changes triggered by new phone state
     newDevice = getNewDevice(mHardwareOutput, false);
+    if (newDevice == 0 && (mLPADecodeOutput != -1 &&
+        mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+        newDevice = getDeviceForStrategy(STRATEGY_MEDIA, false);
+    }
+
 #ifdef WITH_A2DP
     AudioPolicyManagerBase::checkOutputForAllStrategies();
     // suspend A2DP output if a SCO device is present.
@@ -157,6 +162,107 @@ void AudioPolicyManager::setPhoneState(int state)
     }
 }
 
+
+audio_io_handle_t AudioPolicyManager::getSession(AudioSystem::stream_type stream,
+                                    uint32_t format,
+                                    AudioSystem::output_flags flags,
+                                    int32_t sessionId)
+{
+    audio_io_handle_t output = 0;
+    uint32_t latency = 0;
+    routing_strategy strategy = getStrategy((AudioSystem::stream_type)stream);
+    uint32_t device = getDeviceForStrategy(strategy);
+    LOGV("getSession() stream %d, format %d, sessionId %x, flags %x device %d", stream, format, sessionId, flags, device);
+    AudioOutputDescriptor *outputDesc = new AudioOutputDescriptor();
+    outputDesc->mDevice = device;
+    outputDesc->mSamplingRate = 0;
+    outputDesc->mFormat = format;
+    outputDesc->mChannels = 2;
+    outputDesc->mLatency = 0;
+    outputDesc->mFlags = (AudioSystem::output_flags)(flags | AudioSystem::OUTPUT_FLAG_DIRECT);
+    outputDesc->mRefCount[stream] = 0;
+    output = mpClientInterface->openSession(&outputDesc->mDevice,
+                                    &outputDesc->mFormat,
+                                    outputDesc->mFlags,
+                                    stream,
+                                    sessionId);
+
+    // only accept an output with the requeted parameters
+    if ((format != 0 && format != outputDesc->mFormat) || !output) {
+        LOGE("openSession() failed opening a session: format %d, sessionId %d output %d",
+                format, sessionId, output);
+        if(output) {
+            mpClientInterface->closeSession(output);
+        }
+        delete outputDesc;
+        return 0;
+    }
+
+    //reset it here, it will get updated in startoutput
+    outputDesc->mDevice = 0;
+
+    mOutputs.add(output, outputDesc);
+    mLPADecodeOutput = output;
+    mLPAStreamType   = stream;
+    return output;
+}
+
+void AudioPolicyManager::pauseSession(audio_io_handle_t output, AudioSystem::stream_type stream)
+{
+    LOGV("pauseSession() Output [%d] and stream is [%d]", output, stream);
+
+    if ( (output == mLPADecodeOutput) &&
+         (stream == mLPAStreamType) ) {
+
+        mLPAActiveOuput = mLPADecodeOutput;
+        mLPAActiveStreamType = mLPAStreamType;
+        mLPADecodeOutput = -1;
+        mLPAStreamType = AudioSystem::DEFAULT;
+        mLPAMuted = false;
+    }
+}
+
+void AudioPolicyManager::resumeSession(audio_io_handle_t output, AudioSystem::stream_type stream)
+{
+    LOGV("resumeSession() Output [%d] and stream is [%d]", output, stream);
+
+    if (output == mLPAActiveOuput)
+    {
+        mLPADecodeOutput = mLPAActiveOuput;
+        mLPAStreamType = stream;
+
+        // Set Volume if the music stream volume is changed in the Pause state of LPA Jagan
+        mLPAActiveOuput = -1;
+        mLPAActiveStreamType = AudioSystem::DEFAULT;
+        AudioPolicyManager::startOutput(mLPADecodeOutput, mLPAStreamType);
+    }
+}
+
+void AudioPolicyManager::releaseSession(audio_io_handle_t output)
+{
+    LOGV("releaseSession() %d", output);
+
+    // This means the Output is put into Pause state
+    if (output == mLPAActiveOuput && mLPADecodeOutput == -1) {
+        mLPADecodeOutput = mLPAActiveOuput;
+        mLPAStreamType = mLPAActiveStreamType;
+    }
+
+    ssize_t index = mOutputs.indexOfKey(output);
+    if (index < 0) {
+        LOGW("releaseSession() releasing unknown output %d", output);
+        return;
+    }
+
+    AudioPolicyManager::stopOutput(output, mLPAStreamType);
+    delete mOutputs.valueAt(index);
+    mOutputs.removeItem(output);
+    mLPADecodeOutput = -1;
+    mLPAActiveOuput = -1;
+    mLPAStreamType = AudioSystem::DEFAULT;
+    mLPAActiveStreamType = AudioSystem::DEFAULT;
+    mLPAMuted = false;
+}
 
 uint32_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strategy, bool fromCache)
 {
@@ -476,6 +582,9 @@ status_t AudioPolicyManager::setDeviceConnectionState(AudioSystem::audio_devices
 
         // request routing change if necessary
         uint32_t newDevice = getNewDevice(mHardwareOutput, false);
+        if(newDevice == 0 && mLPADecodeOutput != -1) {
+            newDevice = AudioPolicyManagerBase::getNewDevice(mLPADecodeOutput, false);
+        }
         if (device == AudioSystem::DEVICE_OUT_FM) {
             if (state == AudioSystem::DEVICE_STATE_AVAILABLE) {
                 mOutputs.valueFor(mHardwareOutput)->changeRefCount(AudioSystem::FM, 1);
@@ -495,6 +604,9 @@ status_t AudioPolicyManager::setDeviceConnectionState(AudioSystem::audio_devices
         }
 #endif
         updateDeviceForStrategy();
+        if (mLPADecodeOutput != -1) {
+            setOutputDevice(mLPADecodeOutput, newDevice);
+        }
         setOutputDevice(mHardwareOutput, newDevice);
 
         if (device == AudioSystem::DEVICE_OUT_WIRED_HEADSET) {
@@ -713,8 +825,11 @@ status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
         LOGE("Selecting AnlgFM + CODEC device %x",NewDevice);
         setOutputDevice(output, NewDevice, true);
     }
-    else {
+    else if (output != mLPADecodeOutput){
         setOutputDevice(output, NewDevice);
+    }
+    else{
+        setOutputDevice(output, AudioPolicyManagerBase::getNewDevice(output), true);
     }
 
     // handle special case for sonification while in call
@@ -758,6 +873,9 @@ status_t AudioPolicyManager::stopOutput(audio_io_handle_t output,
 #endif
         uint32_t newDevice = AudioPolicyManagerBase::getNewDevice(mHardwareOutput, false);
 
+        if(newDevice == 0 && mLPADecodeOutput != -1) {
+            newDevice = AudioPolicyManagerBase::getNewDevice(mLPADecodeOutput, false);
+        }
 
         if(FM_ANALOG == getFMMode())
             setOutputDevice(output, newDevice,true);
@@ -819,6 +937,16 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
         device == (AudioSystem::DEVICE_OUT_SPEAKER | AudioSystem::DEVICE_OUT_WIRED_HEADSET | AudioSystem::DEVICE_OUT_FM) ||
         device == (AudioSystem::DEVICE_OUT_SPEAKER | AudioSystem::DEVICE_OUT_FM_TX)){
         setStrategyMute(STRATEGY_MEDIA, true, output);
+
+        LOGV("setOutputDevice: muting output:%d mLPADecodeOutput:%d mHardwareOutput:%d",output,mLPADecodeOutput,mHardwareOutput);
+        // Mute LPA output also if it belongs to STRATEGY_MEDIA
+        if(((mLPADecodeOutput != -1) && (mLPADecodeOutput != output) &&
+            mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            setStrategyMute(STRATEGY_MEDIA, true, mLPADecodeOutput);
+        } else if (output != mHardwareOutput) {
+            setStrategyMute(STRATEGY_MEDIA, true, mHardwareOutput);
+        }
+
         // wait for the PCM output buffers to empty before proceeding with the rest of the command
         usleep(outputDesc->mLatency*2*1000);
     }
@@ -838,6 +966,11 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
     // update stream volumes according to new device
     applyStreamVolumes(output, device, delayMs);
 
+    if((mLPADecodeOutput != -1 &&
+        mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+        applyStreamVolumes(mLPADecodeOutput, device, delayMs);
+    }
+
 #ifdef WITH_A2DP
     // if disconnecting SCO device, restore A2DP output
     if (AudioSystem::isBluetoothScoDevice((AudioSystem::audio_devices)prevDevice)) {
@@ -854,6 +987,14 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
         prevDevice == (AudioSystem::DEVICE_OUT_SPEAKER | AudioSystem::DEVICE_OUT_WIRED_HEADSET | AudioSystem::DEVICE_OUT_FM) ||
         prevDevice == (AudioSystem::DEVICE_OUT_SPEAKER | AudioSystem::DEVICE_OUT_FM_TX)){
         setStrategyMute(STRATEGY_MEDIA, false, output, delayMs);
+        LOGV("setOutputDevice: Unmuting output:%d mLPADecodeOutput:%d mHardwareOutput:%d",output,mLPADecodeOutput,mHardwareOutput);
+        // Unmute LPA output also if it belongs to STRATEGY_MEDIA
+        if((mLPADecodeOutput != -1 && (mLPADecodeOutput != output) &&
+            mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            setStrategyMute(STRATEGY_MEDIA, false, mLPADecodeOutput, delayMs);
+        } else if (output != mHardwareOutput) {
+            setStrategyMute(STRATEGY_MEDIA, false, mHardwareOutput, delayMs);
+        }
     }
 }
 
@@ -861,7 +1002,8 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream, int index, audio_io_h
 {
 
     // do not change actual stream volume if the stream is muted
-    if (mOutputs.valueFor(output)->mMuteCount[stream] != 0) {
+    if ((mOutputs.valueFor(output)->mMuteCount[stream] != 0 && output != mLPADecodeOutput) ||
+         (output == mLPADecodeOutput && stream == mLPAStreamType && mLPAMuted == true)){
         LOGV("checkAndSetVolume() stream %d muted count %d", stream, mOutputs.valueFor(output)->mMuteCount[stream]);
         return NO_ERROR;
     }
@@ -882,6 +1024,11 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream, int index, audio_io_h
         (stream == AudioSystem::VOICE_CALL) || (stream == AudioSystem::FM) || force) {
         mOutputs.valueFor(output)->mCurVolume[stream] = volume;
         LOGV("setStreamVolume() for output %d stream %d, volume %f, delay %d", output, stream, volume, delayMs);
+
+        if (stream == mLPAActiveStreamType && mLPAActiveOuput > 0 ) {
+            mOutputs.valueFor(mLPAActiveOuput)->mCurVolume[mLPAActiveStreamType] = volume;
+        }
+
         if (stream == AudioSystem::VOICE_CALL ||
             stream == AudioSystem::DTMF ||
             stream == AudioSystem::BLUETOOTH_SCO) {
@@ -924,4 +1071,48 @@ status_t AudioPolicyManager::checkAndSetVolume(int stream, int index, audio_io_h
    }
     return NO_ERROR;
 }
+
+
+void AudioPolicyManager::setStreamMute(int stream, bool on, audio_io_handle_t output, int delayMs)
+{
+    StreamDescriptor &streamDesc = mStreams[stream];
+    AudioOutputDescriptor *outputDesc = mOutputs.valueFor(output);
+
+    LOGV("setStreamMute() stream %d, mute %d, output %d, mMuteCount %d", stream, on, output, outputDesc->mMuteCount[stream]);
+
+    if (on) {
+        if ((outputDesc->mMuteCount[stream] == 0 && output != mLPADecodeOutput) ||
+            (output == mLPADecodeOutput && stream == mLPAStreamType && false == mLPAMuted)) {
+            if (streamDesc.mCanBeMuted) {
+                checkAndSetVolume(stream, 0, output, outputDesc->device(), delayMs);
+            }
+        }
+        // increment mMuteCount after calling checkAndSetVolume() so that volume change is not ignored
+        if(output == mLPADecodeOutput) {
+            if(stream == mLPAStreamType && false == mLPAMuted) {
+                mLPAMuted = true;
+            }
+        } else {
+            outputDesc->mMuteCount[stream]++;
+        }
+    } else {
+        if ((outputDesc->mMuteCount[stream] == 0 && output != mLPADecodeOutput) ||
+            (output == mLPADecodeOutput && stream == mLPAStreamType && false == mLPAMuted)) {
+            LOGW("setStreamMute() unmuting non muted stream!");
+            return;
+        }
+        if(output == mLPADecodeOutput) {
+            if(stream == mLPAStreamType && true == mLPAMuted) {
+                mLPAMuted = false;
+                checkAndSetVolume(stream, streamDesc.mIndexCur, output, outputDesc->device(), delayMs);
+            }
+        } else {
+            if(--outputDesc->mMuteCount[stream] == 0){
+                checkAndSetVolume(stream, streamDesc.mIndexCur, output, outputDesc->device(), delayMs);
+            }
+        }
+    }
+}
+
+
 }; // namespace android

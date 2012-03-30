@@ -542,6 +542,41 @@ static int qcom_adev_close(hw_device_t* device)
     return 0;
 }
 
+
+static int adev_open_output_session(struct audio_hw_device *dev,
+                                   uint32_t devices,
+                                   int *format,
+                                   int sessionId,
+                                   struct audio_stream_out **stream_out)
+{
+    struct qcom_audio_device *qadev = to_ladev(dev);
+    status_t status;
+    struct qcom_stream_out *out;
+    int ret;
+
+    out = (struct qcom_stream_out *)calloc(1, sizeof(*out));
+    if (!out)
+        return -ENOMEM;
+
+    out->qcom_out = qadev->hwif->openOutputSession(devices, format,&status,sessionId);
+    if (!out->qcom_out) {
+        ret = status;
+        goto err_open;
+    }
+
+    out->stream.common.standby = out_standby;
+    out->stream.common.set_parameters = out_set_parameters;
+    out->stream.set_volume = out_set_volume;
+
+    *stream_out = &out->stream;
+    return 0;
+
+err_open:
+    free(out);
+    *stream_out = NULL;
+    return ret;
+}
+
 static int qcom_adev_open(const hw_module_t* module, const char* name,
                             hw_device_t** device)
 {
@@ -571,6 +606,7 @@ static int qcom_adev_open(const hw_module_t* module, const char* name,
     qadev->device.set_parameters = adev_set_parameters;
     qadev->device.get_parameters = adev_get_parameters;
     qadev->device.get_input_buffer_size = adev_get_input_buffer_size;
+    qadev->device.open_output_session = adev_open_output_session;
     qadev->device.open_output_stream = adev_open_output_stream;
     qadev->device.close_output_stream = adev_close_output_stream;
     qadev->device.open_input_stream = adev_open_input_stream;

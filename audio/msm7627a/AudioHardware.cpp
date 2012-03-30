@@ -73,7 +73,8 @@ static bool audpp_filter_inited = false;
 static bool adrc_filter_exists[3];
 static bool mbadrc_filter_exists[3];
 static int post_proc_feature_mask = 0;
-static bool playback_in_progress = false;
+static bool hpcm_playback_in_progress = false;
+static bool lpa_playback_in_progress = false;
 
 //Pre processing parameters
 static struct tx_iir tx_iir_cfg[9];
@@ -381,6 +382,29 @@ void AudioHardware::closeInputStream(AudioStreamIn* in) {
         LOGE("Attempt to close invalid input stream");
     }
 }
+
+
+AudioStreamOut* AudioHardware::openOutputSession(
+        uint32_t devices, int *format, status_t *status, int sessionId)
+{
+    AudioSessionOutMSM7xxx* out;
+    { // scope for the lock
+        Mutex::Autolock lock(mLock);
+
+        // create new output stream
+        out = new AudioSessionOutMSM7xxx();
+        status_t lStatus = out->set(this, devices, format, sessionId);
+        if (status) {
+            *status = lStatus;
+        }
+        if (lStatus != NO_ERROR) {
+            delete out;
+            out = NULL;
+        }
+    }
+    return out;
+}
+
 
 status_t AudioHardware::setMode(int mode)
 {
@@ -1551,14 +1575,14 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input)
         ret = doAudioRouteOrMute(new_snd_device);
 
        //disable post proc first for previous session
-       if(playback_in_progress)
+       if(hpcm_playback_in_progress || lpa_playback_in_progress)
            msm72xx_enable_postproc(false);
 
        //enable post proc for new device
        snd_device = new_snd_device;
        post_proc_feature_mask = new_post_proc_feature_mask;
 
-       if(playback_in_progress)
+       if(hpcm_playback_in_progress|| lpa_playback_in_progress)
            msm72xx_enable_postproc(true);
 
        mCurSndDevice = new_snd_device;
@@ -2099,7 +2123,7 @@ ssize_t AudioHardware::AudioStreamOutMSM72xx::write(const void* buffer, size_t b
     if (mStartCount) {
         if (--mStartCount == 0) {
             ioctl(mFd, AUDIO_START, 0);
-            playback_in_progress = true;
+            hpcm_playback_in_progress = true;
             //enable post processing
             msm72xx_enable_postproc(true);
         }
@@ -2122,8 +2146,10 @@ status_t AudioHardware::AudioStreamOutMSM72xx::standby()
     status_t status = NO_ERROR;
     if (!mStandby && mFd >= 0) {
         //disable post processing
+        hpcm_playback_in_progress = false;
+        if(!lpa_playback_in_progress)
         msm72xx_enable_postproc(false);
-        playback_in_progress = false;
+
         ::close(mFd);
         mFd = -1;
     }
@@ -2452,6 +2478,115 @@ status_t AudioHardware::AudioStreamOutDirect::getRenderPosition(uint32_t *dspFra
 
 
 // End AudioStreamOutDirect
+
+AudioHardware::AudioSessionOutMSM7xxx::AudioSessionOutMSM7xxx() :
+    mHardware(0), mStartCount(0), mRetryCount(0), mStandby(true), mDevices(0), mLPADriverFd(-1)
+{
+}
+
+status_t AudioHardware::AudioSessionOutMSM7xxx::set(
+        AudioHardware* hw, uint32_t devices, int *pFormat, int32_t LPADriverFd)
+{
+    int lFormat = pFormat ? *pFormat : 0;
+
+    mHardware = hw;
+    mDevices = devices;
+
+    if(LPADriverFd >= 0) {
+        mLPADriverFd = LPADriverFd;
+        lpa_playback_in_progress = true;
+        msm72xx_enable_postproc(true);
+    }
+
+    return NO_ERROR;
+}
+
+AudioHardware::AudioSessionOutMSM7xxx::~AudioSessionOutMSM7xxx()
+{
+}
+
+
+status_t AudioHardware::AudioSessionOutMSM7xxx::standby()
+{
+
+    LOGD("AudioSessionOutMSM7xxx::standby()");
+    mStandby = true;
+    lpa_playback_in_progress = false;
+    if(!hpcm_playback_in_progress )
+        msm72xx_enable_postproc(true);
+    return NO_ERROR;
+}
+
+bool AudioHardware::AudioSessionOutMSM7xxx::checkStandby()
+{
+    return mStandby;
+}
+
+status_t AudioHardware::AudioSessionOutMSM7xxx::setParameters(const String8& keyValuePairs)
+{
+    AudioParameter param = AudioParameter(keyValuePairs);
+    String8 key = String8(AudioParameter::keyRouting);
+    status_t status = NO_ERROR;
+    int device;
+    LOGV("AudioSessionOutMSM7xxx::setParameters() %s", keyValuePairs.string());
+
+    if (param.getInt(key, device) == NO_ERROR) {
+        mDevices = device;
+        LOGV("set output routing %x", mDevices);
+        status = mHardware->doRouting(NULL);
+        param.remove(key);
+    }
+
+    if (param.size()) {
+        status = BAD_VALUE;
+    }
+    return status;
+}
+String8 AudioHardware::AudioSessionOutMSM7xxx::getParameters(const String8& keys)
+{
+    AudioParameter param = AudioParameter(keys);
+    String8 value;
+    String8 key = String8(AudioParameter::keyRouting);
+
+    if (param.get(key, value) == NO_ERROR) {
+        LOGV("get routing %x", mDevices);
+        param.addInt(key, (int)mDevices);
+    }
+
+    LOGV("AudioSessionOutMSM7xxx::getParameters() %s", param.toString().string());
+    return param.toString();
+}
+
+status_t AudioHardware::AudioSessionOutMSM7xxx::getRenderPosition(uint32_t *dspFrames)
+{
+    //TODO: enable when supported by driver
+    return INVALID_OPERATION;
+}
+
+status_t AudioHardware::AudioSessionOutMSM7xxx::setVolume(float left, float right)
+{
+    float v = (left + right) / 2;
+    if (v < 0.0) {
+        LOGW("AudioSessionOutMSM7xxx::setVolume(%f) under 0.0, assuming 0.0\n", v);
+        v = 0.0;
+    } else if (v > 1.0) {
+        LOGW("AudioSessionOutMSM7xxx::setVolume(%f) over 1.0, assuming 1.0\n", v);
+        v = 1.0;
+    }
+
+    // Ensure to convert the log volume back to linear for LPA
+    long vol = v * 10000;
+    LOGV("AudioSessionOutMSM7xxx::setVolume(%f)\n", v);
+    LOGV("Setting session volume to %ld (available range is 0 to 100)\n", vol);
+
+    if (ioctl(mLPADriverFd,AUDIO_SET_VOLUME, vol)< 0)
+        LOGE("LPA volume set failed");
+
+    LOGV("LPA volume set failed(%f) succeeded",vol);
+    return NO_ERROR;
+}
+
+
 //.----------------------------------------------------------------------------
 
 
