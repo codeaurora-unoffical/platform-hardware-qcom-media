@@ -406,7 +406,7 @@ void AudioHardware::closeInputStream(AudioStreamIn* in) {
 
 
 AudioStreamOut* AudioHardware::openOutputSession(
-        uint32_t devices, int *format, status_t *status, int sessionId)
+        uint32_t devices, int *format, status_t *status, int sessionId, uint32_t samplingRate,uint32_t channels)
 {
     AudioSessionOutMSM7xxx* out;
     { // scope for the lock

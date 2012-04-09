@@ -147,7 +147,9 @@ public:
                                 uint32_t devices,
                                 int *format=0,
                                 status_t *status=0,
-                                int sessionId=-1);
+                                int sessionId=-1,
+                                uint32_t samplingRate=0,
+                                uint32_t channels=0);
 
     virtual AudioStreamIn* openInputStream(
                                 uint32_t devices,
