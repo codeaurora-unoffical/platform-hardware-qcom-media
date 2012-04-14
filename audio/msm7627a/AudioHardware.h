@@ -60,6 +60,8 @@ using android::Mutex;
 #define RX_IIR_DISABLE 0xFFFB
 #define MBADRC_ENABLE  0x0010
 #define MBADRC_DISABLE 0xFFEF
+#define SRS_ENABLE 0x0020
+#define SRS_DISABLE 0x0040
 
 #define AGC_ENABLE     0x0001
 #define NS_ENABLE      0x0002

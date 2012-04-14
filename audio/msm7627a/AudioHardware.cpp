@@ -47,6 +47,24 @@ extern "C" {
 
 namespace android_audio_legacy {
 
+#ifdef SRS_PROCESSING
+void*       SRSParamsG = NULL;
+void*       SRSParamsW = NULL;
+void*       SRSParamsC = NULL;
+void*       SRSParamsHP = NULL;
+void*       SRSParamsP = NULL;
+void*       SRSParamsHL = NULL;
+
+#define SRS_PARAMS_G 1
+#define SRS_PARAMS_W 2
+#define SRS_PARAMS_C 4
+#define SRS_PARAMS_HP 8
+#define SRS_PARAMS_P 16
+#define SRS_PARAMS_HL 32
+#define SRS_PARAMS_ALL 0xFF
+
+#endif /*SRS_PROCESSING*/
+
 static int audpre_index, tx_iir_index;
 static void * acoustic;
 const uint32_t AudioHardware::inputSamplingRates[] = {
@@ -55,6 +73,9 @@ const uint32_t AudioHardware::inputSamplingRates[] = {
 
 static int get_audpp_filter(void);
 static int msm72xx_enable_postproc(bool state);
+#ifdef SRS_PROCESSING
+static void msm72xx_enable_srs(int flags, bool state);
+#endif /*SRS_PROCESSING*/
 static int msm72xx_enable_preproc(bool state);
 
 // Post processing paramters
@@ -453,13 +474,49 @@ status_t AudioHardware::setParameters(const String8& keyValuePairs)
     AudioParameter param = AudioParameter(keyValuePairs);
     String8 value;
     String8 key;
+
     const char BT_NREC_KEY[] = "bt_headset_nrec";
     const char BT_NAME_KEY[] = "bt_headset_name";
     const char BT_NREC_VALUE_ON[] = "on";
-
-
+#ifdef SRS_PROCESSING
+    int to_set=0;
     LOGV("setParameters() %s", keyValuePairs.string());
+    if(strncmp("SRS_Buffer", keyValuePairs.string(), 10) == 0) {
+        int SRSptr = 0;
+        String8 keySRSG  = String8("SRS_BufferG"), keySRSW  = String8("SRS_BufferW"),
+          keySRSC  = String8("SRS_BufferC"), keySRSHP = String8("SRS_BufferHP"),
+          keySRSP  = String8("SRS_BufferP"), keySRSHL = String8("SRS_BufferHL");
+        if (param.getInt(keySRSG, SRSptr) == NO_ERROR) {
+            SRSParamsG = (void*)SRSptr;
+            to_set |= SRS_PARAMS_G;
+        } else if (param.getInt(keySRSW, SRSptr) == NO_ERROR) {
+            SRSParamsW = (void*)SRSptr;
+            to_set |= SRS_PARAMS_W;
+        } else if (param.getInt(keySRSC, SRSptr) == NO_ERROR) {
+            SRSParamsC = (void*)SRSptr;
+            to_set |= SRS_PARAMS_C;
+        } else if (param.getInt(keySRSHP, SRSptr) == NO_ERROR) {
+            SRSParamsHP = (void*)SRSptr;
+            to_set |= SRS_PARAMS_HP;
+        } else if (param.getInt(keySRSP, SRSptr) == NO_ERROR) {
+            SRSParamsP = (void*)SRSptr;
+            to_set |= SRS_PARAMS_P;
+        } else if (param.getInt(keySRSHL, SRSptr) == NO_ERROR) {
+            SRSParamsHL = (void*)SRSptr;
+            to_set |= SRS_PARAMS_HL;
+        }
 
+        LOGD("SetParam SRS flags=0x%x", to_set);
+
+        if(hpcm_playback_in_progress || lpa_playback_in_progress){
+            msm72xx_enable_srs(to_set, true);
+        }
+
+        if(SRSptr)
+            return NO_ERROR;
+
+    }
+#endif /*SRS_PROCESSING*/
     if (keyValuePairs.length() == 0) return BAD_VALUE;
 
     key = String8(BT_NREC_KEY);
@@ -1021,11 +1078,61 @@ static int get_audpp_filter(void)
     close(csvfd);
     return 0;
 }
+#ifdef SRS_PROCESSING
+static void msm72xx_enable_srs(int flags, bool state)
+{
+    int fd = open(PCM_CTL_DEVICE, O_RDWR);
+    if (fd < 0) {
+        LOGE("Cannot open PCM Ctl device for srs params");
+        return;
+    }
 
+    int srs_feature_mask =0;
+    LOGD("Enable SRS flags=0x%x state= %d",flags,state);
+    if (state == false) {
+        srs_feature_mask |= SRS_DISABLE;
+        if(SRSParamsG) {
+            unsigned short int backup = ((unsigned short int*)SRSParamsG)[2];
+            ((unsigned short int*)SRSParamsG)[2] = 0;
+            ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsG);
+            ((unsigned short int*)SRSParamsG)[2] = backup;
+        }
+    } else {
+        srs_feature_mask |= SRS_ENABLE;
+        if(SRSParamsW && (flags & SRS_PARAMS_W))
+            ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsW);
+        if(SRSParamsC && (flags & SRS_PARAMS_C))
+            ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsC);
+        if(SRSParamsHP && (flags & SRS_PARAMS_HP))
+            ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsHP);
+        if(SRSParamsP && (flags & SRS_PARAMS_P))
+            ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsP);
+        if(SRSParamsHL && (flags & SRS_PARAMS_HL))
+            ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsHL);
+        if(SRSParamsG && (flags & SRS_PARAMS_G))
+            ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsG);
+    }
+
+    if (ioctl(fd, AUDIO_ENABLE_AUDPP, &srs_feature_mask) < 0) {
+        LOGE("enable audpp error");
+    }
+
+    close(fd);
+}
+
+#endif /*SRS_PROCESSING*/
 static int msm72xx_enable_postproc(bool state)
 {
     int fd;
     int device_id=0;
+
+    char postProc[128];
+    property_get("audio.legacy.postproc",postProc,"0");
+
+    if(!(strcmp("true",postProc) == 0)){
+        LOGV("Legacy Post Proc disabled.");
+        return 0;
+    }
 
     if (!audpp_filter_inited)
     {
@@ -1574,18 +1681,26 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input)
     if (new_snd_device != -1 && new_snd_device != mCurSndDevice) {
         ret = doAudioRouteOrMute(new_snd_device);
 
-       //disable post proc first for previous session
-       if(hpcm_playback_in_progress || lpa_playback_in_progress)
-           msm72xx_enable_postproc(false);
+        //disable post proc first for previous session
+        if(hpcm_playback_in_progress || lpa_playback_in_progress){
+            msm72xx_enable_postproc(false);
+#ifdef SRS_PROCESSING
+            msm72xx_enable_srs(SRS_PARAMS_ALL, false);
+#endif /*SRS_PROCESSING*/
+        }
 
-       //enable post proc for new device
-       snd_device = new_snd_device;
-       post_proc_feature_mask = new_post_proc_feature_mask;
+        //enable post proc for new device
+        snd_device = new_snd_device;
+        post_proc_feature_mask = new_post_proc_feature_mask;
 
-       if(hpcm_playback_in_progress|| lpa_playback_in_progress)
-           msm72xx_enable_postproc(true);
+        if(hpcm_playback_in_progress|| lpa_playback_in_progress){
+            msm72xx_enable_postproc(true);
+#ifdef SRS_PROCESSING
+            msm72xx_enable_srs(SRS_PARAMS_ALL, true);
+#endif /*SRS_PROCESSING*/
+        }
 
-       mCurSndDevice = new_snd_device;
+        mCurSndDevice = new_snd_device;
     }
 
     return ret;
@@ -2126,6 +2241,9 @@ ssize_t AudioHardware::AudioStreamOutMSM72xx::write(const void* buffer, size_t b
             hpcm_playback_in_progress = true;
             //enable post processing
             msm72xx_enable_postproc(true);
+#ifdef SRS_PROCESSING
+            msm72xx_enable_srs(SRS_PARAMS_ALL, true);
+#endif /*SRS_PROCESSING*/
         }
     }
     return bytes;
@@ -2147,9 +2265,12 @@ status_t AudioHardware::AudioStreamOutMSM72xx::standby()
     if (!mStandby && mFd >= 0) {
         //disable post processing
         hpcm_playback_in_progress = false;
-        if(!lpa_playback_in_progress)
-        msm72xx_enable_postproc(false);
-
+        if(!lpa_playback_in_progress){
+            msm72xx_enable_postproc(false);
+#ifdef SRS_PROCESSING
+            msm72xx_enable_srs(SRS_PARAMS_ALL, false);
+#endif /*SRS_PROCESSING*/
+        }
         ::close(mFd);
         mFd = -1;
     }
@@ -2496,6 +2617,10 @@ status_t AudioHardware::AudioSessionOutMSM7xxx::set(
         mLPADriverFd = LPADriverFd;
         lpa_playback_in_progress = true;
         msm72xx_enable_postproc(true);
+#ifdef SRS_PROCESSING
+        msm72xx_enable_srs(SRS_PARAMS_ALL, true);
+#endif /*SRS_PROCESSING*/
+
     }
 
     return NO_ERROR;
@@ -2512,8 +2637,12 @@ status_t AudioHardware::AudioSessionOutMSM7xxx::standby()
     LOGD("AudioSessionOutMSM7xxx::standby()");
     mStandby = true;
     lpa_playback_in_progress = false;
-    if(!hpcm_playback_in_progress )
-        msm72xx_enable_postproc(true);
+    if(!hpcm_playback_in_progress ){
+        msm72xx_enable_postproc(false);
+#ifdef SRS_PROCESSING
+        msm72xx_enable_srs(SRS_PARAMS_ALL, false);
+#endif /*SRS_PROCESSING*/
+    }
     return NO_ERROR;
 }
 
