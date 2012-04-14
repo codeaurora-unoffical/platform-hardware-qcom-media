@@ -965,6 +965,9 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
         } else if ((devices & AudioSystem::DEVICE_OUT_SPDIF) &&
                    (devices & AudioSystem::DEVICE_OUT_SPEAKER)) {
             return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER);
+        } else if ((devices & AudioSystem::DEVICE_OUT_SPDIF) &&
+                   (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL)) {
+            return strdup(SND_USE_CASE_DEV_HDMI_SPDIF);
         } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
             return strdup(SND_USE_CASE_DEV_HDMI); /* HDMI RX */
         } else if (devices & AudioSystem::DEVICE_OUT_PROXY) {
