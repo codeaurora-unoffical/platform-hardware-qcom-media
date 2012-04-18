@@ -366,15 +366,15 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
         LOGW("AudioSessionOutALSA::setVolume(%f) over 1.0, assuming 1.0\n", volume);
         volume = 1.0;
     }
-    mStreamVol = lrint((volume * 100.0)+0.5);
+   mStreamVol = lrint((volume * 0x2000)+0.5);
 
-    LOGD("Setting stream volume to %d (available range is 0 to 100)\n", mStreamVol);
+    LOGD("Setting stream volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
     LOGE("ToDo: Implement volume setting for broadcast stream");
     if(mPcmRxHandle) {
         if(!strcmp(mPcmRxHandle->useCase, SND_USE_CASE_VERB_HIFI2) ||
                 !strcmp(mPcmRxHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2)) {
             LOGD("setPCM 1 Volume(%f)\n", volume);
-            LOGD("Setting PCM volume to %d (available range is 0 to 100)\n", mStreamVol);
+            LOGD("Setting PCM volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
             status = mPcmRxHandle->module->setPcmVolume(mStreamVol);
         }
         return status;
@@ -383,7 +383,7 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
         if(!strcmp(mCompreRxHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
                 !strcmp(mCompreRxHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL)) {
             LOGD("set compressed Volume(%f)\n", volume);
-            LOGD("Setting Compressed volume to %d (available range is 0 to 100)\n", mStreamVol);
+            LOGD("Setting Compressed volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
             status = mCompreRxHandle->module->setCompressedVolume(mStreamVol);
         }
         return status;
