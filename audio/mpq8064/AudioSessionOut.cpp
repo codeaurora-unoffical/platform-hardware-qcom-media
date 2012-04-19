@@ -39,12 +39,19 @@
 #include <sys/prctl.h>
 #include <sys/resource.h>
 #include <pthread.h>
+#include <sys/poll.h>
+#include <sys/eventfd.h>
+#include <linux/unistd.h>
 
 #include "AudioHardwareALSA.h"
 
+namespace sys_write {
+    ssize_t lib_write(int fd, const void *buf, size_t count) {
+        return write(fd, buf, count);
+    }
+};
 namespace android_audio_legacy
 {
-
 // ----------------------------------------------------------------------------
 
 AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
@@ -102,6 +109,9 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mA2dpOutputStarted  = false;
     mOpenMS11Decoder    = false;
     mChannelStatusSet   = false;
+    mTunnelPaused       = false;
+    mTunnelSeeking      = false;
+    mReachedExtractorEOS= false;
 
     mPcmRxHandle        = NULL;
     mPcmTxHandle        = NULL;
@@ -110,6 +120,10 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mProxyPcmHandle     = NULL;
     mMS11Decoder        = NULL;
     mBitstreamSM        = NULL;
+
+    mInputBufferSize    = DEFAULT_BUFFER_SIZE;
+    mInputBufferCount   = TUNNEL_DECODER_BUFFER_COUNT;
+    mEfd = -1;
 
     if(mDevices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
         mCaptureFromProxy = true;
@@ -175,6 +189,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         if(devices & AudioSystem::DEVICE_OUT_PROXY) {
             mCaptureFromProxy = true;
         }
+        createThreadsForTunnelDecode();
     } else if(format == AUDIO_FORMAT_PCM_16_BIT) {
         if(mDevices & ~AudioSystem::DEVICE_OUT_SPDIF) {
             mRoutePcmAudio = true;
@@ -244,7 +259,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
             mALSADevice->setChannelStatus(mChannelStatus);
         }
     }
-    if(mUseTunnelDecode) {
+    if (mUseTunnelDecode) {
         // If audio is to be capture back from proxy device, then route 
         // audio to SPDIF and Proxy devices only
         devices = mDevices;
@@ -252,20 +267,34 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
             devices = (mDevices & AudioSystem::DEVICE_OUT_SPDIF);
             devices |= AudioSystem::DEVICE_OUT_PROXY;
         }
-#if 1
+        mInputBufferSize = TUNNEL_DECODER_BUFFER_SIZE;
         snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
         if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
             *status = openDevice(SND_USE_CASE_VERB_HIFI_TUNNEL, true, devices);
         } else {
-        *status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
+            *status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
         }
         free(use_case);
-#endif
         if(*status != NO_ERROR) {
             return;
         }
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
         mCompreRxHandle = &(*it);
+        //mmap the buffers for playback
+        status_t err = mmap_buffer(mCompreRxHandle->handle);
+        if(err) {
+            LOGE("MMAP buffer failed - playback err = %d", err);
+            *status = err;
+            return;
+        }
+        //prepare the driver for playback
+        err = pcm_prepare(mCompreRxHandle->handle);
+        if (err) {
+            LOGE("PCM Prepare failed - playback err = %d", err);
+            *status = err;
+            return;
+        }
+        bufferAlloc(mCompreRxHandle);
         mBufferSize = mCompreRxHandle->periodSize;
     } else if (mRouteCompreToSpdif) {
         devices = AudioSystem::DEVICE_OUT_SPDIF;
@@ -287,7 +316,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
         mCompreRxHandle = &(*it);
     }
-    if(mCaptureFromProxy) {
+    if (mCaptureFromProxy) {
         status_t err = openProxyDevice();
         if(!err && mRouteAudioToA2dp) {
             err = openA2dpOutput();
@@ -313,8 +342,15 @@ AudioSessionOutALSA::~AudioSessionOutALSA()
         delete mMS11Decoder;
         delete mBitstreamSM;
     }
-    mSessionId = -1;
+    if (mUseTunnelDecode)
+        requestAndWaitForEventThreadExit();
+    if (mCompreRxHandle) {
+        LOGV("Closing the Tunnel device: mCompreRxHandle %p", mCompreRxHandle);
+        pcm_close(mCompreRxHandle->handle);
+        mCompreRxHandle = NULL;
+    }
 
+    mSessionId = -1;
 }
 
 status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
@@ -405,9 +441,48 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     snd_pcm_sframes_t n;
     size_t            sent = 0;
     status_t          err;
+    if (mUseTunnelDecode && mCompreRxHandle) {
+        LOGV("Signal Event thread\n");
+        mEventCv.signal();
+        mInputMemRequestMutex.lock();
+        LOGV("write Empty Queue size() = %d,\
+        Filled Queue size() = %d ",\
+        mInputMemEmptyQueue.size(),\
+        mInputMemFilledQueue.size());
+        if (mInputMemEmptyQueue.empty()) {
+            LOGV("Write: waiting on mWriteCv");
+            mWriteCv.wait(mInputMemRequestMutex);
+            LOGV("Write: received a signal to wake up");
+        }
+
+        List<BuffersAllocated>::iterator it = mInputMemEmptyQueue.begin();
+        BuffersAllocated buf = *it;
+        mInputMemEmptyQueue.erase(it);
+        mInputMemRequestMutex.unlock();
+        memcpy(buf.memBuf, buffer, bytes);
+        buf.bytesToWrite = bytes;
+        mInputMemResponseMutex.lock();
+        mInputMemFilledQueue.push_back(buf);
+        mInputMemResponseMutex.unlock();
+
+        LOGV("PCM write start");
+        pcm * local_handle = (struct pcm *)mCompreRxHandle->handle;
+        pcm_write(local_handle, buf.memBuf, local_handle->period_size);
+        if (bytes < local_handle->period_size) {
+        LOGD("Last buffer case");
+        uint64_t writeValue = SIGNAL_EVENT_THREAD;
+        sys_write::lib_write(mEfd, &writeValue, sizeof(uint64_t));
+
+            //TODO : Is this code reqd - start seems to fail?
+            if (ioctl(local_handle->fd, SNDRV_PCM_IOCTL_START) < 0)
+                LOGE("AUDIO Start failed");
+            else
+                local_handle->start = 1;
+        }
+        LOGV("PCM write complete");
+    } else if(mMS11Decoder != NULL) {
     // 1. Check if MS11 decoder instance is present and if present we need to
     //    preserve the data and supply it to MS 11 decoder.
-    if(mMS11Decoder != NULL) {
         // If MS11, the first buffer in AAC format has the AAC config data.
 
         if(mFormat == AUDIO_FORMAT_AAC || mFormat == AUDIO_FORMAT_HE_AAC_V1 ||
@@ -558,6 +633,163 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     return sent;
 }
 
+void AudioSessionOutALSA::bufferAlloc(alsa_handle_t *handle) {
+    void  *mem_buf = NULL;
+    int i = 0;
+
+    struct pcm * local_handle = (struct pcm *)handle->handle;
+    int32_t nSize = local_handle->period_size;
+    LOGV("number of input buffers = %d", mInputBufferCount);
+    LOGV("memBufferAlloc calling with required size %d", nSize);
+    for (i = 0; i < mInputBufferCount; i++) {
+        mem_buf = (int32_t *)local_handle->addr + (nSize * i/sizeof(int));
+        BuffersAllocated buf(mem_buf, nSize);
+        memset(buf.memBuf, 0x0, nSize);
+        mInputMemEmptyQueue.push_back(buf);
+        mInputBufPool.push_back(buf);
+        LOGD("The MEM that is allocated - buffer is %x",\
+            (unsigned int)mem_buf);
+    }
+}
+
+void AudioSessionOutALSA::bufferDeAlloc() {
+    //Remove all the buffers from request queue
+    while (!mInputBufPool.empty()) {
+        List<BuffersAllocated>::iterator it = mInputBufPool.begin();
+        BuffersAllocated &memBuffer = *it;
+        LOGD("Removing input buffer from Buffer Pool ");
+        mInputBufPool.erase(it);
+   }
+}
+
+void AudioSessionOutALSA::requestAndWaitForEventThreadExit() {
+
+    if (!mEventThreadAlive)
+        return;
+    mKillEventThread = true;
+    if(mEfd != -1) {
+        LOGE("Writing to mEfd %d",mEfd);
+        uint64_t writeValue = KILL_EVENT_THREAD;
+        sys_write::lib_write(mEfd, &writeValue, sizeof(uint64_t));
+    }
+    mEventCv.signal();
+    pthread_join(mEventThread,NULL);
+    LOGD("event thread killed");
+}
+
+void * AudioSessionOutALSA::eventThreadWrapper(void *me) {
+    static_cast<AudioSessionOutALSA *>(me)->eventThreadEntry();
+    return NULL;
+}
+
+void  AudioSessionOutALSA::eventThreadEntry() {
+
+    int rc = 0;
+    int err_poll = 0;
+    int avail = 0;
+    int i = 0;
+    struct pollfd pfd[NUM_FDS];
+    struct pcm * local_handle = NULL;
+    mEventMutex.lock();
+    int timeout = -1;
+    pid_t tid  = gettid();
+    androidSetThreadPriority(tid, ANDROID_PRIORITY_AUDIO);
+    prctl(PR_SET_NAME, (unsigned long)"HAL Audio EventThread", 0, 0, 0);
+
+    LOGV("eventThreadEntry wait for signal \n");
+    mEventCv.wait(mEventMutex);
+    LOGV("eventThreadEntry ready to work \n");
+    mEventMutex.unlock();
+
+    LOGV("Allocating poll fd");
+    if(!mKillEventThread && mUseTunnelDecode) {
+        LOGV("Allocating poll fd");
+        local_handle = (struct pcm *)mCompreRxHandle->handle;
+        pfd[0].fd = local_handle->timer_fd;
+        pfd[0].events = (POLLIN | POLLERR | POLLNVAL);
+        LOGV("Allocated poll fd");
+        mEfd = eventfd(0,0);
+        pfd[1].fd = mEfd;
+        pfd[1].events = (POLLIN | POLLERR | POLLNVAL);
+    }
+    while(mUseTunnelDecode && !mKillEventThread && ((err_poll = poll(pfd, NUM_FDS, timeout)) >=0)) {
+        LOGV("pfd[0].revents =%d ", pfd[0].revents);
+        LOGV("pfd[1].revents =%d ", pfd[1].revents);
+        if (err_poll == EINTR)
+            LOGE("Timer is intrrupted");
+        if (pfd[1].revents & POLLIN) {
+            uint64_t u;
+            read(mEfd, &u, sizeof(uint64_t));
+            LOGV("POLLIN event occured on the event fd, value written to %llu",\
+                    (unsigned long long)u);
+            pfd[1].revents = 0;
+            if (u == SIGNAL_EVENT_THREAD) {
+                LOGV("### Setting mReachedExtractorEOS");
+                mReachedExtractorEOS = true;
+                continue;
+            }
+        }
+        if ((pfd[1].revents & POLLERR) || (pfd[1].revents & POLLNVAL)) {
+            LOGE("POLLERR or INVALID POLL");
+        }
+        struct snd_timer_tread rbuf[4];
+        read(local_handle->timer_fd, rbuf, sizeof(struct snd_timer_tread) * 4 );
+        if((pfd[0].revents & POLLERR) || (pfd[0].revents & POLLNVAL))
+            continue;
+
+        if (pfd[0].revents & POLLIN && !mKillEventThread) {
+            pfd[0].revents = 0;
+            if (mTunnelPaused)
+                continue;
+            LOGV("After an event occurs");
+            {
+                if (mInputMemFilledQueue.empty()) {
+                    LOGV("Filled queue is empty");
+                    continue;
+                }
+                mInputMemResponseMutex.lock();
+                BuffersAllocated buf = *(mInputMemFilledQueue.begin());
+                mInputMemFilledQueue.erase(mInputMemFilledQueue.begin());
+                LOGV("mInputMemFilledQueue %d", mInputMemFilledQueue.size());
+                if (mInputMemFilledQueue.empty() && mReachedExtractorEOS) {
+                    LOGV("Posting the EOS to the MPQ player");
+                    //post the EOS To MPQ player
+                    if (mObserver)
+                        mObserver->postEOS(0);
+                }
+                mInputMemResponseMutex.unlock();
+
+                mInputMemRequestMutex.lock();
+
+                mInputMemEmptyQueue.push_back(buf);
+
+                mInputMemRequestMutex.unlock();
+                mWriteCv.signal();
+            }
+        }
+    }
+    mEventThreadAlive = false;
+    if (mEfd != -1) {
+        close(mEfd);
+        mEfd = -1;
+    }
+
+    LOGD("Event Thread is dying.");
+    return;
+
+}
+
+void AudioSessionOutALSA::createThreadsForTunnelDecode() {
+    mKillEventThread = false;
+    mEventThreadAlive = true;
+    LOGD("Creating Event Thread");
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    pthread_create(&mEventThread, &attr, eventThreadWrapper, this);
+    LOGD("Event Thread created");
+}
+
 status_t AudioSessionOutALSA::start(int64_t startTime)
 {
     Mutex::Autolock autoLock(mLock);
@@ -578,21 +810,79 @@ status_t AudioSessionOutALSA::pause()
     Mutex::Autolock autoLock(mLock);
     if(mPcmRxHandle) {
         if (ioctl(mPcmRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1) < 0) {
-            LOGE("RESUME failed for use case %s", mPcmRxHandle->useCase);
+            LOGE("PAUSE failed for use case %s", mPcmRxHandle->useCase);
         }
     }
     if(mCompreRxHandle) {
         if (ioctl(mCompreRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1) < 0) {
-            LOGE("RESUME failed on use case %s", mCompreRxHandle->useCase);
+            LOGE("PAUSE failed on use case %s", mCompreRxHandle->useCase);
         }
+        mTunnelPaused = true;
     }
     return NO_ERROR;
+}
+
+status_t AudioSessionOutALSA::drainTunnel()
+{
+    status_t err = OK;
+    if (!(mCompreRxHandle && mUseTunnelDecode))
+        return -1;
+    mCompreRxHandle->handle->start = 0;
+    err = pcm_prepare(mCompreRxHandle->handle);
+    if(err != OK) {
+        LOGE("pcm_prepare -seek = %d",err);
+        //Posting EOS
+        if (mObserver)
+            mObserver->postEOS(0);
+    }
+    LOGV("drainTunnel Empty Queue size() = %d,"
+       " Filled Queue size() = %d ",\
+        mInputMemEmptyQueue.size(),\
+        mInputMemFilledQueue.size());
+    LOGV("Reset, drain and prepare completed");
+    mCompreRxHandle->handle->sync_ptr->flags =
+        SNDRV_PCM_SYNC_PTR_APPL | SNDRV_PCM_SYNC_PTR_AVAIL_MIN;
+    sync_ptr(mCompreRxHandle->handle);
+    LOGV("appl_ptr= %d",\
+        (int)mCompreRxHandle->handle->sync_ptr->c.control.appl_ptr);
+    return err;
 }
 
 status_t AudioSessionOutALSA::flush()
 {
     Mutex::Autolock autoLock(mLock);
     LOGD("AudioSessionOutALSA::flush E");
+    int err = 0;
+    if (mUseTunnelDecode && mCompreRxHandle) {
+        struct pcm * local_handle = mCompreRxHandle->handle;
+        LOGV("Paused case, %d",mTunnelPaused);
+
+        mInputMemResponseMutex.lock();
+        mInputMemRequestMutex.lock();
+        mInputMemFilledQueue.clear();
+        mInputMemEmptyQueue.clear();
+        List<BuffersAllocated>::iterator it = mInputBufPool.begin();
+        for (;it!=mInputBufPool.end();++it) {
+            memset((*it).memBuf, 0x0, (*it).memBufsize);
+            mInputMemEmptyQueue.push_back(*it);
+        }
+
+        mInputMemRequestMutex.unlock();
+        mInputMemResponseMutex.unlock();
+        LOGV("Transferred all the buffers from response queue to\
+            request queue to handle seek");
+        if (!mTunnelPaused) {
+            if ((err = ioctl(local_handle->fd, SNDRV_PCM_IOCTL_PAUSE,1)) < 0) {
+                LOGE("Audio Pause failed");
+                return err;
+            }
+            mReachedExtractorEOS = false;
+            if ((err = drainTunnel()) != OK)
+                return err;
+        } else {
+            mTunnelSeeking = true;
+        }
+    }
     /*if(mPcmRxHandle) {
         if (ioctl(mPcmRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1) < 0) {
             LOGE("flush(): Audio Pause failed");
@@ -619,10 +909,14 @@ status_t AudioSessionOutALSA::resume()
             LOGE("RESUME failed for use case %s", mPcmRxHandle->useCase);
         }
     }
-    if(mCompreRxHandle) {
-        if (ioctl(mCompreRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,0) < 0) {
+    if(mCompreRxHandle && mUseTunnelDecode) {
+        if (mTunnelSeeking) {
+            drainTunnel();
+            mTunnelSeeking = false;
+        } else if (ioctl(mCompreRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,0) < 0) {
             LOGE("RESUME failed on use case %s", mCompreRxHandle->useCase);
         }
+        mTunnelPaused = false;
     }
     return NO_ERROR;
 }
@@ -683,6 +977,34 @@ uint32_t AudioSessionOutALSA::latency() const
 {
     // Android wants latency in milliseconds.
     return USEC_TO_MSEC (mPcmRxHandle->latency);
+}
+
+status_t AudioSessionOutALSA::setObserver(void *observer)
+{
+    LOGV("Registering the callback \n");
+    mObserver = reinterpret_cast<AudioEventObserver *>(observer);
+    return NO_ERROR;
+}
+
+status_t AudioSessionOutALSA::getTimeStamp(uint64_t *timeStamp)
+{
+    LOGV("getTimeStamp \n");
+    Mutex::Autolock autoLock(mLock);
+    if (mCompreRxHandle && mUseTunnelDecode) {
+        if (!timeStamp)
+            return -1;
+        struct snd_compr_tstamp tstamp;
+        tstamp.timestamp = -1;
+        if (ioctl(mCompreRxHandle->handle->fd, SNDRV_COMPRESS_TSTAMP, &tstamp)){
+            LOGE("Failed SNDRV_COMPRESS_TSTAMP\n");
+            return -1;
+        } else {
+            LOGV("Timestamp returned = %lld\n", tstamp.timestamp);
+            *timeStamp = tstamp.timestamp;
+            return NO_ERROR;
+        }
+    }
+    return NO_ERROR;
 }
 
 // return the number of audio frames written by the audio dsp to DAC since
@@ -903,17 +1225,16 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
     status_t status = NO_ERROR;
     LOGD("openDevice: E");
     alsa_handle.module      = mALSADevice;
-    alsa_handle.bufferSize  = DEFAULT_BUFFER_SIZE;
+    alsa_handle.bufferSize  = mInputBufferSize;
     alsa_handle.devices     = devices;
     alsa_handle.handle      = 0;
-    alsa_handle.format      = SNDRV_PCM_FORMAT_S16_LE;
+    alsa_handle.format      = (mFormat == AUDIO_FORMAT_PCM_16_BIT ? SNDRV_PCM_FORMAT_S16_LE : mFormat);
     alsa_handle.channels    = mChannels;
     alsa_handle.sampleRate  = mSampleRate;
     alsa_handle.mode        = mParent->mode();
     alsa_handle.latency     = PLAYBACK_LATENCY;
     alsa_handle.rxHandle    = 0;
     alsa_handle.ucMgr       = mUcMgr;
-
     strlcpy(alsa_handle.useCase, useCase, sizeof(alsa_handle.useCase));
     char *ucmDevice = mALSADevice->getUCMDevice(devices & AudioSystem::DEVICE_OUT_ALL, 0);
     if(bIsUseCase) {
@@ -921,16 +1242,12 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
     } else {
         snd_use_case_set_case(mUcMgr, "_enamod", alsa_handle.useCase, ucmDevice);
     }
-    if(mSessionId == TUNNEL_SESSION_ID)
+    status = mALSADevice->open(&alsa_handle);
+    if(status != NO_ERROR) {
+        LOGE("Could not open the ALSA device for use case %s", alsa_handle.useCase);
+        mALSADevice->close(&alsa_handle);
+    } else{
         mParent->mDeviceList.push_back(alsa_handle);
-    else {
-        status = mALSADevice->open(&alsa_handle);
-        if(status != NO_ERROR) {
-            LOGE("Could not open the ALSA device for use case %s", alsa_handle.useCase);
-            mALSADevice->close(&alsa_handle);
-        } else{
-            mParent->mDeviceList.push_back(alsa_handle);
-        }
     }
     LOGD("openDevice: X");
     return status;

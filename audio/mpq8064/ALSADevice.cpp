@@ -99,6 +99,41 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
     unsigned int periodTime, bufferTime;
     unsigned int requestedRate = handle->sampleRate;
     int status = 0;
+    struct snd_compr_caps compr_cap;
+    struct snd_compr_params compr_params;
+    int format = handle->format;
+    int32_t minPeroid, maxPeroid;
+    status_t err = NO_ERROR;
+
+    reqBuffSize = handle->bufferSize;
+
+    if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+        if (ioctl(handle->handle->fd, SNDRV_COMPRESS_GET_CAPS, &compr_cap)) {
+            LOGE("SNDRV_COMPRESS_GET_CAPS, failed Error no %d \n", errno);
+            err = -errno;
+            return err;
+        }
+
+        minPeroid = compr_cap.min_fragment_size;
+        maxPeroid = compr_cap.max_fragment_size;
+        LOGV("Min peroid size = %d , Maximum Peroid size = %d",\
+            minPeroid, maxPeroid);
+        //TODO: what if codec not supported or the array has wrong codec!!!!
+        if (format == AUDIO_FORMAT_AAC) {
+            LOGW("### AAC CODEC");
+            compr_params.codec.id = compr_cap.codecs[1];
+        }
+        else {
+             LOGW("### MP3 CODEC");
+             compr_params.codec.id = compr_cap.codecs[0];
+        }
+        if (ioctl(handle->handle->fd, SNDRV_COMPRESS_SET_PARAMS, &compr_params)) {
+            LOGE("SNDRV_COMPRESS_SET_PARAMS,failed Error no %d \n", errno);
+            err = -errno;
+            return err;
+        }
+    }
 
     params = (snd_pcm_hw_params*) calloc(1, sizeof(struct snd_pcm_hw_params));
     if (!params) {
@@ -107,13 +142,13 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
         return NO_INIT;
     }
 
-    reqBuffSize = handle->bufferSize;
     LOGD("setHardwareParams: reqBuffSize %d channels %d sampleRate %d",
          (int) reqBuffSize, handle->channels, handle->sampleRate);
 
     param_init(params);
     param_set_mask(params, SNDRV_PCM_HW_PARAM_ACCESS,
-                   SNDRV_PCM_ACCESS_RW_INTERLEAVED);
+        (handle->handle->flags & PCM_MMAP) ? SNDRV_PCM_ACCESS_MMAP_INTERLEAVED
+        : SNDRV_PCM_ACCESS_RW_INTERLEAVED);
     param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
                    SNDRV_PCM_FORMAT_S16_LE);
     param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
@@ -173,6 +208,13 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
          params->start_threshold = handle->channels - 1 ? periodSize/2 : periodSize/4;
          params->stop_threshold = INT_MAX;
      }
+    if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+        params->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
+        params->period_step = 1;
+        params->xfer_align = (handle->handle->flags & PCM_MONO) ?
+            handle->handle->period_size/2 : handle->handle->period_size/4;
+    }
     params->silence_threshold = 0;
     params->silence_size = 0;
 
@@ -351,28 +393,36 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI)) ||
         (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
         (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2))) {
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
         flags = PCM_OUT;
     } else {
         flags = PCM_IN;
     }
+
     if (handle->channels == 1) {
         flags |= PCM_MONO;
-    } else {
+    } else if (handle->channels == 6) {
+        flags |= PCM_5POINT1;
+    }else {
         flags |= PCM_STEREO;
     }
     if (deviceName(handle, flags, &devName) < 0) {
         LOGE("Failed to get pcm device node: %s", devName);
         return NO_INIT;
     }
+    if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+        flags |= DEBUG_ON | PCM_MMAP;
+    }
     handle->handle = pcm_open(flags, (char*)devName);
-
+    LOGE("s_open: opening ALSA device '%s'", devName);
     if (!handle->handle) {
         LOGE("s_open: Failed to initialize ALSA device '%s'", devName);
         free(devName);
         return NO_INIT;
     }
-
     handle->handle->flags = flags;
     LOGD("setting hardware parameters");
     err = setHardwareParams(handle);

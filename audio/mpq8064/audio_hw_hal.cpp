@@ -171,6 +171,22 @@ static int out_get_render_position(const struct audio_stream_out *stream,
     return out->qcom_out->getRenderPosition(dsp_frames);
 }
 
+static int out_get_time_stamp(const struct audio_stream_out *stream,
+                                   uint64_t *time_stamp)
+{
+    const struct qcom_stream_out *out =
+        reinterpret_cast<const struct qcom_stream_out *>(stream);
+    return out->qcom_out->getTimeStamp(time_stamp);
+}
+
+static int out_set_observer(const struct audio_stream_out *stream,
+                                   void *observer)
+{
+    const struct qcom_stream_out *out =
+        reinterpret_cast<const struct qcom_stream_out *>(stream);
+    return out->qcom_out->setObserver(observer);
+}
+
 static status_t out_start(struct audio_stream_out *stream, int64_t startTime)
 {
     struct qcom_stream_out *out =
@@ -519,6 +535,8 @@ static int adev_open_output_session(struct audio_hw_device *dev,
     out->stream.flush = out_flush;
     out->stream.resume = out_resume;
     out->stream.stop = out_stop;
+    out->stream.get_time_stamp = out_get_time_stamp;
+    out->stream.set_observer = out_set_observer;
 
     *stream_out = &out->stream;
     return 0;

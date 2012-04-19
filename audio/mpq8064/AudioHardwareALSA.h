@@ -45,6 +45,7 @@ namespace android_audio_legacy
 {
 using android::List;
 using android::Mutex;
+using android::Condition;
 class AudioHardwareALSA;
 class SoftMS11;
 class AudioBitstreamSM;
@@ -112,6 +113,14 @@ class AudioBitstreamSM;
 #define LPA_SESSION_ID 1
 #define TUNNEL_SESSION_ID 2
 #define MPQ_SESSION_ID 3
+
+//Required for Tunnel
+#define TUNNEL_DECODER_BUFFER_SIZE (600 * 1024)
+#define TUNNEL_DECODER_BUFFER_COUNT 4
+#define SIGNAL_EVENT_THREAD 2
+//Values to exit poll via eventfd
+#define KILL_EVENT_THREAD 1
+#define NUM_FDS 2
 
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
@@ -365,6 +374,10 @@ public:
     // the output has exited standby
     virtual status_t    getRenderPosition(uint32_t *dspFrames);
 
+    virtual status_t    getTimeStamp(uint64_t *timeStamp);
+
+    virtual status_t    setObserver(void *observer);
+
 private:
     Mutex               mLock;
     uint32_t            mFrameCount;
@@ -390,6 +403,9 @@ private:
     bool                mAacConfigDataSet;
     unsigned char       mChannelStatus[24];
     bool                mChannelStatusSet;
+    bool                mTunnelPaused;
+    bool                mTunnelSeeking;
+    bool                mReachedExtractorEOS;
 
     AudioHardwareALSA  *mParent;
     alsa_handle_t *     mPcmRxHandle;
@@ -404,6 +420,7 @@ private:
     pthread_t           mA2dpThread;
     SoftMS11           *mMS11Decoder;
     AudioBitstreamSM   *mBitstreamSM;
+    AudioEventObserver *mObserver;
 
     status_t            openDevice(char *pUseCase, bool bIsUseCase, int devices);
     status_t            closeDevice(alsa_handle_t *pDevice);
@@ -415,6 +432,48 @@ private:
     status_t            stopA2dpOutput();
     static void*        a2dpThreadWrapper(void *context);
     void                a2dpThreadFunc();
+    void                createThreadsForTunnelDecode();
+    void                bufferAlloc(alsa_handle_t *handle);
+    void                bufferDeAlloc();
+    bool                isReadyToPostEOS(int errPoll, void *fd);
+    status_t            drainTunnel();
+    // make sure the event thread also exited
+    void                requestAndWaitForEventThreadExit();
+    static void *       eventThreadWrapper(void *me);
+    void                eventThreadEntry();
+
+    //Structure to hold mem buffer information
+    class BuffersAllocated {
+    public:
+        BuffersAllocated(void *buf1, int32_t nSize) :
+        memBuf(buf1), memBufsize(nSize)
+        {}
+        void* memBuf;
+        int32_t memBufsize;
+        uint32_t bytesToWrite;
+    };
+    List<BuffersAllocated> mInputMemEmptyQueue;
+    List<BuffersAllocated> mInputMemFilledQueue;
+    List<BuffersAllocated> mInputBufPool;
+
+    //Declare all the threads
+    pthread_t mEventThread;
+
+    //Declare the condition Variables and Mutex
+    Mutex mInputMemRequestMutex;
+    Mutex mInputMemResponseMutex;
+    Mutex mEventMutex;
+
+    Condition mWriteCv;
+    Condition mEventCv;
+    bool mKillEventThread;
+    bool mEventThreadAlive;
+    int mInputBufferSize;
+    int mInputBufferCount;
+
+    //event fd to signal the EOS and Kill from the userspace
+    int mEfd;
+
 };
 
 // ----------------------------------------------------------------------------
