@@ -156,11 +156,16 @@ status_t AudioHardwareALSA::setVoiceVolume(float v)
     return NO_ERROR;
 }
 
+static const float dBPerStep = 0.5f;
+static const float dBConvert = -dBPerStep * 2.302585093f / 20.0f;
+static const float dBConvertInverse = 1.0f / dBConvert;
+
 status_t  AudioHardwareALSA::setFmVolume(float value)
 {
     status_t status = NO_ERROR;
 
-    int vol = value * 100; //android::AudioSystem::logToLinear( (value?(value+0.005):value) );
+    value = value?(value+0.005):value;
+    int vol = value ? 100 - int(dBConvertInverse * log(value) + 0.5) : 0;
 
     if (vol > 100)
         vol = 100;

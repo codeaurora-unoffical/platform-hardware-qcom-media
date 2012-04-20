@@ -26,7 +26,6 @@ LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libutils \
     libhardware \
-    libc        \
     libpower    \
     libalsa-intf \
     lib_dlb_msd \
