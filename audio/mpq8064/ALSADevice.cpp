@@ -166,7 +166,19 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
                    SNDRV_PCM_FORMAT_S16_LE);
     param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
                    SNDRV_PCM_SUBFORMAT_STD);
-    param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, reqBuffSize);
+    LOGV("hw params -  before hifi2 condition %s", handle->useCase);
+
+    if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2))) {
+        int ALSAbufferSize = getALSABufferSize(handle);
+        param_set_int(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, ALSAbufferSize);
+        LOGD("ALSAbufferSize = %d",ALSAbufferSize);
+        param_set_int(params, SNDRV_PCM_HW_PARAM_PERIODS, MULTI_CHANNEL_PERIOD_COUNT);
+    }
+    else {
+        param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, reqBuffSize);
+    }
+
     param_set_int(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
     param_set_int(params, SNDRV_PCM_HW_PARAM_FRAME_BITS,
                    handle->channels - 1 ? 32 : 16);
@@ -191,6 +203,10 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
     handle->handle->channels = handle->channels;
     handle->periodSize = handle->handle->period_size;
     handle->bufferSize = handle->handle->period_size;
+    if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2))) {
+        handle->latency += (handle->handle->period_cnt * PCM_BUFFER_DURATION);
+    }
     return NO_ERROR;
 }
 
@@ -446,6 +462,8 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     if(err != NO_ERROR) {
         LOGE("Set HW/SW params failed: Closing the pcm stream");
         standby(handle);
+        free(devName);
+        return err;
     }
 
     free(devName);
@@ -1390,6 +1408,53 @@ status_t ALSADevice::setWMAParams(alsa_handle_t *handle, int params[], int size)
     for (int i = 0; i < size; i++)
         mWMA_params[i] = params[i];
     return err;
+}
+
+int ALSADevice::getALSABufferSize(alsa_handle_t *handle) {
+
+    int format = 2;
+
+    switch (handle->format) {
+        case SNDRV_PCM_FORMAT_S8:
+            format = 1;
+        break;
+        case SNDRV_PCM_FORMAT_S16_LE:
+            format = 2;
+        break;
+        case SNDRV_PCM_FORMAT_S24_LE:
+            format = 3;
+        break;
+        default:
+           format = 2;
+        break;
+    }
+    LOGD("getALSABufferSize - handle->channels = %d,  handle->sampleRate = %d,\
+            format = %d",handle->channels, handle->sampleRate,format);
+
+    LOGD("buff size is %d",((PCM_BUFFER_DURATION *  handle->channels\
+            *  handle->sampleRate * format) / 1000000));
+    int bufferSize = ((PCM_BUFFER_DURATION *  handle->channels
+            *  handle->sampleRate * format) / 1000000);
+
+
+    //Check for power of 2
+    if (bufferSize & (bufferSize-1)) {
+
+        bufferSize -= 1;
+        for (int i=1; i<sizeof(bufferSize -1)*CHAR_BIT; i<<=1)
+                bufferSize = bufferSize | bufferSize >> i;
+        bufferSize += 1;
+        LOGV("Not power of 2 - buff size is = %d",bufferSize);
+    }
+    else {
+        LOGV("power of 2");
+    }
+    if(bufferSize < MULTI_CHANNEL_MIN_PERIOD_SIZE)
+        bufferSize = MULTI_CHANNEL_MIN_PERIOD_SIZE;
+    if(bufferSize >  MULTI_CHANNEL_MAX_PERIOD_SIZE)
+        bufferSize = MULTI_CHANNEL_MAX_PERIOD_SIZE;
+
+    return bufferSize;
 }
 
 }

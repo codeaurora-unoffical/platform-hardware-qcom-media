@@ -537,6 +537,7 @@ static int adev_open_output_session(struct audio_hw_device *dev,
     out->stream.stop = out_stop;
     out->stream.get_time_stamp = out_get_time_stamp;
     out->stream.set_observer = out_set_observer;
+    out->stream.get_latency = out_get_latency;
 
     *stream_out = &out->stream;
     return 0;

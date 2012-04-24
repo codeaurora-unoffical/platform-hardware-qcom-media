@@ -65,6 +65,10 @@ class AudioBitstreamSM;
 #define DEFAULT_BUFFER_SIZE   2048
 #define DEFAULT_IN_BUFFER_SIZE   320
 #define FM_BUFFER_SIZE        1024
+#define MULTI_CHANNEL_MIN_PERIOD_SIZE 256
+#define MULTI_CHANNEL_MAX_PERIOD_SIZE 4032
+#define MULTI_CHANNEL_PERIOD_COUNT 8
+#define PCM_BUFFER_DURATION 10000
 
 #define VOIP_SAMPLING_RATE_8K 8000
 #define VOIP_SAMPLING_RATE_16K 16000
@@ -193,6 +197,7 @@ public:
     status_t    setCompressedVolume(int);
     status_t    setPlaybackFormat(const char *value);
     status_t    setWMAParams(alsa_handle_t* , int[], int);
+    int         getALSABufferSize(alsa_handle_t *handle);
 private:
 
     int         deviceName(alsa_handle_t *handle, unsigned flags, char **value);
