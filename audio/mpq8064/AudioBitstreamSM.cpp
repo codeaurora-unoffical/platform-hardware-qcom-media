@@ -119,6 +119,16 @@ void AudioBitstreamSM::resetBitstreamPtr()
 }
 
 /*
+Reset the output buffer pointers to start for port reconfiguration
+*/
+void AudioBitstreamSM::resetOutputBitstreamPtr()
+{
+    ms11DDEncOutputBufferWritePtr = ms11DDEncOutputBuffer;
+    ms11PCM2ChOutputBufferWritePtr = ms11PCM2ChOutputBuffer;
+    ms11PCM6ChOutputBufferWritePtr = ms11PCM6ChOutputBuffer;
+}
+
+/*
 Copy the bitstream/pcm from Player to internal buffer.
 The incoming bitstream is appended to existing bitstream
 */
@@ -188,7 +198,7 @@ char* AudioBitstreamSM::getOutputBufferWritePtr(int format)
     else if(format == PCM_2CH_OUT)
         return ms11PCM2ChOutputBufferWritePtr;
     else
-        return ms11DDEncOutputBuffer;
+        return ms11DDEncOutputBufferWritePtr;
 }
 
 /*
@@ -228,7 +238,7 @@ void AudioBitstreamSM::copyResidueOutputToStart(int format, size_t samplesRender
         memcpy(ms11PCM2ChOutputBuffer, ms11PCM2ChOutputBuffer+samplesRendered, remainingBytes);
         ms11PCM2ChOutputBufferWritePtr = ms11PCM2ChOutputBuffer + remainingBytes;
     } else {
-        remainingBytes = ms11DDEncOutputBufferWritePtr-(ms11DDEncOutputBufferWritePtr+samplesRendered);
+        remainingBytes = ms11DDEncOutputBufferWritePtr-(ms11DDEncOutputBuffer+samplesRendered);
         memcpy(ms11DDEncOutputBuffer, ms11DDEncOutputBuffer+samplesRendered, remainingBytes);
         ms11DDEncOutputBufferWritePtr = ms11DDEncOutputBuffer + remainingBytes;
     }

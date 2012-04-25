@@ -17,8 +17,8 @@
  */
 
 #define LOG_TAG "ALSADevice"
-//#define LOG_NDEBUG 0
-#define LOG_NDDEBUG 0
+#define LOG_NDEBUG 0
+//#define LOG_NDDEBUG 0
 #include <utils/Log.h>
 #include <cutils/properties.h>
 #include <linux/ioctl.h>
@@ -105,7 +105,6 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
     status_t err = NO_ERROR;
 
     reqBuffSize = handle->bufferSize;
-
     if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
         (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
@@ -118,16 +117,16 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
 
         minPeroid = compr_cap.min_fragment_size;
         maxPeroid = compr_cap.max_fragment_size;
+        if (handle->channels > 2)
+            handle->channels = 2;
         LOGV("Min peroid size = %d , Maximum Peroid size = %d",\
             minPeroid, maxPeroid);
         //TODO: what if codec not supported or the array has wrong codec!!!!
         if (format == AUDIO_FORMAT_WMA || format == AUDIO_FORMAT_WMA_PRO) {
-            LOGV("### WMA CODEC");
+            LOGV("WMA CODEC");
             if (format == AUDIO_FORMAT_WMA_PRO) {
                 compr_params.codec.id = compr_cap.codecs[4];
                 compr_params.codec.ch_in = handle->channels;
-                if (handle->channels > 2)
-                    handle->channels = 2;
             }
             else {
                 compr_params.codec.id = compr_cap.codecs[3];
@@ -142,13 +141,19 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
             compr_params.codec.format = mWMA_params[3];
             compr_params.codec.options.wma.bits_per_sample = mWMA_params[4];
             compr_params.codec.options.wma.channelmask = mWMA_params[5];
-        } else if (format == AUDIO_FORMAT_AAC) {
-            LOGV("### AAC CODEC");
-            compr_params.codec.id = compr_cap.codecs[1];
-        }
-        else {
-             LOGW("### MP3 CODEC");
+        } else if(format == AUDIO_FORMAT_AAC || format == AUDIO_FORMAT_HE_AAC_V1 ||
+           format == AUDIO_FORMAT_HE_AAC_V2 || format == AUDIO_FORMAT_AAC_ADIF) {
+            LOGV("AAC CODEC");
+            compr_params.codec.id = compr_cap.codecs[2];
+        } else if(format == AUDIO_FORMAT_AC3) {
+            LOGV("AC3 CODEC");
+            compr_params.codec.id = compr_cap.codecs[2];
+        } else if(format == AUDIO_FORMAT_MP3) {
+             LOGV("MP3 CODEC");
              compr_params.codec.id = compr_cap.codecs[0];
+        } else {
+             LOGE("format not supported to open tunnel device");
+             return BAD_VALUE;
         }
         if (ioctl(handle->handle->fd, SNDRV_COMPRESS_SET_PARAMS, &compr_params)) {
             LOGE("SNDRV_COMPRESS_SET_PARAMS,failed Error no %d \n", errno);
@@ -249,7 +254,7 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
           params->stop_threshold = INT_MAX;
      } else {
          params->avail_min = periodSize/2;
-         params->start_threshold = handle->channels - 1 ? periodSize/2 : periodSize/4;
+         params->start_threshold = handle->channels - 1 ? periodSize : periodSize/2;
          params->stop_threshold = INT_MAX;
      }
     if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
@@ -391,7 +396,6 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     char *devName;
     unsigned flags = 0;
     int err = NO_ERROR;
-
     /* No need to call s_close for LPA as pcm device open and close is handled by LPAPlayer in stagefright */
     if((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
                            strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER))) || 
@@ -440,7 +444,7 @@ status_t ALSADevice::open(alsa_handle_t *handle)
         flags |= PCM_MONO;
     } else if (handle->channels == 6) {
         flags |= PCM_5POINT1;
-    }else {
+    } else {
         flags |= PCM_STEREO;
     }
     if (deviceName(handle, flags, &devName) < 0) {
@@ -462,6 +466,7 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     }
     handle->handle->flags = flags;
     LOGD("setting hardware parameters");
+
     err = setHardwareParams(handle);
     if (err == NO_ERROR) {
         LOGD("setting software parameters");
@@ -1413,11 +1418,13 @@ status_t ALSADevice::setCompressedVolume(int value)
     return err;
 }
 
-status_t ALSADevice::setPlaybackFormat(const char *value)
+status_t ALSADevice::setPlaybackFormat(const char *value, int device)
 {
     status_t err = NO_ERROR;
-
-    err = setMixerControl("SEC RX Format",value);
+    if (device == AudioSystem::DEVICE_OUT_SPDIF)
+        err = setMixerControl("SEC RX Format",value);
+    else if(device == AudioSystem::DEVICE_OUT_AUX_DIGITAL)
+        err = setMixerControl("HDMI RX Format",value);
     if(err) {
         LOGE("setPlaybackFormat error = %d",err);
     }

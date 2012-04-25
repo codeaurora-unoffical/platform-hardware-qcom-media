@@ -307,6 +307,24 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         param.remove(key);
     }
 
+    key = String8(SPDIF_FORMAT_KEY);
+    if (param.get(key, value) == NO_ERROR) {
+        if(value == "lpcm" || value == "ac3" || value == "dts")
+            strlcpy(mSpdifOutputFormat,value,sizeof(mSpdifOutputFormat));
+        else
+            strlcpy(mSpdifOutputFormat,"lpcm",sizeof(mSpdifOutputFormat));
+        param.remove(key);
+    }
+
+    key = String8(HDMI_FORMAT_KEY);
+    if (param.get(key, value) == NO_ERROR) {
+        if(value == "lpcm" || value == "ac3" || value == "dts")
+            strlcpy(mHdmiOutputFormat,value,sizeof(mHdmiOutputFormat));
+        else
+            strlcpy(mHdmiOutputFormat,"lpcm",sizeof(mHdmiOutputFormat));
+        param.remove(key);
+    }
+
     if (param.size()) {
         status = BAD_VALUE;
     }

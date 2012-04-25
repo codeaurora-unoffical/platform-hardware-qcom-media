@@ -89,6 +89,8 @@ class AudioBitstreamSM;
 #define BTHEADSET_VGS       "bt_headset_vgs"
 #define WIDEVOICE_KEY       "wide_voice_enable"
 #define FENS_KEY            "fens_enable"
+#define SPDIF_FORMAT_KEY    "spdif_format"
+#define HDMI_FORMAT_KEY     "hdmi_format"
 
 #define ANC_FLAG        0x00000001
 #define DMIC_FLAG       0x00000002
@@ -109,7 +111,7 @@ class AudioBitstreamSM;
 
 #define PCM_2CH_OUT                 0
 #define PCM_MCH_OUT                 1
-#define DDRE_OUT                    2
+#define SPDIF_OUT                   2
 
 #ifndef ALSA_DEFAULT_SAMPLE_RATE
 #define ALSA_DEFAULT_SAMPLE_RATE 44100 // in Hz
@@ -121,8 +123,8 @@ class AudioBitstreamSM;
 #define MPQ_SESSION_ID 3
 
 //Required for Tunnel
-#define TUNNEL_DECODER_BUFFER_SIZE (600 * 1024)
-#define TUNNEL_DECODER_BUFFER_COUNT 4
+#define TUNNEL_DECODER_BUFFER_SIZE 4800
+#define TUNNEL_DECODER_BUFFER_COUNT 512
 #define SIGNAL_EVENT_THREAD 2
 //Values to exit poll via eventfd
 #define KILL_EVENT_THREAD 1
@@ -198,7 +200,7 @@ public:
 
     status_t    setPcmVolume(int);
     status_t    setCompressedVolume(int);
-    status_t    setPlaybackFormat(const char *value);
+    status_t    setPlaybackFormat(const char *value, int device);
     status_t    setWMAParams(alsa_handle_t* , int[], int);
     int         getALSABufferSize(alsa_handle_t *handle);
     status_t    setHDMIChannelCount();
@@ -412,6 +414,8 @@ private:
     bool                mRouteCompreAudio;
     bool                mRoutePcmToSpdif;
     bool                mRouteCompreToSpdif;
+    bool                mRoutePcmToHdmi;
+    bool                mRouteCompreToHdmi;
     bool                mRouteAudioToA2dp;
     bool                mUseTunnelDecode;
     bool                mCaptureFromProxy;
@@ -428,6 +432,8 @@ private:
     bool                mTunnelSeeking;
     bool                mReachedExtractorEOS;
     bool                mSkipWrite;
+    char                mSpdifOutputFormat[10];
+    char                mHdmiOutputFormat[10];
 
     AudioHardwareALSA  *mParent;
     alsa_handle_t *     mPcmRxHandle;
@@ -459,11 +465,14 @@ private:
     void                bufferDeAlloc();
     bool                isReadyToPostEOS(int errPoll, void *fd);
     status_t            drainTunnel();
-    status_t            openTunnelDevice();
+    status_t            openTunnelDevice(int devices);
     // make sure the event thread also exited
     void                requestAndWaitForEventThreadExit();
+    int32_t             writeToCompressedDriver(char *buffer, int bytes);
     static void *       eventThreadWrapper(void *me);
     void                eventThreadEntry();
+    void                updateOutputFormat();
+    void                updateRoutingFlags();
 
     //Structure to hold mem buffer information
     class BuffersAllocated {
@@ -782,6 +791,8 @@ protected:
     int                 mIsVoiceCallActive;
     int                 mIsFmActive;
     bool                mBluetoothVGS;
+    char                mSpdifOutputFormat[10];
+    char                mHdmiOutputFormat[10];
 };
 
 class AudioBitstreamSM
@@ -802,6 +813,7 @@ public:
     char*   getOutputBufferWritePtr(int format);
     void    setOutputBufferWritePtr(int format, size_t outputPCMSample);
     void    appendSilenceToBitstreamInternalBuffer(size_t bytes, unsigned char);
+    void    resetOutputBitstreamPtr();
 private:
     // Buffer pointers for input and output to MS11
     char               *ms11InputBuffer;
