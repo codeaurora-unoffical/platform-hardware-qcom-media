@@ -46,12 +46,18 @@ namespace android_audio_legacy
 
 AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
                                                    uint32_t  devices,
-                                                   int      *format,
-                                                   uint32_t *channels,
-                                                   uint32_t *sampleRate,
+                                                   int      format,
+                                                   uint32_t channels,
+                                                   uint32_t sampleRate,
                                                    uint32_t audioSource,
                                                    status_t *status)
 {
+
+    mFormat         = format;
+    mDevices        = devices;
+    mSampleRate     = sampleRate;
+    mChannels       = channels;
+
     mParent           = parent;
     mFrameCount       = 0;
     mPcmRxHandle      = NULL;
@@ -86,10 +92,10 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         // there is no need for MS11 decoder, HAL just needs to initiate DSP loop back
         mSetupDSPLoopback = true;
     } else if(audioSource == QCOM_AUDIO_SOURCE_HDMI_IN) {
-        if( *format == AudioSystem::PCM_16_BIT) {
+        if( format == AudioSystem::PCM_16_BIT) {
             // If the audio source is HDMI input and channels are MONO/STEREO or output device is HDMI
             // there is no need for MS11 decoder, HAL just needs to initiate DSP loop back
-            if(*channels == 1 || *channels == 2 || devices == AudioSystem::DEVICE_OUT_AUX_DIGITAL){
+            if(channels == 1 || channels == 2 || devices == AudioSystem::DEVICE_OUT_AUX_DIGITAL){
                 // Handle DSP loop back here
                 mSetupDSPLoopback = true;
             } else {
@@ -102,9 +108,9 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         } else {
             // Pull the compressed data from DSP
             mPullAudioFromDSP = true;
-            if(*format == AudioSystem::AC3 || *format == AudioSystem::AC3_PLUS ||
-               *format == AudioSystem::AAC || *format == AudioSystem::HE_AAC_V1 ||
-               *format == AudioSystem::HE_AAC_V2) {
+            if(format == AudioSystem::AC3 || format == AudioSystem::AC3_PLUS ||
+               format == AudioSystem::AAC || format == AudioSystem::HE_AAC_V1 ||
+               format == AudioSystem::HE_AAC_V2) {
                 // If the format is AC3/AAC decode it using MS11 decoder
                 mOpenMS11Decoder  = true;
             } else {
@@ -115,9 +121,9 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         }
     } else if(audioSource == QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_ONLY ||
               audioSource == QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_AD) {
-        if(*format == AudioSystem::AC3 || *format == AudioSystem::AC3_PLUS ||
-           *format == AudioSystem::AAC || *format == AudioSystem::HE_AAC_V1 ||
-           *format == AudioSystem::HE_AAC_V2) {
+        if(format == AudioSystem::AC3 || format == AudioSystem::AC3_PLUS ||
+           format == AudioSystem::AAC || format == AudioSystem::HE_AAC_V1 ||
+           format == AudioSystem::HE_AAC_V2) {
             // If the format is AC3/AAC decode it using MS11 decoder
             mOpenMS11Decoder  = true;
         } else {
@@ -140,7 +146,7 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
     alsa_handle_t alsa_handle;
     if(mPullAudioFromDSP) {
         // ToDo: Open the capture driver and route audio
-        if(*format == AudioSystem::PCM_16_BIT) {
+        if(format == AudioSystem::PCM_16_BIT) {
             // Open PCM capture driver
             bool bIsUseCaseSet = false;
             alsa_handle.module = mParent->mALSADevice;
@@ -279,6 +285,40 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
     }
     if(mSetupDSPLoopback) {
         // ToDo: Set up for audio loop back in DSP itself
+        LOGV("Start mSetupDSPLoopback");
+        bool bIsUseCaseSet = false;
+
+        alsa_handle.module = mParent->mALSADevice;
+        alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;
+        alsa_handle.devices = devices;
+        alsa_handle.handle = 0;
+        alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
+        alsa_handle.channels = mChannels;
+        alsa_handle.sampleRate = mSampleRate;
+        alsa_handle.latency = PLAYBACK_LATENCY;
+        alsa_handle.rxHandle = 0;
+        alsa_handle.ucMgr = mParent->mUcMgr;
+
+        snd_use_case_get(mParent->mUcMgr, "_verb", (const char **)&use_case);
+        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+            strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_MI2S, sizeof(alsa_handle.useCase));
+            bIsUseCaseSet = true;
+        } else {
+            strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_MI2S, sizeof(alsa_handle.useCase));
+        }
+
+        mParent->mDeviceList.push_back(alsa_handle);
+        ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+        free(use_case);
+        LOGD("useCase %s", it->useCase);
+
+        mParent->mALSADevice->route(&(*it), devices, mParent->mode());
+        if(bIsUseCaseSet) {
+            snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
+        } else {
+            snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
+        }
+        *status = mParent->mALSADevice->startLoopback(&(*it));
     }
 }
 

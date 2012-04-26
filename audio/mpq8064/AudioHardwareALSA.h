@@ -154,6 +154,7 @@ public:
     status_t    startVoipCall(alsa_handle_t *handle);
     status_t    startVoiceCall(alsa_handle_t *handle);
     status_t    startFm(alsa_handle_t *handle);
+    status_t    startLoopback(alsa_handle_t *handle);
     status_t    setFmVolume(int value);
     status_t    setLpaVolume(int value);
     status_t    start(alsa_handle_t *handle);
@@ -423,9 +424,9 @@ class AudioBroadcastStreamALSA : public AudioBroadcastStream
 public:
     AudioBroadcastStreamALSA(AudioHardwareALSA *parent, 
                              uint32_t  devices,
-                             int      *format,
-                             uint32_t *channels,
-                             uint32_t *sampleRate,
+                             int      format,
+                             uint32_t channels,
+                             uint32_t sampleRate,
                              uint32_t audioSource,
                              status_t *status);
 
@@ -644,9 +645,9 @@ public:
     /** This method creates and opens the audio hardware output stream */
     virtual AudioBroadcastStream* openBroadcastStream(
             uint32_t  devices,
-            int      *format=0,
-            uint32_t *channels=0,
-            uint32_t *sampleRate=0,
+            int      format=0,
+            uint32_t channels=0,
+            uint32_t sampleRate=0,
             uint32_t audioSource=0,
             status_t *status=0);
     virtual    void        closeBroadcastStream(AudioBroadcastStream* out);

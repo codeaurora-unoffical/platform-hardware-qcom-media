@@ -483,9 +483,9 @@ void AudioHardwareALSA::doRouting(int device)
 
 AudioBroadcastStream *
 AudioHardwareALSA::openBroadcastStream(uint32_t  devices,
-                                       int      *format,
-                                       uint32_t *channels,
-                                       uint32_t *sampleRate,
+                                       int      format,
+                                       uint32_t channels,
+                                       uint32_t sampleRate,
                                        uint32_t audioSource,
                                        status_t *status)
 {

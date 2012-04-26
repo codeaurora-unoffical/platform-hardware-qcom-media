@@ -590,9 +590,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
 
 static int adev_open_broadcast_stream(struct audio_hw_device *dev,
                                       uint32_t devices,
-                                      int      *format,
-                                      uint32_t *channels,
-                                      uint32_t *sample_rate,
+                                      int      format,
+                                      uint32_t channels,
+                                      uint32_t sample_rate,
                                       uint32_t audio_source,
                                       struct audio_broadcast_stream **stream_out)
 {
