@@ -189,6 +189,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         if(devices & AudioSystem::DEVICE_OUT_PROXY) {
             mCaptureFromProxy = true;
         }
+        mWMAConfigDataSet = false;
         createThreadsForTunnelDecode();
     } else if(format == AUDIO_FORMAT_PCM_16_BIT) {
         if(mDevices & ~AudioSystem::DEVICE_OUT_SPDIF) {
@@ -260,42 +261,10 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         }
     }
     if (mUseTunnelDecode) {
-        // If audio is to be capture back from proxy device, then route 
-        // audio to SPDIF and Proxy devices only
-        devices = mDevices;
-        if(mCaptureFromProxy) {
-            devices = (mDevices & AudioSystem::DEVICE_OUT_SPDIF);
-            devices |= AudioSystem::DEVICE_OUT_PROXY;
-        }
-        mInputBufferSize = TUNNEL_DECODER_BUFFER_SIZE;
-        snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
-            *status = openDevice(SND_USE_CASE_VERB_HIFI_TUNNEL, true, devices);
-        } else {
-            *status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
-        }
-        free(use_case);
-        if(*status != NO_ERROR) {
-            return;
-        }
-        ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
-        mCompreRxHandle = &(*it);
-        //mmap the buffers for playback
-        status_t err = mmap_buffer(mCompreRxHandle->handle);
-        if(err) {
-            LOGE("MMAP buffer failed - playback err = %d", err);
-            *status = err;
-            return;
-        }
-        //prepare the driver for playback
-        err = pcm_prepare(mCompreRxHandle->handle);
-        if (err) {
-            LOGE("PCM Prepare failed - playback err = %d", err);
-            *status = err;
-            return;
-        }
-        bufferAlloc(mCompreRxHandle);
-        mBufferSize = mCompreRxHandle->periodSize;
+        if (format != AUDIO_FORMAT_WMA)
+            *status = openTunnelDevice();
+        else
+            *status = NO_ERROR;
     } else if (mRouteCompreToSpdif) {
         devices = AudioSystem::DEVICE_OUT_SPDIF;
         if(mCaptureFromProxy) {
@@ -415,7 +384,7 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
         }
         return status;
     }
-    else if(mCompreRxHandle || mSessionId == 2) {
+    else if(mCompreRxHandle) {
         if(!strcmp(mCompreRxHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
                 !strcmp(mCompreRxHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL)) {
             LOGD("set compressed Volume(%f)\n", volume);
@@ -425,6 +394,62 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
         return status;
     }
     return INVALID_OPERATION;
+}
+
+
+status_t AudioSessionOutALSA::openTunnelDevice()
+{
+    // If audio is to be capture back from proxy device, then route
+    // audio to SPDIF and Proxy devices only
+    int devices = mDevices;
+    char *use_case;
+    status_t status = NO_ERROR;;
+    if(mCaptureFromProxy) {
+        devices = (mDevices & AudioSystem::DEVICE_OUT_SPDIF);
+        devices |= AudioSystem::DEVICE_OUT_PROXY;
+    }
+    mInputBufferSize    = 4800;
+    mInputBufferCount   = 512;
+    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+    if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+        status = openDevice(SND_USE_CASE_VERB_HIFI_TUNNEL, true, devices);
+    } else {
+        status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
+    }
+    free(use_case);
+    if(status != NO_ERROR) {
+        return status;
+    }
+    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+    mCompreRxHandle = &(*it);
+
+    //mmap the buffers for playback
+    status_t err = mmap_buffer(mCompreRxHandle->handle);
+    if(err) {
+        LOGE("MMAP buffer failed - playback err = %d", err);
+        return err;
+    }
+    //prepare the driver for playback
+    status = pcm_prepare(mCompreRxHandle->handle);
+    if (status) {
+        LOGE("PCM Prepare failed - playback err = %d", err);
+        return status;
+    }
+    bufferAlloc(mCompreRxHandle);
+    mBufferSize = mCompreRxHandle->periodSize;
+    if(mRoutePcmToSpdif) {
+        status = mALSADevice->setPlaybackFormat("LPCM");
+        if(status != NO_ERROR) {
+            return status;
+        }
+        mChannelStatusSet = true;
+        if(mALSADevice->get_linearpcm_channel_status(mSampleRate, mChannelStatus)) {
+            LOGE("channel status set error ");
+            return status;
+        }
+        mALSADevice->setChannelStatus(mChannelStatus);
+    }
+    return status;
 }
 
 ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
@@ -441,6 +466,21 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     snd_pcm_sframes_t n;
     size_t            sent = 0;
     status_t          err;
+    if (mUseTunnelDecode && mWMAConfigDataSet == false && mFormat == AUDIO_FORMAT_WMA) {
+        LOGV("Configuring the WMA params");
+        status_t err = mALSADevice->setWMAParams(mCompreRxHandle, (int *)buffer, bytes/sizeof(int));
+        if (err) {
+            LOGE("WMA param config failed");
+            return -1;
+        }
+        err = openTunnelDevice();
+        if (err) {
+            LOGE("opening of tunnel device failed");
+            return -1;
+        }
+        mWMAConfigDataSet = true;
+        return bytes;
+    }
     if (mUseTunnelDecode && mCompreRxHandle) {
         LOGV("Signal Event thread\n");
         mEventCv.signal();
@@ -943,6 +983,7 @@ status_t AudioSessionOutALSA::stop()
     mCaptureFromProxy = false;
     mOpenMS11Decoder = false;
     mAacConfigDataSet = false;
+    mWMAConfigDataSet = false;
 
     return NO_ERROR;
 }
@@ -989,6 +1030,7 @@ status_t AudioSessionOutALSA::setObserver(void *observer)
 status_t AudioSessionOutALSA::getTimeStamp(uint64_t *timeStamp)
 {
     LOGV("getTimeStamp \n");
+    *timeStamp = -1;
     Mutex::Autolock autoLock(mLock);
     if (mCompreRxHandle && mUseTunnelDecode) {
         if (!timeStamp)

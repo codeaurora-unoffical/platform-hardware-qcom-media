@@ -107,8 +107,8 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
 
     reqBuffSize = handle->bufferSize;
 
-    if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+    if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
+        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
         if (ioctl(handle->handle->fd, SNDRV_COMPRESS_GET_CAPS, &compr_cap)) {
             LOGE("SNDRV_COMPRESS_GET_CAPS, failed Error no %d \n", errno);
             err = -errno;
@@ -120,8 +120,21 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
         LOGV("Min peroid size = %d , Maximum Peroid size = %d",\
             minPeroid, maxPeroid);
         //TODO: what if codec not supported or the array has wrong codec!!!!
-        if (format == AUDIO_FORMAT_AAC) {
-            LOGW("### AAC CODEC");
+        if (format == AUDIO_FORMAT_WMA) {
+            LOGV("### WMA CODEC");
+            compr_params.codec.id = compr_cap.codecs[3];
+            if (mWMA_params == NULL) {
+                LOGV("WMA param config missing.");
+                return BAD_VALUE;
+            }
+            compr_params.codec.bit_rate = mWMA_params[0];
+            compr_params.codec.align = mWMA_params[1];
+            compr_params.codec.options.wma.encodeopt = mWMA_params[2];
+            compr_params.codec.format = mWMA_params[3];
+            compr_params.codec.options.wma.bits_per_sample = mWMA_params[4];
+            compr_params.codec.options.wma.channelmask = mWMA_params[5];
+        } else if (format == AUDIO_FORMAT_AAC) {
+            LOGV("### AAC CODEC");
             compr_params.codec.id = compr_cap.codecs[1];
         }
         else {
@@ -426,12 +439,10 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     handle->handle->flags = flags;
     LOGD("setting hardware parameters");
     err = setHardwareParams(handle);
-
     if (err == NO_ERROR) {
         LOGD("setting software parameters");
         err = setSoftwareParams(handle);
     }
-
     if(err != NO_ERROR) {
         LOGE("Set HW/SW params failed: Closing the pcm stream");
         standby(handle);
@@ -511,7 +522,6 @@ status_t ALSADevice::startVoipCall(alsa_handle_t *handle)
      }
 
      handle->handle->flags = flags;
-
      err = setHardwareParams(handle);
 
      if (err == NO_ERROR) {
@@ -1355,6 +1365,30 @@ status_t ALSADevice::setCompressedVolume(int value)
         LOGE("setCompressedVolume = error = %d",err);
     }
 
+    return err;
+}
+
+status_t ALSADevice::setPlaybackFormat(const char *value)
+{
+    status_t err = NO_ERROR;
+
+    err = setMixerControl("SEC RX Format",value);
+    if(err) {
+        LOGE("setPlaybackFormat error = %d",err);
+    }
+
+    return err;
+}
+
+status_t ALSADevice::setWMAParams(alsa_handle_t *handle, int params[], int size)
+{
+    status_t err = NO_ERROR;
+    if (size > sizeof(mWMA_params)/sizeof(mWMA_params[0])) {
+        LOGE("setWMAParams too many params error");
+        return BAD_VALUE;
+    }
+    for (int i = 0; i < size; i++)
+        mWMA_params[i] = params[i];
     return err;
 }
 

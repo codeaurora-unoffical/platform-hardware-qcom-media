@@ -191,6 +191,8 @@ public:
 
     status_t    setPcmVolume(int);
     status_t    setCompressedVolume(int);
+    status_t    setPlaybackFormat(const char *value);
+    status_t    setWMAParams(alsa_handle_t* , int[], int);
 private:
 
     int         deviceName(alsa_handle_t *handle, unsigned flags, char **value);
@@ -209,6 +211,8 @@ private:
     uint32_t    mDevSettingsFlag;
     int         btsco_samplerate;
     int         callMode;
+    int         mWMA_params[6];
+
     struct mixer*  mMixer;
     ALSAUseCaseList mUseCaseList;
 };
@@ -401,6 +405,7 @@ private:
     uint32_t            mSessionId;
     size_t              mMinBytesReqToDecode;
     bool                mAacConfigDataSet;
+    bool                mWMAConfigDataSet;
     unsigned char       mChannelStatus[24];
     bool                mChannelStatusSet;
     bool                mTunnelPaused;
@@ -437,6 +442,7 @@ private:
     void                bufferDeAlloc();
     bool                isReadyToPostEOS(int errPoll, void *fd);
     status_t            drainTunnel();
+    status_t            openTunnelDevice();
     // make sure the event thread also exited
     void                requestAndWaitForEventThreadExit();
     static void *       eventThreadWrapper(void *me);
