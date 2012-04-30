@@ -73,7 +73,7 @@ public:
     virtual int convertC2D(int srcFd, void * srcData, int dstFd, void * dstData) = 0;
 };
 
-typedef C2DColorConverterBase* createC2DColorConverter_t(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, size_t srcSize, size_t dstSize, int32_t flags);
+typedef C2DColorConverterBase* createC2DColorConverter_t(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags);
 typedef void destroyC2DColorConverter_t(C2DColorConverterBase*);
 
 }

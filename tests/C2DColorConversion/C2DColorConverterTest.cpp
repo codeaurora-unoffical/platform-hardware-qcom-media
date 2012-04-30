@@ -18,7 +18,6 @@ Copyright (c) 2012, Code Aurora Forum. All rights reserved.
 --------------------------------------------------------------------------*/
 
 #include <cutils/memory.h>
-#include <utils/Log.h>
 #include <binder/IPCThreadState.h>
 #include <binder/ProcessState.h>
 #include <binder/IServiceManager.h>
@@ -39,6 +38,12 @@ Copyright (c) 2012, Code Aurora Forum. All rights reserved.
 #include <C2DColorConverter.h>
 
 #define ALIGN( num, to ) (((num) + (to-1)) & (~(to-1)))
+#define ALIGN8K 8192
+#define ALIGN4K 4096
+#define ALIGN2K 2048
+#define ALIGN128 128
+#define ALIGN32 32
+#define ALIGN16 16
 
 using namespace android;
 
@@ -53,11 +58,11 @@ int32_t getFormatSize(int32_t format, int32_t width, int32_t height)
 {
     switch (format) {
         case 1: // RGB565
-            return (ALIGN (width, 32) * ALIGN (height , 32) * 2);
+            return (ALIGN (width, ALIGN32) * ALIGN (height , ALIGN32) * 2);
         case 2: // TILE 4x2
-            return (ALIGN(ALIGN(width, 128) * ALIGN(height, 32), 8192) + ALIGN(ALIGN(width, 128)* ALIGN(height/2, 32), 8192));
+            return (ALIGN(ALIGN(width, ALIGN128) * ALIGN(height, ALIGN32), ALIGN8K) + ALIGN(ALIGN(width, ALIGN128)* ALIGN(height/2, ALIGN32), ALIGN8K));
         case 3: // sp
-             return (ALIGN(ALIGN((width * height), 2048) + ((width * height) / 2), 8192));
+            return ALIGN((ALIGN(width, ALIGN32) * height) + (ALIGN(width/2, ALIGN32) * (height/2) * 2), ALIGN4K);
         default:
             return 0;
     }
@@ -72,6 +77,34 @@ int32_t getHalFormat(int32_t format)
             return HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED;
         case 3: // sp
             return HAL_PIXEL_FORMAT_YCbCr_420_SP;
+        default:
+            return 0;
+    }
+}
+
+int32_t getStride(int32_t format, int32_t width)
+{
+    switch (format) {
+        case 1: // RGB565
+            return ALIGN(width, ALIGN32) * 2;
+        case 2: // TILE 4x2
+            return ALIGN(width, ALIGN128);
+        case 3: // sp
+            return ALIGN(width, ALIGN32);
+        default:
+            return 0;
+    }
+}
+
+int32_t getSlice(int32_t format, int32_t height)
+{
+    switch (format) {
+        case 1: // RGB565
+            return ALIGN(height, ALIGN32);
+        case 2: // TILE 4x2
+            return ALIGN(height, ALIGN32);
+        case 3: // sp
+            return height;
         default:
             return 0;
     }
@@ -99,6 +132,8 @@ int main(int argc, char** argv)
     int outFormat = atoi(argv[5]);
     int inSize = getFormatSize(inFormat, width, height);
     int outSize = getFormatSize(outFormat, width, height);
+    int outStride = getStride(outFormat, width);
+    int outSlice = getSlice(outFormat, height);
     CHECK(inSize);
     CHECK(outSize);
 
@@ -116,7 +151,7 @@ int main(int argc, char** argv)
     sp<SurfaceComposerClient> client = new SurfaceComposerClient();
 
     sp<SurfaceControl> surfaceControl = client->createSurface(
-                                             String8("test-surface"),
+                                             String8("test-C2D"),
                                              0,
                                              600, 1024,
                                              PIXEL_FORMAT_RGB_565);
@@ -140,9 +175,17 @@ int main(int argc, char** argv)
 
     int err = native_window_set_buffers_geometry(
                   window,
-                  width,
-                  height,
+                  outStride,
+                  outSlice,
                  getHalFormat(outFormat));
+
+    android_native_rect_t crop;
+    crop.left = 0;
+    crop.top = 0;
+    crop.right = width;
+    crop.bottom = height;
+
+    err = native_window_set_crop(window, &crop);
 
     err = native_window_set_buffer_count(window, 4);
 
@@ -178,15 +221,15 @@ int main(int argc, char** argv)
         mConvertOpen = (createC2DColorConverter_t *)dlsym(mLibHandle,"createC2DColorConverter");
         mConvertClose = (destroyC2DColorConverter_t *)dlsym(mLibHandle,"destroyC2DColorConverter");
         if(mConvertOpen != NULL && mConvertClose != NULL) {
-            LOGV("Successfully acquired mConvert symbol");
-            C2DCC = mConvertOpen(width, height, width, height, (ColorConvertFormat)inFormat, (ColorConvertFormat)outFormat, outSize, outSize, 0);
+            printf("Successfully acquired mConvert symbol");
+            C2DCC = mConvertOpen(width, height, width, height, (ColorConvertFormat)inFormat, (ColorConvertFormat)outFormat, 0);
         } else {
-            LOGE("Could not get the mConverts...\n");
+            printf("Could not get the mConverts...\n");
             CHECK(0);
         }
     }
     else {
-        LOGE("Could not get yuvconversion lib handle");
+        printf("Could not get yuvconversion lib handle");
         CHECK(0);
     }
 
@@ -254,7 +297,6 @@ int main(int argc, char** argv)
         private_handle_t const* hnd_out =
             reinterpret_cast<private_handle_t const*>(buffer_out->handle);
 
-        int size_out = hnd_out->size;
         sp<GraphicBuffer> graphicBuffer_out(new GraphicBuffer(buffer_out,
                                                       false));
         unsigned char * addr_out = NULL;
@@ -280,7 +322,7 @@ int main(int argc, char** argv)
         window->cancelBuffer(window, buffer);
 
         if (result < 0) {
-            LOGE("Conversion failed\n");
+            printf("Conversion failed\n");
             window->cancelBuffer(window, buffer_out);
             goto cleanup;
         }
