@@ -417,6 +417,7 @@ private:
     bool                mTunnelPaused;
     bool                mTunnelSeeking;
     bool                mReachedExtractorEOS;
+    bool                mSkipWrite;
 
     AudioHardwareALSA  *mParent;
     alsa_handle_t *     mPcmRxHandle;
