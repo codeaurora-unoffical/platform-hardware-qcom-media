@@ -198,6 +198,7 @@ public:
     status_t    setPlaybackFormat(const char *value);
     status_t    setWMAParams(alsa_handle_t* , int[], int);
     int         getALSABufferSize(alsa_handle_t *handle);
+    status_t    setHDMIChannelCount();
 private:
 
     int         deviceName(alsa_handle_t *handle, unsigned flags, char **value);

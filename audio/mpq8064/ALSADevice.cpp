@@ -409,8 +409,15 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     }
 
     close(handle);
-
     LOGD("s_open: handle %p", handle);
+
+    if(handle->channels == 1 && handle->devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
+        err = setHDMIChannelCount();
+        if(err != OK) {
+            LOGE("setHDMIChannelCount err = %d", err);
+            return err;
+        }
+    }
 
     // ASoC multicomponent requires a valid path (frontend/backend) for
     // the device to be opened
@@ -1441,7 +1448,7 @@ int ALSADevice::getALSABufferSize(alsa_handle_t *handle) {
     if (bufferSize & (bufferSize-1)) {
 
         bufferSize -= 1;
-        for (int i=1; i<sizeof(bufferSize -1)*CHAR_BIT; i<<=1)
+        for (uint32_t i=1; i<sizeof(bufferSize -1)*CHAR_BIT; i<<=1)
                 bufferSize = bufferSize | bufferSize >> i;
         bufferSize += 1;
         LOGV("Not power of 2 - buff size is = %d",bufferSize);
@@ -1455,6 +1462,17 @@ int ALSADevice::getALSABufferSize(alsa_handle_t *handle) {
         bufferSize = MULTI_CHANNEL_MAX_PERIOD_SIZE;
 
     return bufferSize;
+}
+
+status_t ALSADevice::setHDMIChannelCount()
+{
+    status_t err = NO_ERROR;
+
+    err = setMixerControl("HDMI_RX Channels","Two");
+    if(err) {
+        LOGE("setHDMIChannelCount error = %d",err);
+    }
+    return err;
 }
 
 }
