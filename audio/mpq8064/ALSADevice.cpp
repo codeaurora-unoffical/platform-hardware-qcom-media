@@ -65,29 +65,26 @@ int ALSADevice::deviceName(alsa_handle_t *handle, unsigned flags, char **value)
 {
     int ret = 0;
     char ident[70];
-    char *rxDevice; //,useCase[70];
+    char *rxDevice, useCase[70];
 
     if (flags & PCM_IN) {
         strlcpy(ident, "CapturePCM/", sizeof(ident));
     } else {
         strlcpy(ident, "PlaybackPCM/", sizeof(ident));
     }
-    if(!strcmp(handle->useCase,"MI2S") && !(flags & PCM_IN)) {
+    if((!strncmp(handle->useCase,SND_USE_CASE_VERB_MI2S,
+                          strlen(SND_USE_CASE_VERB_MI2S)) ||
+        !strncmp(handle->useCase,SND_USE_CASE_MOD_PLAY_MI2S,
+                   strlen(SND_USE_CASE_MOD_PLAY_MI2S))) && !(flags & PCM_IN) ) {
         rxDevice = getUCMDevice(handle->devices & AudioSystem::DEVICE_OUT_ALL, 0);
-//        strlcpy(useCase,handle->useCase,sizeof(handle->useCase)+1);
-//        strncat(useCase,rxDevice,strlen(rxDevice));
-//        strlcat(ident, useCase, sizeof(ident));
-        if(!strcmp(rxDevice,"Speaker"))
-            *value = strdup("hw:0,5");
-        else if(!strcmp(rxDevice,"HDMI"))
-            *value = strdup("hw:0,12");
-        else if(!strcmp(rxDevice,"SPDIF"))
-            *value = strdup("hw:0,13");
+        strlcpy(useCase,handle->useCase,sizeof(handle->useCase)+1);
+        strncat(useCase,rxDevice,strlen(rxDevice));
+        strlcat(ident, useCase, sizeof(ident));
         free(rxDevice);
     } else {
         strlcat(ident, handle->useCase, sizeof(ident));
-        ret = snd_use_case_get(handle->ucMgr, ident, (const char **)value);
     }
+    ret = snd_use_case_get(handle->ucMgr, ident, (const char **)value);
     LOGD("Device value returned is %s", (*value));
     return ret;
 }

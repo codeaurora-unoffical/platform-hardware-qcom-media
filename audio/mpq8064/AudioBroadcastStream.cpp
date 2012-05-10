@@ -287,6 +287,7 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         // ToDo: Set up for audio loop back in DSP itself
         LOGV("Start mSetupDSPLoopback");
         bool bIsUseCaseSet = false;
+        char *rxDevice;
 
         alsa_handle.module = mParent->mALSADevice;
         alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;
@@ -313,10 +314,14 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         LOGD("useCase %s", it->useCase);
 
         mParent->mALSADevice->route(&(*it), devices, mParent->mode());
-        if(bIsUseCaseSet) {
-            snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
-        } else {
-            snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
+        rxDevice = mParent->mALSADevice->getUCMDevice(mDevices,0);
+        if(rxDevice != NULL) {
+            if(bIsUseCaseSet) {
+                snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
+            } else {
+                snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
+            }
+            free(rxDevice);
         }
         *status = mParent->mALSADevice->startLoopback(&(*it));
     }
