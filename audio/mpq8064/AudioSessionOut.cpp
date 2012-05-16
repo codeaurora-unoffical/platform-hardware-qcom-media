@@ -68,14 +68,6 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     bool bIsUseCaseSet = false;
 
     Mutex::Autolock autoLock(mLock);
-    if(devices == 0) {
-        LOGE("No output device specified");
-        return;
-    }
-    if((format == AUDIO_FORMAT_PCM_16_BIT) && (channels == 0 || channels > 6)) {
-        LOGE("Invalid number of channels %d", channels);
-        return;
-    }
     // Default initilization
     mParent         = parent;
     mALSADevice     = mParent->mALSADevice;
@@ -125,6 +117,23 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mInputBufferSize    = DEFAULT_BUFFER_SIZE;
     mInputBufferCount   = TUNNEL_DECODER_BUFFER_COUNT;
     mEfd = -1;
+
+    mWMAConfigDataSet    = false;
+    mAacConfigDataSet    = false; // flags if AAC config to be set(which is sent in first buffer)
+    mEventThread         = NULL;
+    mEventThreadAlive    = false;
+    mKillEventThread     = false;
+    mMinBytesReqToDecode = 0;
+    mObserver            = NULL;
+
+    if(devices == 0) {
+        LOGE("No output device specified");
+        return;
+    }
+    if((format == AUDIO_FORMAT_PCM_16_BIT) && (channels == 0 || channels > 6)) {
+        LOGE("Invalid number of channels %d", channels);
+        return;
+    }
 
     if(mDevices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
         mCaptureFromProxy = true;
@@ -1043,11 +1052,13 @@ status_t AudioSessionOutALSA::setObserver(void *observer)
 status_t AudioSessionOutALSA::getTimeStamp(uint64_t *timeStamp)
 {
     LOGV("getTimeStamp \n");
+
+    if (!timeStamp)
+        return -1;
+
     *timeStamp = -1;
     Mutex::Autolock autoLock(mLock);
     if (mCompreRxHandle && mUseTunnelDecode) {
-        if (!timeStamp)
-            return -1;
         struct snd_compr_tstamp tstamp;
         tstamp.timestamp = -1;
         if (ioctl(mCompreRxHandle->handle->fd, SNDRV_COMPRESS_TSTAMP, &tstamp)){

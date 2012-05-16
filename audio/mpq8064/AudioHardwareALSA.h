@@ -459,7 +459,7 @@ private:
     class BuffersAllocated {
     public:
         BuffersAllocated(void *buf1, int32_t nSize) :
-        memBuf(buf1), memBufsize(nSize)
+        memBuf(buf1), memBufsize(nSize), bytesToWrite(0)
         {}
         void* memBuf;
         int32_t memBufsize;

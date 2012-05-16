@@ -78,7 +78,9 @@ int ALSADevice::deviceName(alsa_handle_t *handle, unsigned flags, char **value)
                    strlen(SND_USE_CASE_MOD_PLAY_MI2S))) && !(flags & PCM_IN) ) {
         rxDevice = getUCMDevice(handle->devices & AudioSystem::DEVICE_OUT_ALL, 0);
         strlcpy(useCase,handle->useCase,sizeof(handle->useCase)+1);
-        strncat(useCase,rxDevice,strlen(rxDevice));
+        if(rxDevice) {
+           strlcat(useCase,rxDevice,sizeof(useCase));
+        }
         strlcat(ident, useCase, sizeof(ident));
         free(rxDevice);
     } else {
