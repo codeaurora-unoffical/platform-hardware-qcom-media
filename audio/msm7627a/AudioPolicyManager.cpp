@@ -946,8 +946,12 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
         // Mute LPA output also if it belongs to STRATEGY_MEDIA
         if(((mLPADecodeOutput != -1) && (mLPADecodeOutput != output) &&
             mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            LOGV("setOutputDevice: muting mLPADecodeOutput:%d", mLPADecodeOutput);
             setStrategyMute(STRATEGY_MEDIA, true, mLPADecodeOutput);
-        } else if (output != mHardwareOutput) {
+        }
+        if(((mHardwareOutput != -1) && (mHardwareOutput != output) &&
+            mOutputs.valueFor(mHardwareOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            LOGV("setOutputDevice: muting mHardwareOutput:%d", mHardwareOutput);
             setStrategyMute(STRATEGY_MEDIA, true, mHardwareOutput);
         }
 
@@ -978,8 +982,12 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
         // Unmute LPA output also if it belongs to STRATEGY_MEDIA
         if((mLPADecodeOutput != -1 && (mLPADecodeOutput != output) &&
             mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            LOGV("setOutputDevice: Unmuting mLPADecodeOutput:%d delayMs:%d", mLPADecodeOutput,delayMs);
             setStrategyMute(STRATEGY_MEDIA, false, mLPADecodeOutput, delayMs);
-        } else if (output != mHardwareOutput) {
+        }
+        if(((mHardwareOutput != -1) && (mHardwareOutput != output) &&
+            mOutputs.valueFor(mHardwareOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            LOGV("setOutputDevice: Unmuting mHardwareOutput:%d delayMs:%d", mHardwareOutput,delayMs);
             setStrategyMute(STRATEGY_MEDIA, false, mHardwareOutput, delayMs);
         }
     }
