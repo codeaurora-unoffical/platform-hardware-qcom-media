@@ -144,6 +144,7 @@ struct alsa_handle_t {
     unsigned int        bufferSize;      // Size of sample buffer
     unsigned int        periodSize;
     struct pcm *        rxHandle;
+    uint32_t            activeDevice;
     snd_use_case_mgr_t  *ucMgr;
 };
 
@@ -173,7 +174,7 @@ public:
     status_t    start(alsa_handle_t *handle);
     status_t    close(alsa_handle_t *handle);
     status_t    standby(alsa_handle_t *handle);
-    status_t    route(alsa_handle_t *handle, uint32_t devices, int mode);
+    status_t    route(uint32_t devices, int mode);
     status_t    setChannelStatus(unsigned char *channelStatus);
     void        disableDevice(alsa_handle_t *handle);
     char*       getUCMDevice(uint32_t devices, int input);
@@ -199,15 +200,21 @@ public:
     status_t    setWMAParams(alsa_handle_t* , int[], int);
     int         getALSABufferSize(alsa_handle_t *handle);
     status_t    setHDMIChannelCount();
+    void        switchDeviceUseCase(alsa_handle_t *handle, uint32_t devices,
+                                            uint32_t mode);
+    void        setDeviceList(ALSAHandleList *mDeviceList);
+    void        setUseCase(alsa_handle_t *handle, bool bIsUseCaseSet);
 private:
 
     int         deviceName(alsa_handle_t *handle, unsigned flags, char **value);
     status_t    setHardwareParams(alsa_handle_t *handle);
     status_t    setSoftwareParams(alsa_handle_t *handle);
-    void        switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode);
+    void        switchDevice(uint32_t devices, uint32_t mode);
     status_t    getMixerControl(const char *name, unsigned int &value, int index);
     status_t    setMixerControl(const char *name, unsigned int value, int index);
     status_t    setMixerControl(const char *name, const char *value);
+    void        getDevices(uint32_t devices, uint32_t mode,
+                                    char **rxDevice, char **txDevice);
 
     char        mic_type[25];
     char        curRxUCMDevice[50];
@@ -221,6 +228,7 @@ private:
 
     struct mixer*  mMixer;
     ALSAUseCaseList mUseCaseList;
+    ALSAHandleList  *mDeviceList;
 };
 
 class ALSAControl

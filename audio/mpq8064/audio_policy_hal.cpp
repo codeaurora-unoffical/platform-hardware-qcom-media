@@ -425,7 +425,8 @@ static int qcom_ap_dev_open(const hw_module_t* module, const char* name,
 {
     struct qcom_ap_device *dev;
 
-    if (strcmp(name, AUDIO_POLICY_INTERFACE) != 0)
+    if (strncmp(name, AUDIO_POLICY_INTERFACE,
+                      strlen(AUDIO_POLICY_INTERFACE)) != 0)
         return -EINVAL;
 
     dev = (struct qcom_ap_device *)calloc(1, sizeof(*dev));

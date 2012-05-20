@@ -143,24 +143,27 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
 
     // 3. Instantiate the Dolby MS11 decoder instance and configure it
     char *use_case;
+    bool bIsUseCaseSet = false;
     alsa_handle_t alsa_handle;
     if(mPullAudioFromDSP) {
         // ToDo: Open the capture driver and route audio
         if(format == AudioSystem::PCM_16_BIT) {
             // Open PCM capture driver
-            bool bIsUseCaseSet = false;
             alsa_handle.module = mParent->mALSADevice;
             alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;
             alsa_handle.devices = devices;
+            alsa_handle.activeDevice = devices;
             alsa_handle.handle = 0;
             alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
             alsa_handle.channels = DEFAULT_CHANNEL_MODE; // ToDo: Change this accordingly
             alsa_handle.sampleRate = DEFAULT_SAMPLING_RATE;
             alsa_handle.latency = RECORD_LATENCY;
             alsa_handle.rxHandle = 0;
+            alsa_handle.mode = mParent->mode();
             alsa_handle.ucMgr = mParent->mUcMgr;
             snd_use_case_get(mParent->mUcMgr, "_verb", (const char **)&use_case);
-            if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+            if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                                strlen(SND_USE_CASE_VERB_INACTIVE)))) {
                 strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_HIFI_REC, sizeof(alsa_handle.useCase));
                 bIsUseCaseSet = true;
             } else {
@@ -170,30 +173,27 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
             mParent->mDeviceList.push_back(alsa_handle);
             ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
             LOGD("useCase %s", it->useCase);
-            mParent->mALSADevice->route(&(*it), devices, mParent->mode());
             mPcmRxHandle = &(*it);
-            if(bIsUseCaseSet) {
-                snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
-            } else {
-                snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
-            }
+            mParent->mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
             *status = mParent->mALSADevice->open(&(*it));
         } else {
             // Open Compressed capture driver
-            bool bIsUseCaseSet = false;
             alsa_handle.module = mParent->mALSADevice;
             alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;
             alsa_handle.devices = devices;
+            alsa_handle.activeDevice = devices;
             alsa_handle.handle = 0;
             alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
             alsa_handle.channels = DEFAULT_CHANNEL_MODE; // ToDo: Change this accordingly
             alsa_handle.sampleRate = DEFAULT_SAMPLING_RATE;
             alsa_handle.latency = RECORD_LATENCY;
             alsa_handle.rxHandle = 0;
+            alsa_handle.mode = mParent->mode();
             alsa_handle.ucMgr = mParent->mUcMgr;
 #if 0
             snd_use_case_get(mParent->mUcMgr, "_verb", (const char **)&use_case);
-            if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+            if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                                 strlen(SND_USE_CASE_VERB_INACTIVE)))) {
                 strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED, sizeof(alsa_handle.useCase));
                 bIsUseCaseSet = true;
             } else {
@@ -204,13 +204,8 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
             mParent->mDeviceList.push_back(alsa_handle);
             ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
             LOGD("useCase %s", it->useCase);
-            mParent->mALSADevice->route(&(*it), devices, mParent->mode());
             mPcmRxHandle = &(*it);
-            if(bIsUseCaseSet) {
-                snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
-            } else {
-                snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
-            }
+            mParent->mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
             *status = mParent->mALSADevice->open(&(*it));
         }
     }
@@ -222,15 +217,18 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         alsa_handle.module = mParent->mALSADevice;
         alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;
         alsa_handle.devices = devices;
+        alsa_handle.activeDevice = devices;
         alsa_handle.handle = 0;
         alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
         alsa_handle.channels = DEFAULT_CHANNEL_MODE;
         alsa_handle.sampleRate = DEFAULT_SAMPLING_RATE;
         alsa_handle.latency = PLAYBACK_LATENCY;
         alsa_handle.rxHandle = 0;
+        alsa_handle.mode = mParent->mode();
         alsa_handle.ucMgr = mParent->mUcMgr;
         snd_use_case_get(mParent->mUcMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
             strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_HIFI2, sizeof(alsa_handle.useCase));
         } else {
             strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_MUSIC2, sizeof(alsa_handle.useCase));
@@ -239,13 +237,8 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         mParent->mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
         LOGD("useCase %s", it->useCase);
-        mParent->mALSADevice->route(&(*it), devices, mParent->mode());
         mComprRxHandle = &(*it);
-        if(bIsUseCaseSet) {
-            snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
-        } else {
-            snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
-        }
+        mParent->mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
         *status = mParent->mALSADevice->open(&(*it));
     }
     if((mRouteCompressedAudio || mRouteAudioToSpdif)&& !mSetupDSPLoopback) {
@@ -254,16 +247,19 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         alsa_handle.module = mParent->mALSADevice;
         alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;
         alsa_handle.devices = devices;
+        alsa_handle.activeDevice = devices;
         alsa_handle.handle = 0;
         alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
         alsa_handle.channels = DEFAULT_CHANNEL_MODE;
         alsa_handle.sampleRate = DEFAULT_SAMPLING_RATE;
         alsa_handle.latency = PLAYBACK_LATENCY;
         alsa_handle.rxHandle = 0;
+        alsa_handle.mode = mParent->mode();
         alsa_handle.ucMgr = mParent->mUcMgr;
 #if 0
         snd_use_case_get(mParent->mUcMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                             strlen(SND_USE_CASE_VERB_INACTIVE)))) {
             strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_HIFI_COMPRESSED, sizeof(alsa_handle.useCase));
             bIsUseCaseSet = true;
         } else {
@@ -274,34 +270,31 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         mParent->mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
         LOGD("useCase %s", it->useCase);
-        mParent->mALSADevice->route(&(*it), devices, mParent->mode());
         mPcmRxHandle = &(*it);
-        if(bIsUseCaseSet) {
-            snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
-        } else {
-            snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
-        }
+        mParent->mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
         *status = mParent->mALSADevice->open(&(*it));
     }
     if(mSetupDSPLoopback) {
         // ToDo: Set up for audio loop back in DSP itself
         LOGV("Start mSetupDSPLoopback");
         bool bIsUseCaseSet = false;
-        char *rxDevice;
 
         alsa_handle.module = mParent->mALSADevice;
         alsa_handle.bufferSize = DEFAULT_BUFFER_SIZE;
         alsa_handle.devices = devices;
+        alsa_handle.activeDevice = devices;
         alsa_handle.handle = 0;
         alsa_handle.format = SNDRV_PCM_FORMAT_S16_LE;
         alsa_handle.channels = mChannels;
         alsa_handle.sampleRate = mSampleRate;
         alsa_handle.latency = PLAYBACK_LATENCY;
         alsa_handle.rxHandle = 0;
+        alsa_handle.mode = mParent->mode();
         alsa_handle.ucMgr = mParent->mUcMgr;
 
         snd_use_case_get(mParent->mUcMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
             strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_MI2S, sizeof(alsa_handle.useCase));
             bIsUseCaseSet = true;
         } else {
@@ -313,22 +306,24 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         free(use_case);
         LOGD("useCase %s", it->useCase);
 
-        mParent->mALSADevice->route(&(*it), devices, mParent->mode());
-        rxDevice = mParent->mALSADevice->getUCMDevice(mDevices,0);
-        if(rxDevice != NULL) {
-            if(bIsUseCaseSet) {
-                snd_use_case_set(mParent->mUcMgr, "_verb", it->useCase);
-            } else {
-                snd_use_case_set(mParent->mUcMgr, "_enamod", it->useCase);
-            }
-            free(rxDevice);
-        }
+        mParent->mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
         *status = mParent->mALSADevice->startLoopback(&(*it));
     }
 }
 
 AudioBroadcastStreamALSA::~AudioBroadcastStreamALSA()
 {
+
+    for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
+            it != mParent->mDeviceList.end(); ++it) {
+        if((!strncmp(it->useCase, SND_USE_CASE_VERB_MI2S,
+                            strlen(SND_USE_CASE_VERB_MI2S))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MI2S,
+                            strlen(SND_USE_CASE_MOD_PLAY_MI2S)))) {
+            mParent->mDeviceList.erase(it);
+        }
+    }
+
 }
 
 status_t AudioBroadcastStreamALSA::setParameters(const String8& keyValuePairs)
@@ -395,8 +390,10 @@ status_t AudioBroadcastStreamALSA::setVolume(float left, float right)
     status_t status = NO_ERROR;
 
     LOGE("ToDo: setVolume:: Add correct condition check for the appropriate use case/modifier");
-    if(mPcmRxHandle && (!strcmp(mPcmRxHandle->useCase, SND_USE_CASE_VERB_HIFI) ||
-                        !strcmp(mPcmRxHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC))) {
+    if(mPcmRxHandle && (!strncmp(mPcmRxHandle->useCase, SND_USE_CASE_VERB_HIFI,
+                                                strlen(SND_USE_CASE_VERB_HIFI)) ||
+                        !strncmp(mPcmRxHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
+                                          strlen(SND_USE_CASE_MOD_PLAY_MUSIC)))) {
         volume = (left + right) / 2;
         if (volume < 0.0) {
             LOGW("AudioBroadcastStreamALSA::setVolume(%f) under 0.0, assuming 0.0\n", volume);

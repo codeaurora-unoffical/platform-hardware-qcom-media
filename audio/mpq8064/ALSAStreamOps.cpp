@@ -52,8 +52,10 @@ ALSAStreamOps::~ALSAStreamOps()
 {
     Mutex::Autolock autoLock(mParent->mLock);
 
-    if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
-       (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+    if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+                             strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
+       (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+                            strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
         if((mParent->mVoipStreamCount)) {
             mParent->mVoipStreamCount--;
             if(mParent->mVoipStreamCount > 0) {

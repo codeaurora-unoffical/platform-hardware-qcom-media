@@ -866,7 +866,7 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
     mpClientInterface->setParameters(mHardwareOutput, param.toString(), delayMs);
     // update stream volumes according to new device
     AudioPolicyManagerBase::applyStreamVolumes(output, device, delayMs);
-#if 1
+#if 0
     if((mLPADecodeOutput != -1 &&
         mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
         AudioPolicyManagerBase::applyStreamVolumes(mLPADecodeOutput, device, delayMs);

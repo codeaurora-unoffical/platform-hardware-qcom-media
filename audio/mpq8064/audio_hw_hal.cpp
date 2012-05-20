@@ -756,7 +756,8 @@ static int qcom_adev_open(const hw_module_t* module, const char* name,
 {
     int ret;
 
-    if (strcmp(name, AUDIO_HARDWARE_INTERFACE) != 0)
+    if (strncmp(name, AUDIO_HARDWARE_INTERFACE,
+                    strlen(AUDIO_HARDWARE_INTERFACE)) != 0)
         return -EINVAL;
 
     if(qadev) {

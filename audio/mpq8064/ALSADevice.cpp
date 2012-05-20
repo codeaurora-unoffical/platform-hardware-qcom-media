@@ -41,7 +41,7 @@ ALSADevice::ALSADevice() {
     property_get("persist.audio.handset.mic",value,"0");
     strlcpy(mic_type, value, sizeof(mic_type));
     property_get("persist.audio.fluence.mode",value,"0");
-    if (!strcmp("broadside", value)) {
+    if (!strncmp("broadside", value,9)) {
         fluence_mode = FLUENCE_MODE_BROADSIDE;
     } else {
         fluence_mode = FLUENCE_MODE_ENDFIRE;
@@ -106,8 +106,10 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
 
     reqBuffSize = handle->bufferSize;
 
-    if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
+    if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                          strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                          strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))))) {
         if (ioctl(handle->handle->fd, SNDRV_COMPRESS_GET_CAPS, &compr_cap)) {
             LOGE("SNDRV_COMPRESS_GET_CAPS, failed Error no %d \n", errno);
             err = -errno;
@@ -175,8 +177,10 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
                    SNDRV_PCM_SUBFORMAT_STD);
     LOGV("hw params -  before hifi2 condition %s", handle->useCase);
 
-    if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2))) {
+    if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI2,
+                           strlen(SND_USE_CASE_VERB_HIFI2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
         int ALSAbufferSize = getALSABufferSize(handle);
         param_set_int(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, ALSAbufferSize);
         LOGD("ALSAbufferSize = %d",ALSAbufferSize);
@@ -210,8 +214,10 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
     handle->handle->channels = handle->channels;
     handle->periodSize = handle->handle->period_size;
     handle->bufferSize = handle->handle->period_size;
-    if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2))) {
+    if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI2,
+                           strlen(SND_USE_CASE_VERB_HIFI2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
         handle->latency += (handle->handle->period_cnt * PCM_BUFFER_DURATION);
     }
     return NO_ERROR;
@@ -233,8 +239,10 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
     // Get the current software parameters
     params->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
     params->period_step = 1;
-    if(((!strcmp(handle->useCase,SND_USE_CASE_MOD_PLAY_VOIP)) ||
-        (!strcmp(handle->useCase,SND_USE_CASE_VERB_IP_VOICECALL)))){
+    if(((!strncmp(handle->useCase,SND_USE_CASE_MOD_PLAY_VOIP,
+                            strlen(SND_USE_CASE_MOD_PLAY_VOIP))) ||
+        (!strncmp(handle->useCase,SND_USE_CASE_VERB_IP_VOICECALL,
+                            strlen(SND_USE_CASE_VERB_IP_VOICECALL))))){
           LOGV("setparam:  start & stop threshold for Voip ");
           params->avail_min = handle->channels - 1 ? periodSize/4 : periodSize/2;
           params->start_threshold = periodSize/2;
@@ -244,8 +252,10 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
          params->start_threshold = handle->channels - 1 ? periodSize/2 : periodSize/4;
          params->stop_threshold = INT_MAX;
      }
-    if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+    if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                           strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
         params->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
         params->period_step = 1;
         params->xfer_align = (handle->handle->flags & PCM_MONO) ?
@@ -261,146 +271,119 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
     return NO_ERROR;
 }
 
-void ALSADevice::switchDevice(alsa_handle_t *handle, uint32_t devices, uint32_t mode)
+void ALSADevice::switchDevice(uint32_t devices, uint32_t mode)
 {
-    const char **mods_list;
-    use_case_t useCaseNode;
-    unsigned usecase_type = 0;
-    bool inCallDevSwitch = false;
-    char *rxDevice, *txDevice, ident[70], *use_case = NULL;
-    int err = 0, index, mods_size;
-    LOGV("%s: device %d", __FUNCTION__, devices);
-
-    if ((mode == AudioSystem::MODE_IN_CALL)  || (mode == AudioSystem::MODE_IN_COMMUNICATION)) {
-        if ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
-            (devices & AudioSystem::DEVICE_IN_WIRED_HEADSET)) {
-            devices = devices | (AudioSystem::DEVICE_OUT_WIRED_HEADSET |
-                      AudioSystem::DEVICE_IN_WIRED_HEADSET);
-        } else if (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE) {
-            devices = devices | (AudioSystem::DEVICE_OUT_WIRED_HEADPHONE |
-                      AudioSystem::DEVICE_IN_BUILTIN_MIC);
-        } else if ((devices & AudioSystem::DEVICE_OUT_EARPIECE) ||
-                  (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC)) {
-            devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
-                      AudioSystem::DEVICE_OUT_EARPIECE);
-        } else if (devices & AudioSystem::DEVICE_OUT_SPEAKER) {
-            devices = devices | (AudioSystem::DEVICE_IN_DEFAULT |
-                       AudioSystem::DEVICE_OUT_SPEAKER);
-        } else if ((devices & AudioSystem::DEVICE_OUT_BLUETOOTH_SCO) ||
-                   (devices & AudioSystem::DEVICE_OUT_BLUETOOTH_SCO_HEADSET) ||
-                   (devices & AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET)) {
-            devices = devices | (AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET |
-                      AudioSystem::DEVICE_OUT_BLUETOOTH_SCO);
-        } else if ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET) ||
-                   (devices & AudioSystem::DEVICE_IN_ANC_HEADSET)) {
-            devices = devices | (AudioSystem::DEVICE_OUT_ANC_HEADSET |
-                      AudioSystem::DEVICE_IN_ANC_HEADSET);
-        } else if (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE) {
-            devices = devices | (AudioSystem::DEVICE_OUT_ANC_HEADPHONE |
-                      AudioSystem::DEVICE_IN_BUILTIN_MIC);
-        } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
-            devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
-                      AudioSystem::DEVICE_IN_AUX_DIGITAL);
-        } else if (devices & AudioSystem::DEVICE_OUT_PROXY) {
-            devices = devices | (AudioSystem::DEVICE_OUT_PROXY |
-                      AudioSystem::DEVICE_IN_BUILTIN_MIC);
+    LOGV("switchDevice devices = %d, mode = %d", devices,mode);
+    for(ALSAHandleList::iterator it = mDeviceList->begin(); it != mDeviceList->end(); ++it) {
+        if((strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                          strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) &&
+           (strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                          strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) &&
+           (strncmp(it->useCase, SND_USE_CASE_VERB_HIFI2,
+                          strlen(SND_USE_CASE_VERB_HIFI2))) &&
+           (strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                          strlen(SND_USE_CASE_MOD_PLAY_MUSIC2))) &&
+           (strncmp(it->useCase, SND_USE_CASE_VERB_MI2S,
+                          strlen(SND_USE_CASE_VERB_MI2S))) &&
+           (strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MI2S,
+                          strlen(SND_USE_CASE_MOD_PLAY_MI2S))) )
+        {
+            switchDeviceUseCase(&(*it),devices,mode);
         }
     }
+}
 
-    rxDevice = getUCMDevice(devices & AudioSystem::DEVICE_OUT_ALL, 0);
-    txDevice = getUCMDevice(devices & AudioSystem::DEVICE_IN_ALL, 1);
-    if ((rxDevice != NULL) && (txDevice != NULL)) {
-        if (((strcmp(rxDevice, curRxUCMDevice)) || (strcmp(txDevice, curTxUCMDevice))) &&
+void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
+                                              uint32_t devices, uint32_t mode)
+{
+    unsigned usecase_type = 0;
+    bool inCallDevSwitch = false;
+    char useCase[MAX_STR_LEN],*use_case = NULL;
+    char *rxDeviceNew=NULL, *txDeviceNew=NULL;
+    char *rxDeviceOld=NULL, *txDeviceOld=NULL;
+
+    LOGV("switchDeviceUseCase devices = %d, mode = %d", devices,mode);
+    if(handle->devices == devices)
+        return;
+
+    getDevices(devices, mode, &rxDeviceNew, &txDeviceNew);
+    getDevices(handle->devices, handle->mode, &rxDeviceOld, &txDeviceOld);
+    if ((rxDeviceNew != NULL) && (txDeviceNew != NULL)) {
+        if (((strcmp(rxDeviceNew, rxDeviceOld)) || (strcmp(txDeviceNew, txDeviceOld))) &&
             (mode == AudioSystem::MODE_IN_CALL))
             inCallDevSwitch = true;
     }
 
     snd_use_case_get(handle->ucMgr, "_verb", (const char **)&use_case);
-    mods_size = snd_use_case_get_list(handle->ucMgr, "_enamods", &mods_list);
-    if (rxDevice != NULL) {
-        if ((strcmp(curRxUCMDevice, "None")) &&
-	        ((strcmp(rxDevice, curRxUCMDevice)) || (inCallDevSwitch == true))) {
+
+    if (rxDeviceNew != NULL) {
+        if ( ((strcmp(rxDeviceNew, rxDeviceOld)) || (inCallDevSwitch == true))) {
             if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-	            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+                    strlen(SND_USE_CASE_VERB_INACTIVE)))) {
                 usecase_type = getUseCaseType(use_case);
                 if (usecase_type & USECASE_TYPE_RX) {
+                    strlcpy(useCase, handle->useCase, MAX_STR_LEN);
                     LOGD("Deroute use case %s type is %d\n", use_case, usecase_type);
-                    strlcpy(useCaseNode.useCase, use_case, MAX_STR_LEN);
-                    snd_use_case_set(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE);
-                    mUseCaseList.push_front(useCaseNode);
-                }
-            }
-            if (mods_size) {
-                for(index = 0; index < mods_size; index++) {
-                    usecase_type = getUseCaseType(mods_list[index]);
-                    if (usecase_type & USECASE_TYPE_RX) {
-                        LOGD("Deroute use case %s type is %d\n", mods_list[index], usecase_type);
-                        strlcpy(useCaseNode.useCase, mods_list[index], MAX_STR_LEN);
-                        snd_use_case_set(handle->ucMgr, "_dismod", mods_list[index]);
-                        mUseCaseList.push_back(useCaseNode);
+                    if(!strcmp(use_case,handle->useCase)) {
+                        snd_use_case_set_case(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE,rxDeviceOld);
+                    } else {
+                        snd_use_case_set_case(handle->ucMgr, "_dismod",useCase,rxDeviceOld);
                     }
                 }
             }
-            snd_use_case_set(handle->ucMgr, "_disdev", curRxUCMDevice);
         }
     }
-    if (txDevice != NULL) {
-        if ((strcmp(curTxUCMDevice, "None")) &&
-            ((strcmp(txDevice, curTxUCMDevice)) || (inCallDevSwitch == true))) {
+    if (txDeviceNew != NULL) {
+        if ( ((strcmp(txDeviceNew, txDeviceOld)) || (inCallDevSwitch == true))) {
             if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-	                strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+                    strlen(SND_USE_CASE_VERB_INACTIVE)))) {
                 usecase_type = getUseCaseType(use_case);
                 if ((usecase_type & USECASE_TYPE_TX) && (!(usecase_type & USECASE_TYPE_RX))) {
-                   LOGD("Deroute use case %s type is %d\n", use_case, usecase_type);
-                   strlcpy(useCaseNode.useCase, use_case, MAX_STR_LEN);
-                   snd_use_case_set(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE);
-                   mUseCaseList.push_front(useCaseNode);
-                }
-            }
-            if (mods_size) {
-                for(index = 0; index < mods_size; index++) {
-                    usecase_type = getUseCaseType(mods_list[index]);
-                    if ((usecase_type & USECASE_TYPE_TX) && (!(usecase_type & USECASE_TYPE_RX))) {
-                        LOGD("Deroute use case %s type is %d\n", mods_list[index], usecase_type);
-                        strlcpy(useCaseNode.useCase, mods_list[index], MAX_STR_LEN);
-                        snd_use_case_set(handle->ucMgr, "_dismod", mods_list[index]);
-                        mUseCaseList.push_back(useCaseNode);
+                    strlcpy(useCase, handle->useCase, MAX_STR_LEN);
+                    LOGD("Deroute use case %s type is %d\n", use_case, usecase_type);
+                    if(!strcmp(use_case,handle->useCase)) {
+                        snd_use_case_set_case(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE,txDeviceOld);
+                    } else {
+                        snd_use_case_set_case(handle->ucMgr, "_dismod",useCase,txDeviceOld);
                     }
                 }
             }
-            snd_use_case_set(handle->ucMgr, "_disdev", curTxUCMDevice);
-       }
-    }
-    if (rxDevice != NULL) {
-        snd_use_case_set(handle->ucMgr, "_enadev", rxDevice);
-        strlcpy(curRxUCMDevice, rxDevice, sizeof(curRxUCMDevice));
-        if (devices & AudioSystem::DEVICE_OUT_FM)
-            setFmVolume(fmVolume);
-        free(rxDevice);
-    }
-    if (txDevice != NULL) {
-       snd_use_case_set(handle->ucMgr, "_enadev", txDevice);
-       strlcpy(curTxUCMDevice, txDevice, sizeof(curTxUCMDevice));
-       free(txDevice);
-    }
-    for(ALSAUseCaseList::iterator it = mUseCaseList.begin(); it != mUseCaseList.end(); ++it) {
-        LOGE("Route use case %s\n", it->useCase);
-
-        if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-            strlen(SND_USE_CASE_VERB_INACTIVE))) && (!strncmp(use_case, it->useCase, MAX_UC_LEN))) {
-            snd_use_case_set(handle->ucMgr, "_verb", it->useCase);
-        } else {
-            snd_use_case_set(handle->ucMgr, "_enamod", it->useCase);
         }
     }
-    if (!mUseCaseList.empty())
-        mUseCaseList.clear();
+
+    disableDevice(handle);
+
+    if(rxDeviceNew != NULL) {
+        if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+            strlen(SND_USE_CASE_VERB_INACTIVE))) && (!strncmp(use_case, useCase, MAX_UC_LEN))) {
+            snd_use_case_set_case(handle->ucMgr, "_verb", useCase,rxDeviceNew);
+        } else {
+            snd_use_case_set_case(handle->ucMgr, "_enamod", useCase, rxDeviceNew);
+        }
+        handle->activeDevice = devices;
+        handle->devices = devices;
+    }
+    if(txDeviceNew != NULL) {
+        if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+            strlen(SND_USE_CASE_VERB_INACTIVE))) && (!strncmp(use_case, useCase, MAX_UC_LEN))) {
+            snd_use_case_set_case(handle->ucMgr, "_verb", useCase,txDeviceNew);
+        } else {
+            snd_use_case_set_case(handle->ucMgr, "_enamod", useCase, txDeviceNew);
+        }
+        handle->activeDevice = devices;
+        handle->devices = devices;
+    }
+    if(rxDeviceNew != NULL)
+        free(rxDeviceNew);
+    if(rxDeviceOld != NULL)
+        free(rxDeviceOld);
+    if(txDeviceNew != NULL)
+        free(txDeviceNew);
+    if(txDeviceOld != NULL)
+        free(txDeviceOld);
     if (use_case != NULL)
         free(use_case);
-    LOGD("switchDevice: curTxUCMDevivce %s curRxDevDevice %s", curTxUCMDevice, curRxUCMDevice);
-
 }
-
 // ----------------------------------------------------------------------------
 
 status_t ALSADevice::open(alsa_handle_t *handle)
@@ -410,7 +393,10 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     int err = NO_ERROR;
 
     /* No need to call s_close for LPA as pcm device open and close is handled by LPAPlayer in stagefright */
-    if((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) || (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
+    if((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
+                           strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER))) || 
+       (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LPA,
+                           strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER)))) {
         LOGD("s_open: Opening LPA playback");
         return NO_ERROR;
     }
@@ -433,12 +419,18 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     // AudioFlinger seems to assume blocking mode too, so asynchronous mode
     // should not be used.
     // ToDo: Add a condition check for HIFI2 use cases also
-    if ((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI2)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+    if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI,
+                            strlen(SND_USE_CASE_VERB_HIFI))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI2,
+                            strlen(SND_USE_CASE_VERB_HIFI2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
+                            strlen(SND_USE_CASE_MOD_PLAY_MUSIC))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                            strlen(SND_USE_CASE_MOD_PLAY_MUSIC2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
         flags = PCM_OUT;
     } else {
         flags = PCM_IN;
@@ -455,8 +447,10 @@ status_t ALSADevice::open(alsa_handle_t *handle)
         LOGE("Failed to get pcm device node: %s", devName);
         return NO_INIT;
     }
-    if (!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
-        (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL))) {
+    if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
         flags |= DEBUG_ON | PCM_MMAP;
     }
     handle->handle = pcm_open(flags, (char*)devName);
@@ -801,6 +795,11 @@ status_t ALSADevice::setLpaVolume(int value)
     return err;
 }
 
+void ALSADevice::setDeviceList(ALSAHandleList *mParentDeviceList)
+{
+    mDeviceList = mParentDeviceList;
+}
+
 status_t ALSADevice::start(alsa_handle_t *handle)
 {
     status_t err = NO_ERROR;
@@ -841,8 +840,10 @@ status_t ALSADevice::close(alsa_handle_t *handle)
             LOGE("close: pcm_close failed for handle with err %d", err);
         }
         disableDevice(handle);
-    } else if((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
-              (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
+    } else if((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
+                                  strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER))) ||
+              (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LPA,
+                                  strlen(SND_USE_CASE_MOD_PLAY_LPA)))) {
         disableDevice(handle);
     }
 
@@ -880,21 +881,23 @@ status_t ALSADevice::standby(alsa_handle_t *handle)
             LOGE("s_standby: pcm_close failed for handle with err %d", err);
         }
         disableDevice(handle);
-    } else if((!strcmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
-              (!strcmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LPA))) {
+    } else if((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
+                                  strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER))) ||
+              (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_LPA,
+                                  strlen(SND_USE_CASE_MOD_PLAY_LPA)))) {
         disableDevice(handle);
     }
 
     return err;
 }
 
-status_t ALSADevice::route(alsa_handle_t *handle, uint32_t devices, int mode)
+status_t ALSADevice::route(uint32_t devices, int mode)
 {
     status_t status = NO_ERROR;
 
     LOGD("s_route: devices 0x%x in mode %d", devices, mode);
     callMode = mode;
-    switchDevice(handle, devices, mode);
+    switchDevice(devices, mode);
     return status;
 }
 
@@ -964,39 +967,49 @@ int  ALSADevice::getUseCaseType(const char *useCase)
 
 void ALSADevice::disableDevice(alsa_handle_t *handle)
 {
-    unsigned usecase_type = 0;
-    int i, mods_size;
-    char *useCase;
-    const char **mods_list;
-    snd_use_case_get(handle->ucMgr, "_verb", (const char **)&useCase);
-    if (useCase != NULL) {
-        if (!strncmp(useCase, handle->useCase, MAX_UC_LEN)) {
-            snd_use_case_set(handle->ucMgr, "_verb", SND_USE_CASE_VERB_INACTIVE);
-        } else {
-            snd_use_case_set(handle->ucMgr, "_dismod", handle->useCase);
-        }
-        free(useCase);
-        snd_use_case_get(handle->ucMgr, "_verb", (const char **)&useCase);
-        if (strncmp(useCase, SND_USE_CASE_VERB_INACTIVE,
-               strlen(SND_USE_CASE_VERB_INACTIVE)))
-            usecase_type |= getUseCaseType(useCase);
-        mods_size = snd_use_case_get_list(handle->ucMgr, "_enamods", &mods_list);
-        LOGE("Number of modifiers %d\n", mods_size);
-        if (mods_size) {
-            for(i = 0; i < mods_size; i++) {
-                LOGE("index %d modifier %s\n", i, mods_list[i]);
-                usecase_type |= getUseCaseType(mods_list[i]);
+    bool disableRxDevice = true;
+    bool disableTxDevice = true;
+
+    char *rxDeviceToDisable=NULL, *txDeviceToDisable=NULL;
+    char *rxDevice=NULL, *txDevice=NULL;
+
+    getDevices(handle->activeDevice, handle->mode, &rxDeviceToDisable, &txDeviceToDisable);
+    for(ALSAHandleList::iterator it = mDeviceList->begin(); it != mDeviceList->end(); ++it) {
+        if(it->useCase != NULL) {
+            if(strcmp(it->useCase,handle->useCase)) {
+                if((&(*it)) != handle && handle->activeDevice && it->activeDevice && (it->activeDevice & handle->activeDevice)) {
+                    LOGD("disableRxDevice - false ");
+                    disableRxDevice = false;
+                    disableTxDevice = false;
+                }
             }
         }
-        LOGE("usecase_type is %d\n", usecase_type);
-        if (!(usecase_type & USECASE_TYPE_TX) && (strncmp(curTxUCMDevice, "None", 4)))
-            snd_use_case_set(handle->ucMgr, "_disdev", curTxUCMDevice);
-        if (!(usecase_type & USECASE_TYPE_RX) && (strncmp(curRxUCMDevice, "None", 4)))
-            snd_use_case_set(handle->ucMgr, "_disdev", curRxUCMDevice);
-    } else {
-        LOGE("Invalid state, no valid use case found to disable");
     }
-    free(useCase);
+
+    if(disableRxDevice && rxDeviceToDisable) {
+        if(handle->devices & AudioSystem::DEVICE_OUT_SPDIF) {
+            char *tempRxDevice = NULL;
+            tempRxDevice = getUCMDevice(handle->devices & ~AudioSystem::DEVICE_OUT_SPDIF,0);
+            if(tempRxDevice != NULL) {
+                snd_use_case_set_case(handle->ucMgr, "_disdev",tempRxDevice,handle->useCase);
+                free(tempRxDevice);
+            }
+        }
+        snd_use_case_set_case(handle->ucMgr, "_disdev",rxDeviceToDisable,handle->useCase);
+    }
+    if(disableTxDevice && txDeviceToDisable) {
+        snd_use_case_set_case(handle->ucMgr, "_disdev",txDeviceToDisable,handle->useCase);
+    }
+    handle->activeDevice = 0;
+
+    if(rxDeviceToDisable != NULL)
+        free(rxDeviceToDisable);
+    if(txDeviceToDisable != NULL)
+        free(txDeviceToDisable);
+    if(rxDevice != NULL)
+        free(rxDevice);
+    if(txDevice != NULL)
+        free(txDevice);
 }
 
 char* ALSADevice::getUCMDevice(uint32_t devices, int input)
@@ -1480,6 +1493,73 @@ status_t ALSADevice::setHDMIChannelCount()
         LOGE("setHDMIChannelCount error = %d",err);
     }
     return err;
+}
+
+void ALSADevice::getDevices(uint32_t devices, uint32_t mode, char **rxDevice, char **txDevice)
+{
+    LOGV("%s: device %d", __FUNCTION__, devices);
+
+    if ((mode == AudioSystem::MODE_IN_CALL)  || (mode == AudioSystem::MODE_IN_COMMUNICATION)) {
+        if ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
+            (devices & AudioSystem::DEVICE_IN_WIRED_HEADSET)) {
+            devices = devices | (AudioSystem::DEVICE_OUT_WIRED_HEADSET |
+                      AudioSystem::DEVICE_IN_WIRED_HEADSET);
+        } else if (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE) {
+            devices = devices | (AudioSystem::DEVICE_OUT_WIRED_HEADPHONE |
+                      AudioSystem::DEVICE_IN_BUILTIN_MIC);
+        } else if ((devices & AudioSystem::DEVICE_OUT_EARPIECE) ||
+                  (devices & AudioSystem::DEVICE_IN_BUILTIN_MIC)) {
+            devices = devices | (AudioSystem::DEVICE_IN_BUILTIN_MIC |
+                      AudioSystem::DEVICE_OUT_EARPIECE);
+        } else if (devices & AudioSystem::DEVICE_OUT_SPEAKER) {
+            devices = devices | (AudioSystem::DEVICE_IN_DEFAULT |
+                       AudioSystem::DEVICE_OUT_SPEAKER);
+        } else if ((devices & AudioSystem::DEVICE_OUT_BLUETOOTH_SCO) ||
+                   (devices & AudioSystem::DEVICE_OUT_BLUETOOTH_SCO_HEADSET) ||
+                   (devices & AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET)) {
+            devices = devices | (AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET |
+                      AudioSystem::DEVICE_OUT_BLUETOOTH_SCO);
+        } else if ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET) ||
+                   (devices & AudioSystem::DEVICE_IN_ANC_HEADSET)) {
+            devices = devices | (AudioSystem::DEVICE_OUT_ANC_HEADSET |
+                      AudioSystem::DEVICE_IN_ANC_HEADSET);
+        } else if (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE) {
+            devices = devices | (AudioSystem::DEVICE_OUT_ANC_HEADPHONE |
+                      AudioSystem::DEVICE_IN_BUILTIN_MIC);
+        } else if (devices & AudioSystem::DEVICE_OUT_AUX_DIGITAL) {
+            devices = devices | (AudioSystem::DEVICE_OUT_AUX_DIGITAL |
+                      AudioSystem::DEVICE_IN_AUX_DIGITAL);
+        } else if (devices & AudioSystem::DEVICE_OUT_PROXY) {
+            devices = devices | (AudioSystem::DEVICE_OUT_PROXY |
+                      AudioSystem::DEVICE_IN_BUILTIN_MIC);
+        }
+    }
+
+    *rxDevice = getUCMDevice(devices & AudioSystem::DEVICE_OUT_ALL, 0);
+    *txDevice = getUCMDevice(devices & AudioSystem::DEVICE_IN_ALL, 1);
+
+    return;
+}
+
+void ALSADevice::setUseCase(alsa_handle_t *handle, bool bIsUseCaseSet)
+{
+    char *rxDevice = NULL, *txDevice = NULL;
+    getDevices(handle->devices, handle->mode, &rxDevice, &txDevice);
+
+    if(rxDevice != NULL) {
+        if(bIsUseCaseSet)
+            snd_use_case_set_case(handle->ucMgr, "_verb", handle->useCase, rxDevice);
+        else
+            snd_use_case_set_case(handle->ucMgr, "_enamod", handle->useCase, rxDevice);
+        free(rxDevice);
+    }
+    if(txDevice != NULL) {
+        if(bIsUseCaseSet)
+            snd_use_case_set_case(handle->ucMgr, "_verb", handle->useCase, txDevice);
+        else
+            snd_use_case_set_case(handle->ucMgr, "_enamod", handle->useCase, txDevice);
+        free(txDevice);
+    }
 }
 
 }

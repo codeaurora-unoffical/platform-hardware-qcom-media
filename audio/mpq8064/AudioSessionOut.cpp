@@ -26,7 +26,7 @@
 #include <math.h>
 
 #define LOG_TAG "AudioSessionOutALSA"
-#define LOG_NDEBUG 0
+//#define LOG_NDEBUG 0
 #define LOG_NDDEBUG 0
 #include <utils/Log.h>
 #include <utils/String8.h>
@@ -249,7 +249,8 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
             devices = mDevices & ~AudioSystem::DEVICE_OUT_SPDIF;
         }
         snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                           strlen(SND_USE_CASE_VERB_INACTIVE)))) {
             *status = openDevice(SND_USE_CASE_VERB_HIFI2, true, devices);
         } else {
             *status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
@@ -282,7 +283,8 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         }
 #if 0
         snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                          strlen(SND_USE_CASE_VERB_INACTIVE)))) {
             *status = openDevice(SND_USE_CASE_VERB_HIFI_COMPRESSED, true, devices);
         } else {
         *status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC_COMPRESSED, false, devices);
@@ -308,6 +310,21 @@ AudioSessionOutALSA::~AudioSessionOutALSA()
 {
     Mutex::Autolock autoLock(mLock);
     LOGV("~AudioSessionOutALSA");
+    for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
+            it != mParent->mDeviceList.end(); ++it) {
+        if((!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI2,
+                            strlen(SND_USE_CASE_VERB_HIFI2))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                            strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
+            mParent->mDeviceList.erase(it);
+        }
+    }
+
+
     if(mProxyPcmHandle) {
         LOGV("Closing the Proxy device: mProxyPcmHandle %p", mProxyPcmHandle);
         pcm_close(mProxyPcmHandle);
@@ -340,6 +357,7 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
     int device;
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore routing if device is 0.
+        device |= AudioSystem::DEVICE_OUT_SPDIF;
         LOGD("setParameters(): keyRouting with device %d", device);
         mDevices = device;
         if(device) {
@@ -386,8 +404,10 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
     LOGD("Setting stream volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
     LOGE("ToDo: Implement volume setting for broadcast stream");
     if(mPcmRxHandle) {
-        if(!strcmp(mPcmRxHandle->useCase, SND_USE_CASE_VERB_HIFI2) ||
-                !strcmp(mPcmRxHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2)) {
+        if(!strncmp(mPcmRxHandle->useCase, SND_USE_CASE_VERB_HIFI2,
+                                     strlen(SND_USE_CASE_VERB_HIFI2)) ||
+                !strncmp(mPcmRxHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                                     strlen(SND_USE_CASE_MOD_PLAY_MUSIC2))) {
             LOGD("setPCM 1 Volume(%f)\n", volume);
             LOGD("Setting PCM volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
             status = mPcmRxHandle->module->setPcmVolume(mStreamVol);
@@ -395,8 +415,10 @@ status_t AudioSessionOutALSA::setVolume(float left, float right)
         return status;
     }
     else if(mCompreRxHandle) {
-        if(!strcmp(mCompreRxHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL) ||
-                !strcmp(mCompreRxHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL)) {
+        if(!strncmp(mCompreRxHandle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                                     strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+                !strncmp(mCompreRxHandle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                                     strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) {
             LOGD("set compressed Volume(%f)\n", volume);
             LOGD("Setting Compressed volume to %d (available range is 0 to 0x2000)\n", mStreamVol);
             status = mCompreRxHandle->module->setCompressedVolume(mStreamVol);
@@ -421,7 +443,8 @@ status_t AudioSessionOutALSA::openTunnelDevice()
     mInputBufferSize    = 4800;
     mInputBufferCount   = 512;
     snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-    if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                 strlen(SND_USE_CASE_VERB_INACTIVE)))) {
         status = openDevice(SND_USE_CASE_VERB_HIFI_TUNNEL, true, devices);
     } else {
         status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
@@ -605,7 +628,8 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                         devices = mDevices & ~AudioSystem::DEVICE_OUT_SPDIF;
                     }
                     snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-                    if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+                    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                                 strlen(SND_USE_CASE_VERB_INACTIVE)))) {
                         status = openDevice(SND_USE_CASE_VERB_HIFI2, true, devices);
                     } else {
                         status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
@@ -990,6 +1014,21 @@ status_t AudioSessionOutALSA::stop()
     // ToDo: How to make sure all the data is rendered before closing
     mSkipWrite = true;
     mWriteCv.signal();
+    //TODO: This might need to be Locked using Parent lock
+    for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
+            it != mParent->mDeviceList.end(); ++it) {
+        if((!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI2,
+                            strlen(SND_USE_CASE_VERB_HIFI2))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                            strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
+            mParent->mDeviceList.erase(it);
+        }
+    }
+
     if(mPcmRxHandle)
         closeDevice(mPcmRxHandle);
     if(mCompreRxHandle)
@@ -1295,6 +1334,7 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
     alsa_handle.module      = mALSADevice;
     alsa_handle.bufferSize  = mInputBufferSize;
     alsa_handle.devices     = devices;
+    alsa_handle.activeDevice= devices;
     alsa_handle.handle      = 0;
     alsa_handle.format      = (mFormat == AUDIO_FORMAT_PCM_16_BIT ? SNDRV_PCM_FORMAT_S16_LE : mFormat);
     alsa_handle.channels    = mChannels;
@@ -1304,12 +1344,8 @@ status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int dev
     alsa_handle.rxHandle    = 0;
     alsa_handle.ucMgr       = mUcMgr;
     strlcpy(alsa_handle.useCase, useCase, sizeof(alsa_handle.useCase));
-    char *ucmDevice = mALSADevice->getUCMDevice(devices & AudioSystem::DEVICE_OUT_ALL, 0);
-    if(bIsUseCase) {
-        snd_use_case_set_case(mUcMgr, "_verb", alsa_handle.useCase, ucmDevice);
-    } else {
-        snd_use_case_set_case(mUcMgr, "_enamod", alsa_handle.useCase, ucmDevice);
-    }
+
+    mALSADevice->setUseCase(&alsa_handle, bIsUseCase);
     status = mALSADevice->open(&alsa_handle);
     if(status != NO_ERROR) {
         LOGE("Could not open the ALSA device for use case %s", alsa_handle.useCase);
@@ -1337,7 +1373,7 @@ status_t AudioSessionOutALSA::doRouting(int devices)
 {
     status_t status = NO_ERROR;
     char *use_case;
-    char *ucmDevice = mALSADevice->getUCMDevice(devices & AudioSystem::DEVICE_OUT_ALL, 0);
+    Mutex::Autolock autoLock(mParent->mLock);
 
     LOGV("doRouting: devices 0x%x", devices);
     mDevices = devices;
@@ -1352,21 +1388,20 @@ status_t AudioSessionOutALSA::doRouting(int devices)
         mRouteAudioToA2dp = false;
         mCaptureFromProxy = false;
     }
-    if(mPcmRxHandle && devices != mPcmRxHandle->devices) {
-        mALSADevice->route(mPcmRxHandle, devices, mParent->mode());
-        //snd_use_case_set_case(mUcMgr, "_swdev", mPcmRxHandle->useCase, ucmDevice);
-        mPcmRxHandle->devices = devices;
+    if(mPcmRxHandle) {
+        mALSADevice->switchDeviceUseCase(mPcmRxHandle, devices, mParent->mode());
     }
-    if(mUseTunnelDecode) {
-        mALSADevice->route(mCompreRxHandle, devices, mParent->mode());
-        mCompreRxHandle->devices = devices;
+    if(mUseTunnelDecode &&  mCompreRxHandle) {
+        mALSADevice->switchDeviceUseCase(mCompreRxHandle, devices, mParent->mode());
+
     } else if(mRouteCompreToSpdif && !(devices & AudioSystem::DEVICE_OUT_SPDIF)) {
         mRouteCompreToSpdif = false;
         status = closeDevice(mCompreRxHandle);
     } else if(!mRouteCompreToSpdif && (devices & AudioSystem::DEVICE_OUT_SPDIF)) {
         snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
 #if 0
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                           strlen(SND_USE_CASE_VERB_INACTIVE)))) {
             status = openDevice(SND_USE_CASE_VERB_HIFI_COMPRESSED, true, AudioSystem::DEVICE_OUT_SPDIF);
         } else {
             status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC_COMPRESSED, false, AudioSystem::DEVICE_OUT_SPDIF);

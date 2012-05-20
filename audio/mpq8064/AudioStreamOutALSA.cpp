@@ -70,8 +70,10 @@ status_t AudioStreamOutALSA::setVolume(float left, float right)
     float volume;
     status_t status = NO_ERROR;
 
-    if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER) ||
-       !strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA)) {
+    if(!strncmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI_LOW_POWER,
+                            strlen(SND_USE_CASE_VERB_HIFI_LOW_POWER)) ||
+       !strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_LPA,
+                            strlen(SND_USE_CASE_MOD_PLAY_LPA))) {
         volume = (left + right) / 2;
         if (volume < 0.0) {
             LOGW("AudioSessionOutMSM7xxx::setVolume(%f) under 0.0, assuming 0.0\n", volume);
@@ -106,41 +108,48 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
     status_t          err;
 
     int write_pending = bytes;
-
+    bool bIsUseCaseSet = false;
     if((mHandle->handle == NULL) && (mHandle->rxHandle == NULL) &&
-         (strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) &&
-         (strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+         (strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+                              strlen(SND_USE_CASE_VERB_IP_VOICECALL))) &&
+         (strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+                              strlen(SND_USE_CASE_VERB_IP_VOICECALL)))) {
         mParent->mLock.lock();
         snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
-            if(!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)){
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+            if(!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+                                            strlen(SND_USE_CASE_VERB_IP_VOICECALL))){
                  strlcpy(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,sizeof(mHandle->useCase));
              }
              else {
                  strlcpy(mHandle->useCase, SND_USE_CASE_VERB_HIFI, sizeof(mHandle->useCase));
              }
+             bIsUseCaseSet = true;
         } else {
-            if(!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP)) {
+            if(!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+                                    strlen(SND_USE_CASE_MOD_PLAY_VOIP))) {
                 strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,sizeof(mHandle->useCase));
              } else {
                  strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC, sizeof(mHandle->useCase));
              }
         }
         free(use_case);
-        if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
-           (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
-              mHandle->module->route(mHandle, mDevices , AudioSystem::MODE_IN_COMMUNICATION);
+        mHandle->activeDevice = mDevices;
+        if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+                                 strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
+           (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+                                 strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
+            mHandle->mode = AudioSystem::MODE_IN_COMMUNICATION;
         } else {
-              mHandle->module->route(mHandle, mDevices , mParent->mode());
+            mHandle->mode = mParent->mode();
         }
-        if (!strcmp(mHandle->useCase, SND_USE_CASE_VERB_HIFI) ||
-            !strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) {
-            snd_use_case_set(mHandle->ucMgr, "_verb", mHandle->useCase);
-        } else {
-            snd_use_case_set(mHandle->ucMgr, "_enamod", mHandle->useCase);
-        }
-        if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
-          (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+        mHandle->module->setUseCase(&(*mHandle), bIsUseCaseSet);
+
+        if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+                                 strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
+          (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+                                strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
              err = mHandle->module->startVoipCall(mHandle);
         }
         else
@@ -205,8 +214,10 @@ status_t AudioStreamOutALSA::close()
     Mutex::Autolock autoLock(mParent->mLock);
 
 
-    if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
-        (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+    if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+                             strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
+        (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+                             strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
          if((mParent->mVoipStreamCount)) {
                 return NO_ERROR;
          }
@@ -228,8 +239,10 @@ status_t AudioStreamOutALSA::close()
 status_t AudioStreamOutALSA::standby()
 {
      Mutex::Autolock autoLock(mParent->mLock);
-     if((!strcmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL)) ||
-       (!strcmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP))) {
+     if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
+                              strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
+       (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
+                             strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
          return NO_ERROR;
      }
 
