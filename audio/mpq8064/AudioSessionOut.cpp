@@ -192,7 +192,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
 //      Till then the PCM out of MS11 is routed to both SPDIF and SPEAKER
             mRoutePcmToSpdif = true;
         }
-    } else if(format == AUDIO_FORMAT_WMA || format == AUDIO_FORMAT_DTS ||
+    } else if(format == AUDIO_FORMAT_WMA || format == AUDIO_FORMAT_WMA_PRO || format == AUDIO_FORMAT_DTS ||
               format == AUDIO_FORMAT_MP3){
         // In this case, DSP will decode and route the PCM data to output devices
         mUseTunnelDecode = true;
@@ -271,7 +271,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         }
     }
     if (mUseTunnelDecode) {
-        if (format != AUDIO_FORMAT_WMA)
+        if (format != AUDIO_FORMAT_WMA && format != AUDIO_FORMAT_WMA_PRO)
             *status = openTunnelDevice();
         else
             *status = NO_ERROR;
@@ -476,7 +476,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
     snd_pcm_sframes_t n;
     size_t            sent = 0;
     status_t          err;
-    if (mUseTunnelDecode && mWMAConfigDataSet == false && mFormat == AUDIO_FORMAT_WMA) {
+    if (mUseTunnelDecode && mWMAConfigDataSet == false && (mFormat == AUDIO_FORMAT_WMA || mFormat == AUDIO_FORMAT_WMA_PRO)) {
         LOGV("Configuring the WMA params");
         status_t err = mALSADevice->setWMAParams(mCompreRxHandle, (int *)buffer, bytes/sizeof(int));
         if (err) {
@@ -486,6 +486,8 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         err = openTunnelDevice();
         if (err) {
             LOGE("opening of tunnel device failed");
+            if (mObserver)
+                mObserver->postEOS(0);
             return -1;
         }
         mWMAConfigDataSet = true;

@@ -119,9 +119,17 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
         LOGV("Min peroid size = %d , Maximum Peroid size = %d",\
             minPeroid, maxPeroid);
         //TODO: what if codec not supported or the array has wrong codec!!!!
-        if (format == AUDIO_FORMAT_WMA) {
+        if (format == AUDIO_FORMAT_WMA || format == AUDIO_FORMAT_WMA_PRO) {
             LOGV("### WMA CODEC");
-            compr_params.codec.id = compr_cap.codecs[3];
+            if (format == AUDIO_FORMAT_WMA_PRO) {
+                compr_params.codec.id = compr_cap.codecs[4];
+                compr_params.codec.ch_in = handle->channels;
+                if (handle->channels > 2)
+                    handle->channels = 2;
+            }
+            else {
+                compr_params.codec.id = compr_cap.codecs[3];
+            }
             if (mWMA_params == NULL) {
                 LOGV("WMA param config missing.");
                 return BAD_VALUE;
