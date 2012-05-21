@@ -112,6 +112,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mTunnelPaused       = false;
     mTunnelSeeking      = false;
     mReachedExtractorEOS= false;
+    mSkipWrite          = false;
 
     mPcmRxHandle        = NULL;
     mPcmTxHandle        = NULL;
@@ -491,7 +492,15 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         mInputMemFilledQueue.size());
         if (mInputMemEmptyQueue.empty()) {
             LOGV("Write: waiting on mWriteCv");
+            mLock.unlock();
             mWriteCv.wait(mInputMemRequestMutex);
+            mLock.lock();
+            if (mSkipWrite) {
+                LOGV("Write: Flushing the previous write buffer");
+                mSkipWrite = false;
+                mInputMemRequestMutex.unlock();
+                return 0;
+            }
             LOGV("Write: received a signal to wake up");
         }
 
@@ -922,6 +931,8 @@ status_t AudioSessionOutALSA::flush()
         } else {
             mTunnelSeeking = true;
         }
+        mSkipWrite = true;
+        mWriteCv.signal();
     }
     /*if(mPcmRxHandle) {
         if (ioctl(mPcmRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1) < 0) {
@@ -966,6 +977,8 @@ status_t AudioSessionOutALSA::stop()
     Mutex::Autolock autoLock(mLock);
     // close all the existing PCM devices
     // ToDo: How to make sure all the data is rendered before closing
+    mSkipWrite = true;
+    mWriteCv.signal();
     if(mPcmRxHandle)
         closeDevice(mPcmRxHandle);
     if(mCompreRxHandle)
