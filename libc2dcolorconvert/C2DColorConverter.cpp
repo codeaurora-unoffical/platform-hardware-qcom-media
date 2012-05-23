@@ -43,6 +43,7 @@ Copyright (c) 2012 Code Aurora Forum. All rights reserved.
 #define LOG_TAG "C2DColorConvert"
 #define ALIGN( num, to ) (((num) + (to-1)) & (~(to-1)))
 #define ALIGN8K 8192
+#define ALIGN4K 4096
 #define ALIGN2K 2048
 #define ALIGN128 128
 #define ALIGN32 32
@@ -54,7 +55,7 @@ namespace android {
 class C2DColorConverter : public C2DColorConverterBase {
 
 public:
-    C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, size_t srcSize, size_t dstSize, int32_t flags);
+    C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags);
 
 protected:
     virtual ~C2DColorConverter();
@@ -68,6 +69,7 @@ private:
     virtual uint32_t getC2DFormat(ColorConvertFormat format);
     virtual size_t calcStride(ColorConvertFormat format, size_t width);
     virtual size_t calcYSize(ColorConvertFormat format, size_t width, size_t height);
+    virtual size_t calcSize(ColorConvertFormat format, size_t width, size_t height);
     virtual void *getMappedGPUAddr(int bufFD, void *bufPtr, size_t bufLen);
     virtual bool unmapGPUAddr(uint32_t gAddr);
 
@@ -102,7 +104,7 @@ private:
     int mError;
 };
 
-C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, size_t srcSize, size_t dstSize, int32_t flags)
+C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags)
 {
      mError = 0;
      mC2DLibHandle = dlopen("libC2D2.so", RTLD_NOW);
@@ -134,8 +136,8 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mDstHeight = dstHeight;
     mSrcFormat = srcFormat;
     mDstFormat = dstFormat;
-    mSrcSize = srcSize;
-    mDstSize = dstSize;
+    mSrcSize = calcSize(srcFormat, srcWidth, srcHeight);
+    mDstSize = calcSize(dstFormat, dstWidth, dstHeight);
     mSrcYSize = calcYSize(srcFormat, srcWidth, srcHeight);
     mDstYSize = calcYSize(dstFormat, dstWidth, dstHeight);
 
@@ -288,7 +290,7 @@ void* C2DColorConverter::getDummySurfaceDef(ColorConvertFormat format, size_t wi
         surfaceDef->phys1 = (void *)0xaaaaaaaa;
         surfaceDef->stride1 = calcStride(format, width);
         mC2DCreateSurface(isSource ? &mSrcSurface : &mDstSurface, isSource ? C2D_SOURCE : C2D_TARGET,
-                        (C2D_SURFACE_TYPE)(C2D_SURFACE_YUV_HOST | C2D_SURFACE_WITH_PHYS),
+                        (C2D_SURFACE_TYPE)(C2D_SURFACE_YUV_HOST | C2D_SURFACE_WITH_PHYS | C2D_SURFACE_WITH_PHYS_DUMMY),
                         &(*surfaceDef));
         return ((void *)surfaceDef);
     } else {
@@ -300,7 +302,7 @@ void* C2DColorConverter::getDummySurfaceDef(ColorConvertFormat format, size_t wi
         surfaceDef->phys = (void *)0xaaaaaaaa;
         surfaceDef->stride = calcStride(format, width);
         mC2DCreateSurface(isSource ? &mSrcSurface : &mDstSurface, isSource ? C2D_SOURCE : C2D_TARGET,
-                        (C2D_SURFACE_TYPE)(C2D_SURFACE_RGB_HOST | C2D_SURFACE_WITH_PHYS),
+                        (C2D_SURFACE_TYPE)(C2D_SURFACE_RGB_HOST | C2D_SURFACE_WITH_PHYS | C2D_SURFACE_WITH_PHYS_DUMMY),
                         &(*surfaceDef));
         return ((void *)surfaceDef);
     }
@@ -362,6 +364,7 @@ uint32_t C2DColorConverter::getC2DFormat(ColorConvertFormat format)
         case YCrCb420P:
             return C2D_COLOR_FORMAT_420_YV12;
         default:
+            LOGE("Format not supported , %d\n", format);
             return -1;
     }
 }
@@ -374,12 +377,13 @@ size_t C2DColorConverter::calcStride(ColorConvertFormat format, size_t width)
         case YCbCr420Tile:
             return ALIGN(width, ALIGN128);
         case YCbCr420SP:
+            return ALIGN(width, ALIGN32);
         case YCbCr420P:
             return width;
         case YCrCb420P:
             return ALIGN(width, ALIGN16);
         default:
-            return -1;
+            return 0;
     }
 }
 
@@ -387,7 +391,7 @@ size_t C2DColorConverter::calcYSize(ColorConvertFormat format, size_t width, siz
 {
     switch (format) {
         case YCbCr420SP:
-            return ALIGN((width * height), ALIGN2K);
+            return (ALIGN(width, ALIGN32) * height);
         case YCbCr420P:
             return width * height;
         case YCrCb420P:
@@ -395,8 +399,40 @@ size_t C2DColorConverter::calcYSize(ColorConvertFormat format, size_t width, siz
         case YCbCr420Tile:
             return ALIGN(ALIGN(width, ALIGN128) * ALIGN(height, ALIGN32), ALIGN8K);
         default:
-            return -1;
+            return 0;
     }
+}
+
+size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size_t height)
+{
+    int32_t alignedw = 0;
+    int32_t alignedh = 0;
+    int32_t size = 0;
+
+    switch (format) {
+        case RGB565:
+            size = ALIGN(width, ALIGN32) * ALIGN(height, ALIGN32) * 2;
+            break;
+        case YCbCr420SP:
+            alignedw = ALIGN(width, ALIGN32);
+            size = ALIGN((alignedw * height) + (ALIGN(width/2, ALIGN32) * (height/2) * 2), ALIGN4K);
+            break;
+        case YCbCr420P:
+            size = ALIGN((width * height * 3 / 2), ALIGN4K);
+            break;
+        case YCrCb420P:
+            alignedw = ALIGN(width, ALIGN16);
+            size = ALIGN((alignedw * height) + (ALIGN(width/2, ALIGN16) * (height/2) * 2), ALIGN4K);
+            break;
+        case YCbCr420Tile:
+            alignedw = ALIGN(width, ALIGN128);
+            alignedh = ALIGN(height, ALIGN32);
+            size = ALIGN(alignedw * alignedh, ALIGN8K) + ALIGN(alignedw * ALIGN(height/2, ALIGN32), ALIGN8K);
+            break;
+        default:
+            break;
+    }
+    return size;
 }
 /*
  * Tells GPU to map given buffer and returns a physical address of mapped buffer
@@ -435,9 +471,9 @@ bool C2DColorConverter::unmapGPUAddr(uint32_t gAddr)
    return true;
 }
 
-extern "C" C2DColorConverterBase* createC2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, size_t srcSize, size_t dstSize, int32_t flags)
+extern "C" C2DColorConverterBase* createC2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags)
 {
-    return new C2DColorConverter(srcWidth, srcHeight, dstWidth, dstHeight, srcFormat, dstFormat, srcSize, dstSize, flags);
+    return new C2DColorConverter(srcWidth, srcHeight, dstWidth, dstHeight, srcFormat, dstFormat, flags);
 }
 
 extern "C" void destroyC2DColorConverter(C2DColorConverterBase* C2DCC)
