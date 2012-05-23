@@ -177,17 +177,28 @@ status_t ALSAStreamOps::setParameters(const String8& keyValuePairs)
     AudioParameter param = AudioParameter(keyValuePairs);
     String8 key = String8(AudioParameter::keyRouting);
     int device;
+    status_t err = NO_ERROR;
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore routing if device is 0.
-        LOGD("setParameters(): keyRouting with device %d", device);
-        mDevices = device;
         if(device) {
-            mParent->doRouting(device);
+            LOGD("setParameters(): keyRouting with device %d", device);
+            if(device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
+                device &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
+                device |=  AudioSystem::DEVICE_OUT_PROXY;
+                mParent->mRouteAudioToA2dp = true;
+                LOGD("setParameters(): A2DP device %d", device);
+            }
+            err = mParent->doRouting(device);
+            if(err) {
+                LOGE("doRouting failed = %d",err);
+            }
+            else {
+                mDevices = device;
+            }
         }
         param.remove(key);
     }
-
-    return NO_ERROR;
+    return err;
 }
 
 String8 ALSAStreamOps::getParameters(const String8& keys)

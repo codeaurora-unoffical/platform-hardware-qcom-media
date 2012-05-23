@@ -99,7 +99,6 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mRoutePcmToHdmi     = false;
     mRouteCompreToHdmi  = false;
     mRouteAudioToA2dp   = false;
-    mA2dpOutputStarted  = false;
     mOpenMS11Decoder    = false;
     mChannelStatusSet   = false;
     mTunnelPaused       = false;
@@ -116,7 +115,6 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mPcmTxHandle        = NULL;
     mSpdifRxHandle      = NULL;
     mCompreRxHandle     = NULL;
-    mProxyPcmHandle     = NULL;
     mMS11Decoder        = NULL;
     mBitstreamSM        = NULL;
 
@@ -142,12 +140,12 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     }
 
     if(mDevices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
-        mCaptureFromProxy = true;
+        LOGE("Set Capture from proxy true");
         mRouteAudioToA2dp = true;
-        mDevices &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
-        // ToDo: Handle A2DP+Speaker
-        //mDevices |= AudioSystem::DEVICE_OUT_PROXY;
-        mDevices = AudioSystem::DEVICE_OUT_PROXY;
+        devices  &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
+        devices  &= ~AudioSystem::DEVICE_OUT_SPDIF;
+        devices |=  AudioSystem::DEVICE_OUT_PROXY;
+        mDevices = devices;
     }
 
     if(format == AUDIO_FORMAT_AAC || format == AUDIO_FORMAT_HE_AAC_V1 ||
@@ -250,6 +248,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         }
         free(use_case);
         if(*status != NO_ERROR) {
+            LOGE("openDevice error return = %d", *status);
             return;
         }
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
@@ -311,11 +310,11 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         if(*status != NO_ERROR)
             return;
     }
-    if (mCaptureFromProxy) {
-        status_t err = openProxyDevice();
-        if(!err && mRouteAudioToA2dp) {
-            err = openA2dpOutput();
-        }
+    LOGV("mRouteAudioToA2dp = %d", mRouteAudioToA2dp);
+    if (mRouteAudioToA2dp) {
+        status_t err = NO_ERROR;
+        LOGD("startA2dpPlayback_l - A2DPDirectOutput");
+        err = mParent->startA2dpPlayback_l(AudioHardwareALSA::A2DPDirectOutput);
         *status = err;
     }
 }
@@ -334,16 +333,13 @@ status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
     int device;
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore routing if device is 0.
-        device |= AudioSystem::DEVICE_OUT_SPDIF;
-        LOGD("setParameters(): keyRouting with device %d", device);
-        mDevices = device;
         if(device) {
-            //ToDo: Call device setting UCM API here
+            device |= AudioSystem::DEVICE_OUT_SPDIF;
+            LOGD("setParameters(): keyRouting with device %d", device);
             doRouting(device);
         }
         param.remove(key);
     }
-
     return NO_ERROR;
 }
 
@@ -720,10 +716,6 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                     write_pending -= period_size;
                 }
             } while ((mPcmRxHandle->handle) && (sent < bytes));
-            if(mRouteAudioToA2dp && !mA2dpOutputStarted) {
-                startA2dpOutput();
-                mA2dpOutputStarted = true;
-            }
         }
     }
     return sent;
@@ -952,10 +944,29 @@ status_t AudioSessionOutALSA::start(int64_t startTime)
     }
     return err;
 }
-
 status_t AudioSessionOutALSA::pause()
 {
     Mutex::Autolock autoLock(mLock);
+    status_t err = NO_ERROR;
+    err = pause_l();
+
+    if(err) {
+        LOGE("pause returned error");
+        return err;
+    }
+    if (mRouteAudioToA2dp) {
+        LOGD("Pause - suspendA2dpPlayback - A2DPDirectOutput");
+        err = mParent->suspendA2dpPlayback(AudioHardwareALSA::A2DPDirectOutput);
+        if(err != NO_ERROR) {
+            LOGE("Suspend Proxy from Pause returned error = %d",err);
+            return err;
+        }
+    }
+    return err;
+}
+status_t AudioSessionOutALSA::pause_l()
+{
+    LOGE("AudioSessionOutALSA::pause");
     if(mPcmRxHandle) {
         if (ioctl(mPcmRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,1) < 0) {
             LOGE("PAUSE failed for use case %s", mPcmRxHandle->useCase);
@@ -1050,10 +1061,24 @@ status_t AudioSessionOutALSA::flush()
     LOGD("AudioSessionOutALSA::flush X");
     return NO_ERROR;
 }
-
 status_t AudioSessionOutALSA::resume()
 {
     Mutex::Autolock autoLock(mLock);
+    status_t err = NO_ERROR;
+
+    if (mRouteAudioToA2dp) {
+        LOGD("startA2dpPlayback - resume - A2DPDirectOutput");
+        err = mParent->startA2dpPlayback(AudioHardwareALSA::A2DPDirectOutput);
+        if(err) {
+            LOGE("startA2dpPlayback from resume return error = %d", err);
+            return err;
+        }
+    }
+    err = resume_l();
+    return err;
+}
+status_t AudioSessionOutALSA::resume_l()
+{
     if(mPcmRxHandle) {
         if (ioctl(mPcmRxHandle->handle->fd, SNDRV_PCM_IOCTL_PAUSE,0) < 0) {
             LOGE("RESUME failed for use case %s", mPcmRxHandle->useCase);
@@ -1079,6 +1104,17 @@ status_t AudioSessionOutALSA::stop()
     // ToDo: How to make sure all the data is rendered before closing
     mSkipWrite = true;
     mWriteCv.signal();
+
+    if (mRouteAudioToA2dp) {
+        LOGD("stop - suspendA2dpPlayback - A2DPDirectOutput");
+        status_t err = mParent->suspendA2dpPlayback(AudioHardwareALSA::A2DPDirectOutput);
+        if(err) {
+            LOGE("stop-suspendA2dpPlayback-A2DPDirectOutput return err = %d", err);
+            return err;
+        }
+        mRouteAudioToA2dp = false;
+    }
+
     //TODO: This might need to be Locked using Parent lock
     if(mPcmRxHandle) {
         closeDevice(mPcmRxHandle);
@@ -1096,17 +1132,6 @@ status_t AudioSessionOutALSA::stop()
     if(mPcmTxHandle) {
         closeDevice(mPcmTxHandle);
         mPcmTxHandle = NULL;
-    }
-
-    if(mProxyPcmHandle) {
-        LOGV("Closing the Proxy device: mProxyPcmHandle %p", mProxyPcmHandle);
-        pcm_close(mProxyPcmHandle);
-        mProxyPcmHandle = NULL;
-    }
-
-    if(mA2dpOutputStarted) {
-        stopA2dpOutput();
-        closeA2dpOutput();
     }
 
     if(mOpenMS11Decoder == true) {
@@ -1129,6 +1154,7 @@ status_t AudioSessionOutALSA::stop()
     }
 
     mSessionId = -1;
+
     mRoutePcmAudio = false;
     mRouteCompreAudio = false;
     mRoutePcmToSpdif = false;
@@ -1153,6 +1179,14 @@ status_t AudioSessionOutALSA::standby()
 {
     Mutex::Autolock autoLock(mLock);
     LOGD("standby");
+    if (mRouteAudioToA2dp) {
+         LOGD("standby - suspendA2dpPlayback - A2DPDirectOutput");
+         status_t err = mParent->suspendA2dpPlayback(AudioHardwareALSA::A2DPDirectOutput);
+         if(err) {
+             LOGE("standby-suspendA2dpPlayback-A2DPDirectOutput return er = %d", err);
+         }
+    }
+
     if(mPcmRxHandle) {
         mPcmRxHandle->module->standby(mPcmRxHandle);
     }
@@ -1242,209 +1276,6 @@ status_t AudioSessionOutALSA::getRenderPosition(uint32_t *dspFrames)
     return NO_ERROR;
 }
 
-status_t AudioSessionOutALSA::openA2dpOutput()
-{
-    hw_module_t *mod;
-    int      format = AUDIO_FORMAT_PCM_16_BIT;
-    uint32_t channels = AUDIO_CHANNEL_OUT_STEREO;
-    uint32_t sampleRate = 44100;
-    status_t status;
-    LOGV("openA2dpOutput");
-    int rc = hw_get_module_by_class(AUDIO_HARDWARE_MODULE_ID, (const char*)"a2dp", 
-                                    (const hw_module_t**)&mod);
-    if (rc) {
-        LOGE("Could not get a2dp hardware module");
-        return NO_INIT;
-    }
-
-    rc = audio_hw_device_open(mod, &mA2dpDevice);
-    if(rc) {
-        LOGE("couldn't open a2dp audio hw device");
-        return NO_INIT;
-    }
-    status = mA2dpDevice->open_output_stream(mA2dpDevice, AudioSystem::DEVICE_OUT_BLUETOOTH_A2DP, 
-                                    &format, &channels, &sampleRate, &mA2dpStream);
-    if(status != NO_ERROR) {
-        LOGE("Failed to open output stream for a2dp: status %d", status);
-    }
-    return status;
-}
-
-status_t AudioSessionOutALSA::closeA2dpOutput()
-{
-    LOGV("closeA2dpOutput");
-    if(!mA2dpDevice){
-        LOGE("No Aactive A2dp output found");
-        return BAD_VALUE;
-    }
-
-    mA2dpDevice->close_output_stream(mA2dpDevice, mA2dpStream);
-    mA2dpStream = NULL;
-
-    audio_hw_device_close(mA2dpDevice);
-    mA2dpDevice = NULL;
-    return NO_ERROR;
-}
-
-status_t AudioSessionOutALSA::startA2dpOutput()
-{
-    LOGV("startA2dpOutput");
-    int err = pthread_create(&mA2dpThread, (const pthread_attr_t *) NULL,
-                             a2dpThreadWrapper,
-                             this);
-
-    return err;
-}
-
-status_t AudioSessionOutALSA::stopA2dpOutput()
-{
-    LOGV("stopA2dpOutput");
-    mExitA2dpThread = true;
-    pthread_join(mA2dpThread,NULL);
-    return NO_ERROR;
-}
-
-void *AudioSessionOutALSA::a2dpThreadWrapper(void *me) {
-    static_cast<AudioSessionOutALSA *>(me)->a2dpThreadFunc();
-    return NULL;
-}
-
-void AudioSessionOutALSA::a2dpThreadFunc()
-{
-    if(!mA2dpStream) {
-        LOGE("No valid a2dp output stream found");
-        return;
-    }
-    if(!mProxyPcmHandle) {
-        LOGE("No valid mProxyPcmHandle found");
-        return;
-    }
-
-    setpriority(PRIO_PROCESS, 0, ANDROID_PRIORITY_AUDIO);
-    prctl(PR_SET_NAME, (unsigned long)"AudioHAL A2dpThread", 0, 0, 0);
-
-    int a2dpBufSize = mA2dpStream->common.get_buffer_size(&mA2dpStream->common);
-
-    void *a2dpBuffer = malloc(a2dpBufSize);
-    if(!a2dpBuffer) {
-        LOGE("Could not allocate buffer: a2dpBuffer");
-        return;
-    }
-    int proxyBufSize = mProxyPcmHandle->period_size;
-    void *proxyBuffer = malloc(proxyBufSize);
-    if(!proxyBuffer) {
-        LOGE("Could not allocate buffer: proxyBuffer");
-        return;
-    }
-
-    while(!mExitA2dpThread) {
-        // 1. Read from Proxy device
-        int bytesRead = 0;
-        while( (a2dpBufSize -  bytesRead) >= proxyBufSize) {
-            int err = pcm_read(mProxyPcmHandle, a2dpBuffer + bytesRead, proxyBufSize);
-            if(err) {
-                LOGE("pcm_read on Proxy port failed with err %d", err);
-            } else {
-                LOGV("pcm_read on proxy device is success, bytesRead = %d", proxyBufSize);
-            }
-            bytesRead += proxyBufSize;
-        }
-        // 2. Buffer the data till the requested buffer size from a2dp output stream
-        // 3. write to a2dp output stream
-        LOGV("Writing %d bytes to a2dp output", bytesRead);
-        mA2dpStream->write(mA2dpStream, a2dpBuffer, bytesRead);
-    }
-}
-
-status_t AudioSessionOutALSA::openProxyDevice()
-{
-    char *deviceName = "hw:0,8";
-    struct snd_pcm_hw_params *params = NULL;
-    struct snd_pcm_sw_params *sparams = NULL;
-    int flags = (PCM_IN | PCM_NMMAP | PCM_STEREO | DEBUG_ON);
-
-    LOGV("openProxyDevice");
-    mProxyPcmHandle = pcm_open(flags, deviceName);
-    if (!pcm_ready(mProxyPcmHandle)) {
-        LOGE("Opening proxy device failed");
-        goto bail;
-    }
-    LOGV("Proxy device opened successfully: mProxyPcmHandle %p", mProxyPcmHandle);
-    mProxyPcmHandle->channels = 2;
-    mProxyPcmHandle->rate     = 48000;
-    mProxyPcmHandle->flags    = flags;
-    mProxyPcmHandle->period_size = 480;
-
-    params = (struct snd_pcm_hw_params*) malloc(sizeof(struct snd_pcm_hw_params));
-    if (!params) {
-         goto bail;
-    }
-
-    param_init(params);
-
-    param_set_mask(params, SNDRV_PCM_HW_PARAM_ACCESS,
-                   (mProxyPcmHandle->flags & PCM_MMAP)? SNDRV_PCM_ACCESS_MMAP_INTERLEAVED
-                   : SNDRV_PCM_ACCESS_RW_INTERLEAVED);
-    param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-                   SNDRV_PCM_FORMAT_S16_LE);
-    param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
-                   SNDRV_PCM_SUBFORMAT_STD);
-    param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_SIZE, mProxyPcmHandle->period_size);
-    param_set_int(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
-    param_set_int(params, SNDRV_PCM_HW_PARAM_FRAME_BITS,
-                   mProxyPcmHandle->channels - 1 ? 32 : 16);
-    param_set_int(params, SNDRV_PCM_HW_PARAM_CHANNELS,
-                   mProxyPcmHandle->channels);
-    param_set_int(params, SNDRV_PCM_HW_PARAM_RATE, mProxyPcmHandle->rate);
-
-    param_set_hw_refine(mProxyPcmHandle, params);
-
-    if (param_set_hw_params(mProxyPcmHandle, params)) {
-        LOGE("Failed to set hardware params on Proxy device");
-        param_dump(params);
-        goto bail;
-    }
-
-    param_dump(params);
-    mProxyPcmHandle->buffer_size = pcm_buffer_size(params);
-    mProxyPcmHandle->period_size = pcm_period_size(params);
-    mProxyPcmHandle->period_cnt  = mProxyPcmHandle->buffer_size/mProxyPcmHandle->period_size;
-    sparams = (struct snd_pcm_sw_params*) malloc(sizeof(struct snd_pcm_sw_params));
-    if (!sparams) {
-        LOGE("Failed to allocated software params for Proxy device");
-        goto bail;
-    }
-   sparams->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
-   sparams->period_step = 1;
-   sparams->avail_min = (mProxyPcmHandle->flags & PCM_MONO) ?
-       mProxyPcmHandle->period_size/2 : mProxyPcmHandle->period_size/4;
-   sparams->start_threshold = 1;
-   sparams->stop_threshold = (mProxyPcmHandle->flags & PCM_MONO) ?
-       mProxyPcmHandle->buffer_size/2 : mProxyPcmHandle->buffer_size/4;
-   sparams->xfer_align = (mProxyPcmHandle->flags & PCM_MONO) ?
-       mProxyPcmHandle->period_size/2 : mProxyPcmHandle->period_size/4; /* needed for old kernels */
-   sparams->silence_size = 0;
-   sparams->silence_threshold = 0;
-
-   if (param_set_sw_params(mProxyPcmHandle, sparams)) {
-        LOGE("Failed to set software params on Proxy device");
-        goto bail;
-   }
-   if (pcm_prepare(mProxyPcmHandle)) {
-       LOGE("Failed to pcm_prepare on Proxy device");
-       goto bail;
-   }
-   if(params) delete params;
-   if(sparams) delete sparams;
-   return NO_ERROR;
-
-bail:
-   if(mProxyPcmHandle) pcm_close(mProxyPcmHandle);
-   if(params) delete params;
-   if(sparams) delete sparams;
-   return NO_INIT;
-}
-
 status_t AudioSessionOutALSA::openDevice(char *useCase, bool bIsUseCase, int devices)
 {
     alsa_handle_t alsa_handle;
@@ -1492,22 +1323,28 @@ status_t AudioSessionOutALSA::doRouting(int devices)
     char *use_case;
     Mutex::Autolock autoLock(mParent->mLock);
 
-    LOGV("doRouting: devices 0x%x", devices);
-    if(mDevices == devices)
-        return status;
-
-    mDevices = devices;
-    if(mDevices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
-        mCaptureFromProxy = true;
+    LOGV("doRouting: devices 0x%x, mDevices = 0x%x", devices,mDevices);
+    if(devices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
+        LOGV("doRouting - Capture from Proxy");
+        devices &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
+        devices &= ~AudioSystem::DEVICE_OUT_SPDIF;
+        devices |=  AudioSystem::DEVICE_OUT_PROXY;
+        if(devices != mDevices)
+            pause_l();
         mRouteAudioToA2dp = true;
-        mDevices &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
-        //ToDo: Handle A2dp+Speaker
-        //mDevices |= AudioSystem::DEVICE_OUT_PROXY;
-        mDevices = AudioSystem::DEVICE_OUT_PROXY;
-    } else {
+
+    } else if(!(devices & AudioSystem::DEVICE_OUT_ALL_A2DP) && mRouteAudioToA2dp){
         mRouteAudioToA2dp = false;
-        mCaptureFromProxy = false;
+        devices &= ~AudioSystem::DEVICE_OUT_PROXY;
+        LOGD("doRouting-stopA2dpPlayback_l-A2DPDirectOutput disable");
+        status = mParent->stopA2dpPlayback_l(AudioHardwareALSA::A2DPDirectOutput);
     }
+    if(devices == mDevices) {
+        LOGW("Return same device ");
+        return status;
+    }
+    mDevices = devices;
+
     if(mPcmRxHandle) {
         mALSADevice->switchDeviceUseCase(mPcmRxHandle, devices, mParent->mode());
     }
@@ -1528,32 +1365,37 @@ status_t AudioSessionOutALSA::doRouting(int devices)
             status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false,
                                                    AudioSystem::DEVICE_OUT_SPDIF);
         }
-        free(use_case);
-        if(status == NO_ERROR)
-            mRouteCompreToSpdif = true;
-    }
-    if(mCaptureFromProxy) {
-        if(!mProxyPcmHandle) {
-            status = openProxyDevice();
+        if(use_case != NULL) {
+           free(use_case);
+           use_case = NULL;
         }
-        if(status == NO_ERROR && mRouteAudioToA2dp && !mA2dpDevice) {
-            status = openA2dpOutput();
-            if(status == NO_ERROR) {
-                status = startA2dpOutput();
+        /*if(status == NO_ERROR) {
+            mRouteCompreToSpdif = true;
+        }*/
+    }
+    if(mRouteAudioToA2dp ) {
+        LOGD("doRouting-startA2dpPlayback_l-A2DPDirectOutput-enable");
+        status = mParent->startA2dpPlayback_l(AudioHardwareALSA::A2DPDirectOutput);
+        if(status) {
+            LOGW("startA2dpPlayback_l for direct output failed err = %d", status);
+            status_t err = mParent->stopA2dpPlayback_l(AudioHardwareALSA::A2DPDirectOutput);
+            if(err) {
+                LOGW("stop A2dp playback for hardware output failed = %d", err);
+            }
+            mRouteAudioToA2dp = false;
+            mDevices = mCurDevice;
+            if(mPcmRxHandle) {
+                mALSADevice->switchDeviceUseCase(mPcmRxHandle, devices, mParent->mode());
+            }
+            if(mUseTunnelDecode &&  mCompreRxHandle) {
+               mALSADevice->switchDeviceUseCase(mCompreRxHandle, devices, mParent->mode());
             }
         }
-    } else {
-        if(mProxyPcmHandle) {
-            LOGV("Closing the Proxy device");
-            pcm_close(mProxyPcmHandle);
-            mProxyPcmHandle = NULL;
-        }
-        if(mA2dpOutputStarted) {
-            status = stopA2dpOutput();
-            mA2dpOutputStarted = false;
-            closeA2dpOutput();
-        }
+        resume_l();
     }
+    if(status)
+        mCurDevice = mDevices;
+    LOGD("doRouting status = %d ",status);
     return status;
 }
 

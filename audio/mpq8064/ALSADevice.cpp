@@ -29,6 +29,18 @@
 #define USECASE_TYPE_RX 1
 #define USECASE_TYPE_TX 2
 
+#define AFE_PROXY_PERIOD_SIZE 3072
+#define KILL_A2DP_THREAD 1
+#define SIGNAL_A2DP_THREAD 2
+#define PROXY_CAPTURE_DEVICE_NAME (const char *)("hw:0,8")
+
+namespace sys_close {
+    ssize_t lib_close(int fd) {
+        return close(fd);
+    }
+};
+
+
 namespace android_audio_legacy
 {
 
@@ -50,13 +62,23 @@ ALSADevice::ALSADevice() {
     strlcpy(curTxUCMDevice, "None", sizeof(curTxUCMDevice));
 
     mMixer = mixer_open("/dev/snd/controlC0");
-
+    mProxyParams.mExitRead = false;
+    resetProxyVariables();
+    mProxyParams.mCaptureBufferSize = AFE_PROXY_PERIOD_SIZE;
+    mProxyParams.mCaptureBuffer = NULL;
+    mProxyParams.mProxyState = proxy_params::EProxyClosed;
+    mProxyParams.mProxyPcmHandle = NULL;
     LOGD("ALSA Device opened");
 };
 
 ALSADevice::~ALSADevice()
 {
     if (mMixer) mixer_close(mMixer);
+    if(mProxyParams.mCaptureBuffer != NULL) {
+        free(mProxyParams.mCaptureBuffer);
+        mProxyParams.mCaptureBuffer = NULL;
+    }
+    mProxyParams.mProxyState = proxy_params::EProxyClosed;
 }
 
 // ----------------------------------------------------------------------------
@@ -378,16 +400,27 @@ void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
         handle->activeDevice = devices;
         handle->devices = devices;
     }
-    if(rxDeviceNew != NULL)
+    LOGE("After enable device");
+    if(rxDeviceNew != NULL) {
         free(rxDeviceNew);
-    if(rxDeviceOld != NULL)
+        rxDeviceNew = NULL;
+    }
+    if(rxDeviceOld != NULL) {
         free(rxDeviceOld);
-    if(txDeviceNew != NULL)
+        rxDeviceOld = NULL;
+    }
+    if(txDeviceNew != NULL) {
         free(txDeviceNew);
-    if(txDeviceOld != NULL)
+        txDeviceNew = NULL;
+    }
+    if(txDeviceOld != NULL) {
         free(txDeviceOld);
-    if (use_case != NULL)
+        txDeviceOld = NULL;
+    }
+    if (use_case != NULL) {
         free(use_case);
+        use_case = NULL;
+    }
 }
 // ----------------------------------------------------------------------------
 
@@ -1007,14 +1040,22 @@ void ALSADevice::disableDevice(alsa_handle_t *handle)
     }
     handle->activeDevice = 0;
 
-    if(rxDeviceToDisable != NULL)
+    if(rxDeviceToDisable != NULL) {
         free(rxDeviceToDisable);
-    if(txDeviceToDisable != NULL)
+        rxDeviceToDisable = NULL;
+    }
+    if(txDeviceToDisable != NULL) {
         free(txDeviceToDisable);
-    if(rxDevice != NULL)
+        txDeviceToDisable = NULL;
+    }
+    if(rxDevice != NULL) {
         free(rxDevice);
-    if(txDevice != NULL)
+        rxDevice = NULL;
+    }
+    if(txDevice != NULL) {
         free(txDevice);
+        txDevice = NULL;
+    }
 }
 
 char* ALSADevice::getUCMDevice(uint32_t devices, int input)
@@ -1042,6 +1083,15 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
             } else {
                 return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER_HEADSET);
             }
+        } else if( (devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
+                   (devices & AudioSystem::DEVICE_OUT_PROXY) &&
+                   ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
+                    (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE) ) ) {
+            if (mDevSettingsFlag & ANC_FLAG) {
+                return strdup(SND_USE_CASE_DEV_PROXY_RX_SPEAKER_ANC_HEADSET);
+            } else {
+                return strdup(SND_USE_CASE_DEV_PROXY_RX_SPEAKER_HEADSET);
+            }
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
             ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
             (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE))) {
@@ -1054,6 +1104,10 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
                    ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET)||
                     (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE)) ) {
             return strdup(SND_USE_CASE_DEV_SPDIF_ANC_HEADSET);
+        } else if ((devices & AudioSystem::DEVICE_OUT_PROXY) &&
+                   ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET)||
+                    (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE)) ) {
+            return strdup(SND_USE_CASE_DEV_PROXY_RX_ANC_HEADSET);
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
             ((devices & AudioSystem::DEVICE_OUT_ANC_HEADSET) ||
             (devices & AudioSystem::DEVICE_OUT_ANC_HEADPHONE))) {
@@ -1063,10 +1117,16 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
             return strdup(SND_USE_CASE_DEV_SPEAKER_FM_TX); /* COMBO SPEAKER+FM_TX RX */
         } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
                  (devices & AudioSystem::DEVICE_OUT_SPDIF)) {
-            return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER); /* COMBO SPEAKER+FM_TX RX */
+            return strdup(SND_USE_CASE_DEV_SPDIF_SPEAKER); /* COMBO SPEAKER+ SPDIF */
         } else if ((devices & AudioSystem::DEVICE_OUT_EARPIECE) &&
                  (devices & AudioSystem::DEVICE_OUT_SPDIF)) {
-            return strdup(SND_USE_CASE_DEV_SPDIF_HANDSET); /* COMBO SPEAKER+FM_TX RX */
+            return strdup(SND_USE_CASE_DEV_SPDIF_HANDSET); /* COMBO EARPIECE + SPDIF */
+        } else if ((devices & AudioSystem::DEVICE_OUT_SPEAKER) &&
+                 (devices & AudioSystem::DEVICE_OUT_PROXY)) {
+            return strdup(SND_USE_CASE_DEV_PROXY_RX_SPEAKER); /* COMBO SPEAKER + PROXY RX */
+        } else if ((devices & AudioSystem::DEVICE_OUT_EARPIECE) &&
+                 (devices & AudioSystem::DEVICE_OUT_PROXY)) {
+            return strdup(SND_USE_CASE_DEV_PROXY_RX_HANDSET); /* COMBO EARPIECE + PROXY RX */
         } else if (devices & AudioSystem::DEVICE_OUT_EARPIECE) {
             return strdup(SND_USE_CASE_DEV_EARPIECE); /* HANDSET RX */
         } else if (devices & AudioSystem::DEVICE_OUT_SPEAKER) {
@@ -1078,6 +1138,14 @@ char* ALSADevice::getUCMDevice(uint32_t devices, int input)
                 return strdup(SND_USE_CASE_DEV_SPDIF_ANC_HEADSET);
             } else {
                 return strdup(SND_USE_CASE_DEV_SPDIF_HEADSET);
+            }
+        } else if ((devices & AudioSystem::DEVICE_OUT_PROXY) &&
+                   ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
+                    (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE))) {
+            if (mDevSettingsFlag & ANC_FLAG) {
+                return strdup(SND_USE_CASE_DEV_PROXY_RX_ANC_HEADSET);
+            } else {
+                return strdup(SND_USE_CASE_DEV_PROXY_RX_HEADSET);
             }
         } else if ((devices & AudioSystem::DEVICE_OUT_WIRED_HEADSET) ||
                    (devices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE)) {
@@ -1558,15 +1626,373 @@ void ALSADevice::setUseCase(alsa_handle_t *handle, bool bIsUseCaseSet)
             snd_use_case_set_case(handle->ucMgr, "_verb", handle->useCase, rxDevice);
         else
             snd_use_case_set_case(handle->ucMgr, "_enamod", handle->useCase, rxDevice);
-        free(rxDevice);
+        if(rxDevice) {
+            free(rxDevice);
+            rxDevice = NULL;
+        }
     }
     if(txDevice != NULL) {
         if(bIsUseCaseSet)
             snd_use_case_set_case(handle->ucMgr, "_verb", handle->useCase, txDevice);
         else
             snd_use_case_set_case(handle->ucMgr, "_enamod", handle->useCase, txDevice);
-        free(txDevice);
+        if(txDevice) {
+           free(txDevice);
+           txDevice = NULL;
+        }
     }
+}
+
+status_t ALSADevice::exitReadFromProxy()
+{
+    LOGV("exitReadFromProxy");
+    mProxyParams.mExitRead = true;
+    if(mProxyParams.mPfdProxy[1].fd != -1) {
+        uint64_t writeValue = KILL_A2DP_THREAD;
+        LOGD("Writing to mPfdProxy[1].fd %d",mProxyParams.mPfdProxy[1].fd);
+        write(mProxyParams.mPfdProxy[1].fd, &writeValue, sizeof(uint64_t));
+    }
+    return NO_ERROR;
+}
+
+void ALSADevice::resetProxyVariables() {
+
+    mProxyParams.mAvail = 0;
+    mProxyParams.mFrames = 0;
+    mProxyParams.mX.frames = 0;
+    if(mProxyParams.mPfdProxy[1].fd != -1) {
+        sys_close::lib_close(mProxyParams.mPfdProxy[1].fd);
+        mProxyParams.mPfdProxy[1].fd = -1;
+    }
+}
+
+ssize_t  ALSADevice::readFromProxy(void **captureBuffer , ssize_t *bufferSize) {
+
+    status_t err = NO_ERROR;
+    int err_poll = 0;
+    initProxyParams();
+    err = startProxy();
+    if(err) {
+        LOGE("ReadFromProxy-startProxy returned err = %d", err);
+        *captureBuffer = NULL;
+        *bufferSize = 0;
+        return err;
+    }
+    struct pcm * capture_handle = (struct pcm *)mProxyParams.mProxyPcmHandle;
+
+    while(!mProxyParams.mExitRead) {
+        LOGV("Calling sync_ptr(proxy");
+        err = sync_ptr(capture_handle);
+        if(err == EPIPE) {
+               LOGE("Failed in sync_ptr \n");
+               /* we failed to make our window -- try to restart */
+               capture_handle->underruns++;
+               capture_handle->running = 0;
+               capture_handle->start = 0;
+               continue;
+        }else if(err != NO_ERROR){
+                LOGE("Error: Sync ptr returned %d", err);
+                break;
+        }
+
+        mProxyParams.mAvail = pcm_avail(capture_handle);
+        LOGV("avail is = %d frames = %ld, avai_min = %d\n",\
+                      mProxyParams.mAvail,  mProxyParams.mFrames,(int)capture_handle->sw_p->avail_min);
+        if (mProxyParams.mAvail < capture_handle->sw_p->avail_min) {
+            err_poll = poll(mProxyParams.mPfdProxy, NUM_FDS, TIMEOUT_INFINITE);
+            if (mProxyParams.mPfdProxy[1].revents & POLLIN) {
+                LOGV("Event on userspace fd");
+            }
+            if ((mProxyParams.mPfdProxy[1].revents & POLLERR) ||
+                    (mProxyParams.mPfdProxy[1].revents & POLLNVAL)) {
+                LOGV("POLLERR or INVALID POLL");
+                err = BAD_VALUE;
+                break;
+            }
+            if((mProxyParams.mPfdProxy[0].revents & POLLERR) ||
+                    (mProxyParams.mPfdProxy[0].revents & POLLNVAL)) {
+                LOGV("POLLERR or INVALID POLL on zero");
+                err = BAD_VALUE;
+                break;
+            }
+            if (mProxyParams.mPfdProxy[0].revents & POLLIN) {
+                LOGV("POLLIN on zero");
+            }
+            LOGV("err_poll = %d",err_poll);
+            continue;
+        }
+        break;
+    }
+    if(err != NO_ERROR) {
+        LOGE("Reading from proxy failed = err = %d", err);
+        *captureBuffer = NULL;
+        *bufferSize = 0;
+        return err;
+    }
+    if (mProxyParams.mX.frames > mProxyParams.mAvail)
+        mProxyParams.mFrames = mProxyParams.mAvail;
+    void *data  = dst_address(capture_handle);
+    //TODO: Return a pointer to AudioHardware
+    if(mProxyParams.mCaptureBuffer == NULL)
+        mProxyParams.mCaptureBuffer =  malloc(mProxyParams.mCaptureBufferSize);
+    memcpy(mProxyParams.mCaptureBuffer, (char *)data,
+             mProxyParams.mCaptureBufferSize);
+    mProxyParams.mX.frames -= mProxyParams.mFrames;
+    capture_handle->sync_ptr->c.control.appl_ptr += mProxyParams.mFrames;
+    capture_handle->sync_ptr->flags = 0;
+    LOGV("Calling sync_ptr for proxy after sync");
+    err = sync_ptr(capture_handle);
+    if(err == EPIPE) {
+        LOGV("Failed in sync_ptr \n");
+        capture_handle->running = 0;
+        err = sync_ptr(capture_handle);
+    }
+    if(err != NO_ERROR ) {
+        LOGE("Error: Sync ptr end returned %d", err);
+        *captureBuffer = NULL;
+        *bufferSize = 0;
+        return err;
+    }
+    *captureBuffer = mProxyParams.mCaptureBuffer;
+    *bufferSize = mProxyParams.mCaptureBufferSize;
+    return err;
+}
+
+void ALSADevice::initProxyParams() {
+    if(mProxyParams.mPfdProxy[1].fd == -1) {
+        LOGV("Allocating A2Dp poll fd");
+        mProxyParams.mPfdProxy[0].fd = mProxyParams.mProxyPcmHandle->fd;
+        mProxyParams.mPfdProxy[0].events = (POLLIN | POLLERR | POLLNVAL);
+        LOGV("Allocated A2DP poll fd");
+        mProxyParams.mPfdProxy[1].fd = eventfd(0,0);
+        mProxyParams.mPfdProxy[1].events = (POLLIN | POLLERR | POLLNVAL);
+        mProxyParams.mFrames = (mProxyParams.mProxyPcmHandle->flags & PCM_MONO) ?
+            (mProxyParams.mProxyPcmHandle->period_size / 2) :
+            (mProxyParams.mProxyPcmHandle->period_size / 4);
+        mProxyParams.mX.frames = (mProxyParams.mProxyPcmHandle->flags & PCM_MONO) ?
+            (mProxyParams.mProxyPcmHandle->period_size / 2) :
+            (mProxyParams.mProxyPcmHandle->period_size / 4);
+    }
+}
+
+status_t ALSADevice::startProxy() {
+
+    status_t err = NO_ERROR;
+    struct pcm * capture_handle = (struct pcm *)mProxyParams.mProxyPcmHandle;
+    while(1) {
+        if (!capture_handle->start) {
+            if(ioctl(capture_handle->fd, SNDRV_PCM_IOCTL_START)) {
+                err = -errno;
+                if (errno == EPIPE) {
+                   LOGV("Failed in SNDRV_PCM_IOCTL_START\n");
+                   /* we failed to make our window -- try to restart */
+                   capture_handle->underruns++;
+                   capture_handle->running = 0;
+                   capture_handle->start = 0;
+                   continue;
+                } else {
+                   LOGE("IGNORE - IOCTL_START failed for proxy err: %d \n", errno);
+                   err = NO_ERROR;
+                   break;
+                }
+           } else {
+               LOGD(" Proxy Driver started(IOCTL_START Success)\n");
+               break;
+           }
+       }
+       else {
+           LOGV("Proxy Already started break out of condition");
+           break;
+       }
+   }
+   LOGV("startProxy - Proxy started");
+   capture_handle->start = 1;
+   capture_handle->sync_ptr->flags = SNDRV_PCM_SYNC_PTR_APPL |
+               SNDRV_PCM_SYNC_PTR_AVAIL_MIN;
+   return err;
+}
+
+status_t ALSADevice::openProxyDevice()
+{
+    struct snd_pcm_hw_params *params = NULL;
+    struct snd_pcm_sw_params *sparams = NULL;
+    int flags = (DEBUG_ON | PCM_MMAP| PCM_STEREO | PCM_IN);
+
+    LOGV("openProxyDevice");
+    mProxyParams.mProxyPcmHandle = pcm_open(flags, PROXY_CAPTURE_DEVICE_NAME);
+    if (!pcm_ready(mProxyParams.mProxyPcmHandle)) {
+        LOGE("Opening proxy device failed");
+        goto bail;
+    }
+    LOGV("Proxy device opened successfully: mProxyPcmHandle %p", mProxyParams.mProxyPcmHandle);
+    mProxyParams.mProxyPcmHandle->channels = AFE_PROXY_CHANNEL_COUNT;
+    mProxyParams.mProxyPcmHandle->rate     = AFE_PROXY_SAMPLE_RATE;
+    mProxyParams.mProxyPcmHandle->flags    = flags;
+    mProxyParams.mProxyPcmHandle->period_size = AFE_PROXY_PERIOD_SIZE;
+
+    params = (struct snd_pcm_hw_params*) calloc(1,sizeof(struct snd_pcm_hw_params));
+    if (!params) {
+         goto bail;
+    }
+
+    param_init(params);
+
+    param_set_mask(params, SNDRV_PCM_HW_PARAM_ACCESS,
+            (mProxyParams.mProxyPcmHandle->flags & PCM_MMAP)?
+            SNDRV_PCM_ACCESS_MMAP_INTERLEAVED
+            : SNDRV_PCM_ACCESS_RW_INTERLEAVED);
+    param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+            SNDRV_PCM_FORMAT_S16_LE);
+    param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
+            SNDRV_PCM_SUBFORMAT_STD);
+    param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES,
+            mProxyParams.mProxyPcmHandle->period_size);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_FRAME_BITS,
+            mProxyParams.mProxyPcmHandle->channels - 1 ? 32 : 16);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_CHANNELS,
+            mProxyParams.mProxyPcmHandle->channels);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_RATE,
+            mProxyParams.mProxyPcmHandle->rate);
+
+    param_set_hw_refine(mProxyParams.mProxyPcmHandle, params);
+
+    if (param_set_hw_params(mProxyParams.mProxyPcmHandle, params)) {
+        LOGE("Failed to set hardware params on Proxy device");
+        goto bail;
+    }
+
+    mProxyParams.mProxyPcmHandle->buffer_size = pcm_buffer_size(params);
+    mProxyParams.mProxyPcmHandle->period_size = pcm_period_size(params);
+    mProxyParams.mProxyPcmHandle->period_cnt  =
+            mProxyParams.mProxyPcmHandle->buffer_size /
+            mProxyParams.mProxyPcmHandle->period_size;
+    LOGV("Capture - period_size (%d)",\
+            mProxyParams.mProxyPcmHandle->period_size);
+    LOGV("Capture - buffer_size (%d)",\
+            mProxyParams.mProxyPcmHandle->buffer_size);
+    LOGV("Capture - period_cnt  (%d)\n",\
+            mProxyParams.mProxyPcmHandle->period_cnt);
+    sparams = (struct snd_pcm_sw_params*) calloc(1,sizeof(struct snd_pcm_sw_params));
+    if (!sparams) {
+        LOGE("Failed to allocated software params for Proxy device");
+        goto bail;
+    }
+
+   sparams->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
+   sparams->period_step = 1;
+   sparams->avail_min = (mProxyParams.mProxyPcmHandle->flags & PCM_MONO) ?
+           mProxyParams.mProxyPcmHandle->period_size/2
+           : mProxyParams.mProxyPcmHandle->period_size/4;
+   sparams->start_threshold = 1;
+   sparams->stop_threshold = mProxyParams.mProxyPcmHandle->buffer_size;
+   sparams->xfer_align = (mProxyParams.mProxyPcmHandle->flags & PCM_MONO) ?
+           mProxyParams.mProxyPcmHandle->period_size/2
+           : mProxyParams.mProxyPcmHandle->period_size/4; /* needed for old kernels */
+   sparams->silence_size = 0;
+   sparams->silence_threshold = 0;
+
+   if (param_set_sw_params(mProxyParams.mProxyPcmHandle, sparams)) {
+        LOGE("Failed to set software params on Proxy device");
+        goto bail;
+   }
+   mmap_buffer(mProxyParams.mProxyPcmHandle);
+
+   if (pcm_prepare(mProxyParams.mProxyPcmHandle)) {
+       LOGE("Failed to pcm_prepare on Proxy device");
+       goto bail;
+   }
+   mProxyParams.mProxyState = proxy_params::EProxyOpened;
+   return NO_ERROR;
+
+bail:
+   if(mProxyParams.mProxyPcmHandle)  {
+       pcm_close(mProxyParams.mProxyPcmHandle);
+       mProxyParams.mProxyPcmHandle = NULL;
+   }
+   mProxyParams.mProxyState = proxy_params::EProxyClosed;
+   return NO_INIT;
+}
+
+status_t ALSADevice::closeProxyDevice() {
+    status_t err = NO_ERROR;
+    if(mProxyParams.mProxyPcmHandle) {
+        pcm_close(mProxyParams.mProxyPcmHandle);
+        mProxyParams.mProxyPcmHandle = NULL;
+    }
+    resetProxyVariables();
+    mProxyParams.mProxyState = proxy_params::EProxyClosed;
+    mProxyParams.mExitRead = false;
+    return err;
+}
+
+bool ALSADevice::isProxyDeviceOpened() {
+
+   //TODO : Add some intelligence to return appropriate value
+   if(mProxyParams.mProxyState == proxy_params::EProxyOpened ||
+           mProxyParams.mProxyState == proxy_params::EProxyCapture ||
+           mProxyParams.mProxyState == proxy_params::EProxySuspended)
+       return true;
+   return false;
+}
+
+bool ALSADevice::isProxyDeviceSuspended() {
+
+   if(mProxyParams.mProxyState == proxy_params::EProxySuspended)
+        return true;
+   return false;
+}
+
+bool ALSADevice::suspendProxy() {
+
+   status_t err = NO_ERROR;
+   if(mProxyParams.mProxyState == proxy_params::EProxyOpened ||
+           mProxyParams.mProxyState == proxy_params::EProxyCapture) {
+       mProxyParams.mProxyState = proxy_params::EProxySuspended;
+   }
+   else {
+       LOGE("Proxy already suspend or closed, in state = %d",\
+                mProxyParams.mProxyState);
+   }
+   return err;
+}
+
+bool ALSADevice::resumeProxy() {
+
+   status_t err = NO_ERROR;
+   struct pcm *capture_handle= mProxyParams.mProxyPcmHandle;
+   LOGD("resumeProxy mProxyParams.mProxyState = %d, capture_handle =%p",\
+           mProxyParams.mProxyState, capture_handle);
+   if((mProxyParams.mProxyState == proxy_params::EProxyOpened ||
+           mProxyParams.mProxyState == proxy_params::EProxySuspended) &&
+           capture_handle != NULL) {
+       LOGV("pcm_prepare from Resume");
+       capture_handle->start = 0;
+       err = pcm_prepare(capture_handle);
+       if(err != OK) {
+           LOGE("IGNORE: PCM Prepare - capture failed err = %d", err);
+       }
+       err = startProxy();
+       if(err) {
+           LOGE("IGNORE:startProxy returned error = %d", err);
+       }
+       mProxyParams.mProxyState = proxy_params::EProxyCapture;
+       err = sync_ptr(capture_handle);
+       if (err) {
+           LOGE("IGNORE: sync ptr from resumeProxy returned error = %d", err);
+       }
+       LOGV("appl_ptr= %d", (int)capture_handle->sync_ptr->c.control.appl_ptr);
+   }
+   else {
+        LOGE("resume Proxy ignored in invalid state - ignore");
+        if(mProxyParams.mProxyState == proxy_params::EProxyClosed ||
+                capture_handle == NULL) {
+            LOGE("resumeProxy = BAD_VALUE");
+            err = BAD_VALUE;
+            return err;
+        }
+   }
+   return NO_ERROR;
 }
 
 }

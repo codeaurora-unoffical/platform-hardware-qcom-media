@@ -34,8 +34,18 @@
 #include <cutils/properties.h>
 #include <media/AudioRecord.h>
 #include <hardware_legacy/power.h>
+#include <sys/resource.h>
+#include <pthread.h>
+#include <sys/prctl.h>
 
 #include "AudioHardwareALSA.h"
+
+//#define OUTPUT_BUFFER_LOG
+#ifdef OUTPUT_BUFFER_LOG
+    FILE *outputBufferFile1;
+    char outputfilename [50] = "/data/output_proxy";
+    static int number = 0;
+#endif
 
 extern "C"
 {
@@ -61,7 +71,7 @@ AudioHardwareALSA::AudioHardwareALSA() :
 {
     FILE *fp;
     char soundCardInfo[200];
-    int err;
+    int err = 0;
     int codec_rev = 2;
     LOGD("hw_get_module(ALSA_HARDWARE_MODULE_ID) returned err %d", err);
     mALSADevice = new ALSADevice();
@@ -99,6 +109,9 @@ AudioHardwareALSA::AudioHardwareALSA() :
         LOGI("ucm instance opened: %u", (unsigned)mUcMgr);
     }
     mALSADevice->setDeviceList(&mDeviceList);
+    mRouteAudioToA2dp = false;
+    mA2DPActiveUseCases = A2DPNone;
+    mIsA2DPEnabled = false;
 }
 
 AudioHardwareALSA::~AudioHardwareALSA()
@@ -373,7 +386,7 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
     return param.toString();
 }
 
-void AudioHardwareALSA::doRouting(int device)
+status_t AudioHardwareALSA::doRouting(int device)
 {
     Mutex::Autolock autoLock(mLock);
     int newMode = mode();
@@ -381,11 +394,11 @@ void AudioHardwareALSA::doRouting(int device)
     if ((device == AudioSystem::DEVICE_IN_VOICE_CALL) ||
         (device == AudioSystem::DEVICE_IN_FM_RX) ||
         (device == AudioSystem::DEVICE_OUT_DIRECTOUTPUT) ||
-        (device == AudioSystem::DEVICE_IN_COMMUNICATION) ||
-        (device == AudioSystem::DEVICE_IN_FM_RX_A2DP)) {
+        (device == AudioSystem::DEVICE_IN_COMMUNICATION)) {
         LOGV("Ignoring routing for FM/INCALL/VOIP recording");
-        return;
+        return NO_ERROR;
     }
+    LOGV("device = 0x%x,mCurDevice 0x%x", device, mCurDevice);
     if (device == 0)
         device = mCurDevice;
     LOGV("doRouting: device %d newMode %d mIsVoiceCallActive %d mIsFmActive %d",
@@ -449,6 +462,12 @@ void AudioHardwareALSA::doRouting(int device)
         alsa_handle_t alsa_handle;
         char *use_case;
         LOGV("Start FM");
+        if (device & AudioSystem::DEVICE_OUT_ALL_A2DP) {
+            device &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
+            device |=  AudioSystem::DEVICE_OUT_PROXY;
+            mRouteAudioToA2dp = true;
+            LOGV("Routing FM to proxy now");
+        }
         snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
         if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
                                          strlen(SND_USE_CASE_VERB_INACTIVE)))) {
@@ -477,11 +496,35 @@ void AudioHardwareALSA::doRouting(int device)
         mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mDeviceList.end();
         it--;
+
         mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
+        if((device & AudioSystem::DEVICE_OUT_PROXY) && mRouteAudioToA2dp) {
+            LOGD("FM A2DP writer needs to be disabled in frameworks");
+            LOGD("doRouting-startA2dpPlayback_l-FM");
+            status_t err = startA2dpPlayback_l(AudioHardwareALSA::A2DPFm);
+            if(err) {
+                LOGW("startA2dpPlayback for FM failed err = %d", err);
+                stopA2dpPlayback_l(AudioHardwareALSA::A2DPFm);
+                alsa_handle.devices = mCurDevice;
+                alsa_handle.activeDevice = mCurDevice;
+                mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
+                return err;
+            }
+        }
         mALSADevice->startFm(&(*it));
     } else if(!(device & AudioSystem::DEVICE_OUT_FM) && mIsFmActive == 1) {
         // Stop FM Radio
         LOGV("Stop FM");
+        if(!device & AudioSystem::DEVICE_OUT_ALL_A2DP && mRouteAudioToA2dp == true) {
+            device &= ~ AudioSystem::DEVICE_OUT_PROXY;
+            LOGD("doRouting-stopA2dpPlayback_l-FM");
+            status_t err = stopA2dpPlayback_l(AudioHardwareALSA::A2DPFm);
+            if(err) {
+                LOGW("stopA2dpPlayback_l for FM failed err = %d", err);
+                return err;
+            }
+            mRouteAudioToA2dp = false;
+        }
         for(ALSAHandleList::iterator it = mDeviceList.begin();
             it != mDeviceList.end(); ++it) {
             if((!strncmp(it->useCase, SND_USE_CASE_VERB_DIGITAL_RADIO,
@@ -496,13 +539,40 @@ void AudioHardwareALSA::doRouting(int device)
             }
         }
         mIsFmActive = 0;
+    } else if (device & AudioSystem::DEVICE_OUT_PROXY &&
+            mRouteAudioToA2dp == true && device != mCurDevice)  {
+        LOGV(" A2DP Enabled - Routing everything to proxy now");
+        mALSADevice->route((uint32_t)device, newMode);
+        status_t err = NO_ERROR;
+        LOGD("doRouting-startA2dpPlayback_l-A2DPHardwareOutput-enable");
+        err = startA2dpPlayback_l(AudioHardwareALSA::A2DPHardwareOutput);
+        if(err) {
+            LOGW("startA2dpPlayback_l for hardware output failed err = %d", err);
+            stopA2dpPlayback_l(AudioHardwareALSA::A2DPHardwareOutput);
+            mRouteAudioToA2dp = false;
+            mALSADevice->route((uint32_t)mCurDevice, newMode);
+            return err;
+        }
+    } else if(!(device & AudioSystem::DEVICE_OUT_PROXY) &&
+        mRouteAudioToA2dp == true && device != mCurDevice) {
+        LOGV(" A2DP Disable on hardware output");
+        LOGD("doRouting-stopA2dpPlayback_l-A2DPHardwareOutput-disable");
+        status_t err = stopA2dpPlayback_l(AudioHardwareALSA::A2DPHardwareOutput);
+        if(err) {
+            LOGW("stop A2dp playback for hardware output failed = %d", err);
+            return err;
+        }
+        mRouteAudioToA2dp = false;
+        mALSADevice->route((uint32_t)device, newMode);
     } else {
         // ToDo: to use snd_use_case_set_case API here
         // HANDLING ONLY USE CASE WHICH ARE NOT AT OTHER DOROUTING
         // CONFIRM ?
-        mALSADevice->route((uint32_t)device, newMode);
+        if(device != mCurDevice)
+            mALSADevice->route((uint32_t)device, newMode);
     }
     mCurDevice = device;
+    return NO_ERROR;
 }
 
 AudioBroadcastStream *
@@ -568,6 +638,13 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
         return out;
     }
 
+    if(devices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
+        LOGE("Set Capture from proxy true");
+        devices &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
+        devices |=  AudioSystem::DEVICE_OUT_PROXY;
+        mRouteAudioToA2dp = true;
+
+    }
     if(devices == AudioSystem::DEVICE_OUT_DIRECTOUTPUT) {
         bool voipstream_active = false;
         for(it = mDeviceList.begin();
@@ -984,6 +1061,305 @@ size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, in
         bufferSize = DEFAULT_IN_BUFFER_SIZE * 12;
     }
     return bufferSize;
+}
+
+status_t AudioHardwareALSA::startA2dpPlayback(uint32_t activeUsecase) {
+
+    Mutex::Autolock autoLock(mLock);
+    status_t err = startA2dpPlayback_l(activeUsecase);
+    if(err) {
+        LOGE("startA2dpPlayback_l  = %d", err);
+    }
+    return err;
+}
+status_t AudioHardwareALSA::startA2dpPlayback_l(uint32_t activeUsecase) {
+
+    LOGV("startA2dpPlayback_l");
+    status_t err = NO_ERROR;
+    if(!getA2DPActiveUseCases_l() && !mIsA2DPEnabled) {
+        setA2DPActiveUseCases_l(activeUsecase);
+        {
+            Mutex::Autolock autolock1(mA2dpMutex);
+            err = mALSADevice->openProxyDevice();
+            if(err) {
+                LOGE("openProxyDevice failed = %d", err);
+            }
+
+            err = openA2dpOutput();
+            if(err) {
+                LOGE("openA2DPOutput failed = %d",err);
+                return err;
+            }
+
+            mKillA2DPThread = false;
+            err = pthread_create(&mA2dpThread, (const pthread_attr_t *) NULL,
+                    a2dpThreadWrapper,
+                    this);
+            if(err) {
+                LOGE("thread create failed = %d", err);
+                return err;
+            }
+            mA2dpThreadAlive = true;
+            mIsA2DPEnabled = true;
+
+#ifdef OUTPUT_BUFFER_LOG
+    sprintf(outputfilename, "%s%d%s", outputfilename, number,".pcm");
+    outputBufferFile1 = fopen (outputfilename, "ab");
+    number++;
+#endif
+
+        }
+    }
+    setA2DPActiveUseCases_l(activeUsecase);
+    {
+        //Mutex::Autolock autolock1(mA2dpMutex);
+        mALSADevice->resumeProxy();
+    }
+    LOGV("A2DP signal");
+    mA2dpCv.signal();
+    return err;
+}
+
+status_t AudioHardwareALSA::stopA2dpPlayback(uint32_t activeUsecase) {
+     Mutex::Autolock autoLock(mLock);
+     status_t err = stopA2dpPlayback_l(activeUsecase);
+     if(err) {
+         LOGE("stopA2dpPlayback = %d", err);
+     }
+     return err;
+}
+
+status_t AudioHardwareALSA::stopA2dpPlayback_l(uint32_t activeUsecase) {
+
+     LOGV("stopA2dpPlayback  = %d", activeUsecase);
+     status_t err = NO_ERROR;
+     suspendA2dpPlayback_l(activeUsecase);
+     {
+         Mutex::Autolock autolock1(mA2dpMutex);
+         LOGV("stopA2dpPlayback  getA2DPActiveUseCases_l = %d,\
+                 mIsA2DPEnabled = %d",\
+                 getA2DPActiveUseCases_l(),\
+                 mIsA2DPEnabled);
+
+         if(!getA2DPActiveUseCases_l()) {
+             mIsA2DPEnabled = false;
+
+             err = stopA2dpThread();
+             if(err) {
+                 LOGE("stopA2dpOutput = %d" ,err);
+             }
+
+             err = closeA2dpOutput();
+             if(err) {
+                  LOGE("closeA2dpOutput = %d" ,err);
+             }
+
+             err = mALSADevice->closeProxyDevice();
+             if(err) {
+                 LOGE("closeProxyDevice failed = %d", err);
+             }
+
+             mA2DPActiveUseCases = 0x0;
+
+#ifdef OUTPUT_BUFFER_LOG
+    LOGV("close file output");
+    fclose (outputBufferFile1);
+#endif
+         }
+     }
+     return err;
+}
+
+status_t AudioHardwareALSA::openA2dpOutput()
+{
+    hw_module_t *mod;
+    int      format = AUDIO_FORMAT_PCM_16_BIT;
+    uint32_t channels = AUDIO_CHANNEL_OUT_STEREO;
+    uint32_t sampleRate = AFE_PROXY_SAMPLE_RATE;
+    status_t status;
+    LOGV("openA2dpOutput");
+
+    int rc = hw_get_module_by_class(AUDIO_HARDWARE_MODULE_ID, (const char*)"a2dp",
+                                    (const hw_module_t**)&mod);
+    if (rc) {
+        LOGE("Could not get a2dp hardware module");
+        return NO_INIT;
+    }
+
+    rc = audio_hw_device_open(mod, &mA2dpDevice);
+    if(rc) {
+        LOGE("couldn't open a2dp audio hw device");
+        return NO_INIT;
+    }
+    status = mA2dpDevice->open_output_stream(mA2dpDevice, AudioSystem::DEVICE_OUT_BLUETOOTH_A2DP,
+                                    &format, &channels, &sampleRate, &mA2dpStream);
+    if(status != NO_ERROR) {
+        LOGE("Failed to open output stream for a2dp: status %d", status);
+    }
+    return status;
+}
+
+status_t AudioHardwareALSA::closeA2dpOutput()
+{
+    LOGV("closeA2dpOutput");
+    if(!mA2dpDevice){
+        LOGE("No Aactive A2dp output found");
+        return NO_ERROR;
+    }
+
+    mA2dpDevice->close_output_stream(mA2dpDevice, mA2dpStream);
+    mA2dpStream = NULL;
+
+    audio_hw_device_close(mA2dpDevice);
+    mA2dpDevice = NULL;
+    return NO_ERROR;
+}
+
+status_t AudioHardwareALSA::stopA2dpThread()
+{
+    LOGV("stopA2dpThread");
+    status_t err = NO_ERROR;
+    if (!mA2dpThreadAlive) {
+        LOGD("Return - thread not live");
+        return NO_ERROR;
+    }
+    mKillA2DPThread = true;
+    err = mALSADevice->exitReadFromProxy();
+    if(err) {
+        LOGE("exitReadFromProxy failed = %d", err);
+    }
+    mA2dpCv.signal();
+    int ret = pthread_join(mA2dpThread,NULL);
+    LOGD("a2dp thread killed = %d", ret);
+    return err;
+}
+
+void *AudioHardwareALSA::a2dpThreadWrapper(void *me) {
+    static_cast<AudioHardwareALSA *>(me)->a2dpThreadFunc();
+    return NULL;
+}
+
+void AudioHardwareALSA::a2dpThreadFunc() {
+    if(!mA2dpStream) {
+        LOGE("No valid a2dp output stream found");
+        return;
+    }
+    if(!mALSADevice->isProxyDeviceOpened()) {
+        LOGE("No valid mProxyPcmHandle found");
+        return;
+    }
+
+    pid_t tid  = gettid();
+    androidSetThreadPriority(tid, ANDROID_PRIORITY_AUDIO);
+    prctl(PR_SET_NAME, (unsigned long)"A2DPThread", 0, 0, 0);
+
+    int ionBufCount = 0;
+    uint32_t bytesWritten = 0;
+    uint32_t numBytesRemaining = 0;
+    uint32_t bytesAvailInBuffer = 0;
+    void  *data;
+    int err = NO_ERROR;
+    ssize_t size = 0;
+
+    mALSADevice->resetProxyVariables();
+
+    LOGV("mKillA2DPThread = %d", mKillA2DPThread);
+    while(!mKillA2DPThread) {
+
+        {
+            Mutex::Autolock autolock1(mA2dpMutex);
+            if (!mA2dpStream || !mIsA2DPEnabled ||
+                    !mALSADevice->isProxyDeviceOpened() ||
+                    (mALSADevice->isProxyDeviceSuspended()) ||
+                    (err != NO_ERROR)) {
+                LOGD("A2DPThreadEntry:: mIsA2DPEnabled %d,\
+                        proxy opened = %d, proxy suspended = %d,err =%d,\
+                        mA2dpStream = %p", mIsA2DPEnabled,\
+                        mALSADevice->isProxyDeviceOpened(),\
+                        mALSADevice->isProxyDeviceSuspended(),err,mA2dpStream);
+                LOGD("A2DPThreadEntry:: Waiting on mA2DPCv");
+                mA2dpCv.wait(mA2dpMutex);
+                LOGD("A2DPThreadEntry:: received signal to wake up");
+                mA2dpMutex.unlock();
+                continue;
+            }
+        }
+        err = mALSADevice->readFromProxy(&data, &size);
+        if(err < 0) {
+           LOGE("ALSADevice readFromProxy returned err = %d,data = %p,\
+                    size = %d", err, data, size);
+           continue;
+        }
+
+#ifdef OUTPUT_BUFFER_LOG
+    if (outputBufferFile1)
+    {
+        fwrite (data,1,size,outputBufferFile1);
+    }
+#endif
+        void *copyBuffer = data;
+        numBytesRemaining = size;
+        while (err == OK && (numBytesRemaining  > 0) && !mKillA2DPThread
+                && mIsA2DPEnabled ) {
+            {
+                Mutex::Autolock autolock1(mA2dpMutex);
+                bytesAvailInBuffer = mA2dpStream->common.get_buffer_size(&mA2dpStream->common);
+            }
+            uint32_t writeLen = bytesAvailInBuffer > numBytesRemaining ?
+                    numBytesRemaining : bytesAvailInBuffer;
+            LOGV("Writing %d bytes to A2DP ", writeLen);
+            {
+                Mutex::Autolock autolock1(mA2dpMutex);
+                bytesWritten = mA2dpStream->write(mA2dpStream,copyBuffer, writeLen);
+            }
+            LOGV("bytesWritten = %d",bytesWritten);
+            //Need to check warning here - void used in arithmetic
+            copyBuffer = (char *)copyBuffer + bytesWritten;
+            numBytesRemaining -= bytesWritten;
+            LOGV("@_@bytes To write2:%d",numBytesRemaining);
+        }
+    }
+
+    mALSADevice->resetProxyVariables();
+    mA2dpThreadAlive = false;
+    LOGD("A2DP Thread is dying");
+}
+
+void AudioHardwareALSA::setA2DPActiveUseCases_l(uint32_t activeUsecase)
+{
+   mA2DPActiveUseCases |= activeUsecase;
+   LOGD("mA2DPActiveUseCases = %u, activeUsecase = %u", mA2DPActiveUseCases, activeUsecase);
+}
+
+uint32_t AudioHardwareALSA::getA2DPActiveUseCases_l()
+{
+   LOGD("getA2DPActiveUseCases_l: mA2DPActiveUseCases = %u", mA2DPActiveUseCases);
+   return mA2DPActiveUseCases;
+}
+
+void AudioHardwareALSA::clearA2DPActiveUseCases_l(uint32_t activeUsecase) {
+
+   mA2DPActiveUseCases &= ~activeUsecase;
+   LOGD("clear - mA2DPActiveUseCases = %u, activeUsecase = %u", mA2DPActiveUseCases, activeUsecase);
+
+}
+
+bool  AudioHardwareALSA::suspendA2dpPlayback(uint32_t activeUsecase) {
+
+    Mutex::Autolock autoLock(mLock);
+    suspendA2dpPlayback_l(activeUsecase);
+    return NO_ERROR;
+}
+
+bool  AudioHardwareALSA::suspendA2dpPlayback_l(uint32_t activeUsecase) {
+
+    Mutex::Autolock autolock1(mA2dpMutex);
+    LOGD("suspendA2dpPlayback_l activeUsecase = %d, mIsA2DPEnabled = %d",\
+            activeUsecase, mIsA2DPEnabled);
+    clearA2DPActiveUseCases_l(activeUsecase);
+    if(!getA2DPActiveUseCases_l() && mIsA2DPEnabled)
+        return mALSADevice->suspendProxy();
+    return NO_ERROR;
 }
 
 }       // namespace android_audio_legacy

@@ -27,6 +27,8 @@
 #include <system/audio.h>
 #include <hardware/audio.h>
 #include <utils/threads.h>
+#include <sys/poll.h>
+#include <sys/eventfd.h>
 
 extern "C" {
    #include <sound/asound.h>
@@ -129,6 +131,8 @@ class AudioBitstreamSM;
 //Values to exit poll via eventfd
 #define KILL_EVENT_THREAD 1
 #define NUM_FDS 2
+#define AFE_PROXY_SAMPLE_RATE 48000
+#define AFE_PROXY_CHANNEL_COUNT 2
 
 static uint32_t FLUENCE_MODE_ENDFIRE   = 0;
 static uint32_t FLUENCE_MODE_BROADSIDE = 1;
@@ -208,8 +212,24 @@ public:
                                             uint32_t mode);
     void        setDeviceList(ALSAHandleList *mDeviceList);
     void        setUseCase(alsa_handle_t *handle, bool bIsUseCaseSet);
-private:
 
+protected:
+    friend class AudioHardwareALSA;
+
+private:
+    status_t   openProxyDevice();
+    status_t   closeProxyDevice();
+    bool       isProxyDeviceOpened();
+    bool       isProxyDeviceSuspended();
+    bool       suspendProxy();
+    bool       resumeProxy();
+    void       resetProxyVariables();
+    ssize_t    readFromProxy(void **captureBuffer , ssize_t *bufferSize);
+    status_t   exitReadFromProxy();
+    void       initProxyParams();
+    status_t   startProxy();
+
+private:
     int         deviceName(alsa_handle_t *handle, unsigned flags, char **value);
     status_t    setHardwareParams(alsa_handle_t *handle);
     status_t    setSoftwareParams(alsa_handle_t *handle);
@@ -233,6 +253,26 @@ private:
     struct mixer*  mMixer;
     ALSAUseCaseList mUseCaseList;
     ALSAHandleList  *mDeviceList;
+
+    struct proxy_params {
+        bool                mExitRead;
+        struct pcm          *mProxyPcmHandle;
+        uint32_t            mCaptureBufferSize;
+        void                *mCaptureBuffer;
+        enum {
+            EProxyClosed    = 0,
+            EProxyOpened    = 1,
+            EProxySuspended = 2,
+            EProxyCapture   = 3,
+        };
+
+        uint32_t mProxyState;
+        struct snd_xferi mX;
+        unsigned mAvail;
+        struct pollfd mPfdProxy[NUM_FDS];
+        long mFrames;
+    };
+    struct proxy_params mProxyParams;
 };
 
 class ALSAControl
@@ -419,8 +459,6 @@ private:
     bool                mRouteAudioToA2dp;
     bool                mUseTunnelDecode;
     bool                mCaptureFromProxy;
-    bool                mA2dpOutputStarted;
-    bool                mExitA2dpThread;
     bool                mOpenMS11Decoder;
     uint32_t            mSessionId;
     size_t              mMinBytesReqToDecode;
@@ -434,6 +472,7 @@ private:
     bool                mSkipWrite;
     char                mSpdifOutputFormat[10];
     char                mHdmiOutputFormat[10];
+    uint32_t            mCurDevice;
 
     AudioHardwareALSA  *mParent;
     alsa_handle_t *     mPcmRxHandle;
@@ -442,10 +481,6 @@ private:
     alsa_handle_t *     mCompreRxHandle;
     ALSADevice *        mALSADevice;
     snd_use_case_mgr_t *mUcMgr;
-    struct pcm         *mProxyPcmHandle;
-    audio_stream_out   *mA2dpStream;
-    audio_hw_device_t  *mA2dpDevice;
-    pthread_t           mA2dpThread;
     SoftMS11           *mMS11Decoder;
     AudioBitstreamSM   *mBitstreamSM;
     AudioEventObserver *mObserver;
@@ -453,13 +488,6 @@ private:
     status_t            openDevice(char *pUseCase, bool bIsUseCase, int devices);
     status_t            closeDevice(alsa_handle_t *pDevice);
     status_t            doRouting(int devices);
-    status_t            openProxyDevice();
-    status_t            openA2dpOutput();
-    status_t            closeA2dpOutput();
-    status_t            startA2dpOutput();
-    status_t            stopA2dpOutput();
-    static void*        a2dpThreadWrapper(void *context);
-    void                a2dpThreadFunc();
     void                createThreadsForTunnelDecode();
     void                bufferAlloc(alsa_handle_t *handle);
     void                bufferDeAlloc();
@@ -473,6 +501,8 @@ private:
     void                eventThreadEntry();
     void                updateOutputFormat();
     void                updateRoutingFlags();
+    status_t            pause_l();
+    status_t            resume_l();
 
     //Structure to hold mem buffer information
     class BuffersAllocated {
@@ -591,6 +621,8 @@ private:
     // ALSA device handle to Compressed audio routing to SPDIF device
     alsa_handle_t      *mSpdifHandle;
     void               *mMS11Decoder;
+    bool                mRouteAudioToA2dp;
+    bool                mCaptureFromProxy;
 protected:
     AudioHardwareALSA  *mParent;
     bool                mPowerLock;
@@ -753,6 +785,14 @@ public:
             AudioSystem::audio_in_acoustics acoustics);
     virtual    void        closeInputStream(AudioStreamIn* in);
 
+    status_t    startA2dpPlayback(uint32_t activeUsecase);
+    status_t    stopA2dpPlayback(uint32_t activeUsecase);
+    bool        suspendA2dpPlayback(uint32_t activeUsecase);
+
+    status_t    startA2dpPlayback_l(uint32_t activeUsecase);
+    status_t    stopA2dpPlayback_l(uint32_t activeUsecase);
+    bool        suspendA2dpPlayback_l(uint32_t activeUsecase);
+
     /**This method dumps the state of the audio hardware */
     //virtual status_t dumpState(int fd, const Vector<String16>& args);
 
@@ -763,9 +803,20 @@ public:
         return mMode;
     }
 
+private:
+    status_t     openA2dpOutput();
+    status_t     closeA2dpOutput();
+    status_t     stopA2dpThread();
+    void       a2dpThreadFunc();
+    static void*        a2dpThreadWrapper(void *context);
+    void        setA2DPActiveUseCases_l(uint32_t activeUsecase);
+    uint32_t    getA2DPActiveUseCases_l();
+    void        clearA2DPActiveUseCases_l(uint32_t activeUsecase);
+
+
 protected:
     virtual status_t    dump(int fd, const Vector<String16>& args);
-    void                doRouting(int device);
+    status_t            doRouting(int device);
 
     friend class AudioBroadcastStreamALSA;
     friend class AudioSessionOutALSA;
@@ -793,6 +844,30 @@ protected:
     bool                mBluetoothVGS;
     char                mSpdifOutputFormat[10];
     char                mHdmiOutputFormat[10];
+
+    //A2DP variables
+    audio_stream_out   *mA2dpStream;
+    audio_hw_device_t  *mA2dpDevice;
+
+    bool                mKillA2DPThread;
+    bool                mA2dpThreadAlive;
+    pthread_t           mA2dpThread;
+    Mutex               mA2dpMutex;
+    Condition           mA2dpCv;
+    volatile bool       mIsA2DPEnabled;
+
+    enum {
+      A2DPNone = 0x0,
+      A2DPHardwareOutput = 0x1,
+      A2DPDirectOutput = 0x2,
+      A2DPBroadcast = 0x4,
+      A2DPVoip = 0x8,
+      A2DPFm = 0x16,
+    };
+    uint32_t mA2DPActiveUseCases;
+
+public:
+    bool mRouteAudioToA2dp;
 };
 
 class AudioBitstreamSM

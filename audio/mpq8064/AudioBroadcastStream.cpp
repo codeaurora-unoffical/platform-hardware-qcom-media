@@ -73,6 +73,15 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
     mSetupDSPLoopback     = false;
     mPullAudioFromDSP     = false;
     mOpenMS11Decoder      = false;
+    mRouteAudioToA2dp   = false;
+
+    if(mDevices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
+        LOGD("Set Capture from proxy true");
+        mRouteAudioToA2dp = true;
+        devices &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
+        devices |=  AudioSystem::DEVICE_OUT_PROXY;
+        mDevices = devices;
+    }
 
     // Check if audio is to be routed to SPDIF or not
     if(devices & AudioSystem::DEVICE_OUT_SPDIF) {
@@ -309,10 +318,22 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         mParent->mALSADevice->setUseCase(&(*it), bIsUseCaseSet);
         *status = mParent->mALSADevice->startLoopback(&(*it));
     }
+    LOGV("mRouteAudioToA2dp = %d", mRouteAudioToA2dp);
+    if (mRouteAudioToA2dp) {
+        status_t err = NO_ERROR;
+        err = mParent->startA2dpPlayback_l(AudioHardwareALSA::A2DPBroadcast);
+        LOGV("startA2dpPlayback for broadcast returned = %d",err);
+        *status = err;
+    }
 }
 
 AudioBroadcastStreamALSA::~AudioBroadcastStreamALSA()
 {
+    if (mRouteAudioToA2dp) {
+         status_t err = mParent->stopA2dpPlayback_l(AudioHardwareALSA::A2DPBroadcast);
+         LOGV("stopA2dpPlayback_l for broadcast returned %d", err);
+         mRouteAudioToA2dp = false;
+    }
 
     for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
             it != mParent->mDeviceList.end(); ++it) {
@@ -475,6 +496,14 @@ status_t AudioBroadcastStreamALSA::dump(int fd, const Vector<String16>& args)
 status_t AudioBroadcastStreamALSA::standby()
 {
     LOGD("standby");
+    if (mRouteAudioToA2dp) {
+         status_t err = mParent->stopA2dpPlayback_l(AudioHardwareALSA::A2DPBroadcast);
+         if(err) {
+             LOGE("stopA2dpPlayback_l from standby returned = %d", err);
+             return err;
+         }
+         mRouteAudioToA2dp = false;
+    }
     if(mPcmRxHandle) {
         mPcmRxHandle->module->standby(mPcmRxHandle);
     }

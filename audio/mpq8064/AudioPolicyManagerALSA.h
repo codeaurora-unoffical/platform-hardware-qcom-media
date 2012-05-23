@@ -53,6 +53,9 @@ public:
         virtual status_t setDeviceConnectionState(AudioSystem::audio_devices device,
                                                           AudioSystem::device_connection_state state,
                                                           const char *device_address);
+        virtual AudioSystem::device_connection_state getDeviceConnectionState(AudioSystem::audio_devices device,
+                                                                              const char *device_address);
+
         virtual void setPhoneState(int state);
 
         // return appropriate device for streams handled by the specified strategy according to current
@@ -81,6 +84,13 @@ public:
         virtual status_t stopOutput(audio_io_handle_t output, AudioSystem::stream_type stream, int session = 0);
         virtual void setForceUse(AudioSystem::force_use usage, AudioSystem::forced_config config);
         status_t startInput(audio_io_handle_t input);
+
+        virtual audio_io_handle_t getOutput(AudioSystem::stream_type stream,
+                                            uint32_t samplingRate = 0,
+                                            uint32_t format = AudioSystem::FORMAT_DEFAULT,
+                                            uint32_t channels = 0,
+                                            AudioSystem::output_flags flags =
+                                                    AudioSystem::OUTPUT_FLAG_INDIRECT);
 
 protected:
         // true is current platform implements a back microphone

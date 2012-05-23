@@ -55,6 +55,11 @@ AudioStreamOutALSA::AudioStreamOutALSA(AudioHardwareALSA *parent, alsa_handle_t 
 
 AudioStreamOutALSA::~AudioStreamOutALSA()
 {
+    if (mParent->mRouteAudioToA2dp) {
+         status_t err = mParent->stopA2dpPlayback(AudioHardwareALSA::A2DPHardwareOutput);
+         LOGW("stopA2dpPlayback return err  %d", err);
+         mParent->mRouteAudioToA2dp = false;
+    }
     close();
 }
 
@@ -115,6 +120,11 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
          (strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
                               strlen(SND_USE_CASE_VERB_IP_VOICECALL)))) {
         mParent->mLock.lock();
+        LOGV("mDevices =0x%x", mDevices);
+        if(mDevices &  AudioSystem::DEVICE_OUT_PROXY) {
+            LOGV("StreamOut write - mRouteAudioToA2dp = %d ", mParent->mRouteAudioToA2dp);
+            mParent->mRouteAudioToA2dp = true;
+        }
         snd_use_case_get(mHandle->ucMgr, "_verb", (const char **)&use_case);
         if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
                                             strlen(SND_USE_CASE_VERB_INACTIVE)))) {
@@ -158,6 +168,15 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
             LOGE("write:: device open failed");
             mParent->mLock.unlock();
             return 0;
+        }
+        if (mParent->mRouteAudioToA2dp) {
+            status_t err = NO_ERROR;
+            err = mParent->startA2dpPlayback_l(AudioHardwareALSA::A2DPHardwareOutput);
+            if(err) {
+                LOGE("startA2dpPlayback_l from write return err = %d", err);
+                mParent->mLock.unlock();
+                return err;
+            }
         }
         mParent->mLock.unlock();
     }
@@ -212,7 +231,15 @@ status_t AudioStreamOutALSA::open(int mode)
 status_t AudioStreamOutALSA::close()
 {
     Mutex::Autolock autoLock(mParent->mLock);
-
+    LOGV("close = %d", mParent->mRouteAudioToA2dp);
+    if (mParent->mRouteAudioToA2dp) {
+         LOGD("close-suspendA2dpPlayback_l-A2DPHardwareOutput");
+         status_t err = mParent->suspendA2dpPlayback_l(AudioHardwareALSA::A2DPHardwareOutput);
+         if(err) {
+             LOGE("suspendA2dpPlayback from hardware output close return err = %d", err);
+             return err;
+         }
+    }
 
     if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
                              strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
@@ -243,11 +270,20 @@ status_t AudioStreamOutALSA::standby()
                               strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
        (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,
                              strlen(SND_USE_CASE_MOD_PLAY_VOIP)))) {
+
          return NO_ERROR;
      }
 
-    LOGD("standby");
+    LOGD("standby = %d", mParent->mRouteAudioToA2dp);
 
+    if (mParent->mRouteAudioToA2dp) {
+        LOGD("standby-suspendA2dpPlayback_l-A2DPHardwareOutput");
+        status_t err = mParent->suspendA2dpPlayback_l(AudioHardwareALSA::A2DPHardwareOutput);
+        if(err) {
+            LOGE("suspendA2dpPlayback_l from standby return err = %d", err);
+            return err;
+        }
+    }
     mHandle->module->standby(mHandle);
 
     if (mPowerLock) {
