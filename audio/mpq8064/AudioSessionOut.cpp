@@ -1094,13 +1094,13 @@ status_t AudioSessionOutALSA::getTimeStamp(uint64_t *timeStamp)
 {
     LOGV("getTimeStamp \n");
 
+    struct snd_compr_tstamp tstamp;
     if (!timeStamp)
         return -1;
 
     *timeStamp = -1;
     Mutex::Autolock autoLock(mLock);
     if (mCompreRxHandle && mUseTunnelDecode) {
-        struct snd_compr_tstamp tstamp;
         tstamp.timestamp = -1;
         if (ioctl(mCompreRxHandle->handle->fd, SNDRV_COMPRESS_TSTAMP, &tstamp)){
             LOGE("Failed SNDRV_COMPRESS_TSTAMP\n");
@@ -1110,6 +1110,32 @@ status_t AudioSessionOutALSA::getTimeStamp(uint64_t *timeStamp)
             *timeStamp = tstamp.timestamp;
             return NO_ERROR;
         }
+    } else if(mMS11Decoder) {
+        if(mPcmRxHandle) {
+            *timeStamp = -(uint64_t)(latency()*1000) + (((uint64_t)(((int64_t)(
+                        (mFrameCount * mPcmRxHandle->periodSize)/ (2*mChannels)))
+                     * 1000000)) / mSampleRate);
+        } else if(mCompreRxHandle){
+            if (ioctl(mCompreRxHandle->handle->fd, SNDRV_COMPRESS_TSTAMP,
+                      &tstamp)) {
+                LOGE("Failed SNDRV_COMPRESS_TSTAMP\n");
+                return -1;
+            } else {
+                *timeStamp = tstamp.timestamp;
+            }
+        } else {
+            *timeStamp = 0;
+        }
+        LOGV("Timestamp returned = %lld\n",*timeStamp);
+    } else {
+        int bitFormat = audio_bytes_per_sample(mFormat);
+        if(mPcmRxHandle && mSampleRate && mChannels && bitFormat)
+            *timeStamp = -(uint64_t)(latency()*1000) + (((uint64_t)(((int64_t)(
+                    (mFrameCount * mPcmRxHandle->periodSize)/ (mChannels*(bitFormat))))
+                     * 1000000)) / mSampleRate);
+        else
+            *timeStamp = 0;
+        LOGV("Timestamp returned = %lld\n",*timeStamp);
     }
     return NO_ERROR;
 }
