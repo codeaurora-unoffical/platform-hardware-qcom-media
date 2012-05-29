@@ -812,7 +812,9 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
         if(((mLPADecodeOutput != -1) && (mLPADecodeOutput != output) &&
             mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
             setStrategyMute(STRATEGY_MEDIA, true, mLPADecodeOutput);
-        } else if (output != mHardwareOutput) {
+        } else if(((mHardwareOutput != -1) && (mHardwareOutput != output) &&
+            mOutputs.valueFor(mHardwareOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            LOGV("setOutputDevice: muting mHardwareOutput:%d", mHardwareOutput);
             setStrategyMute(STRATEGY_MEDIA, true, mHardwareOutput);
         }
         // wait for the PCM output buffers to empty before proceeding with the rest of the command
@@ -858,7 +860,9 @@ void AudioPolicyManager::setOutputDevice(audio_io_handle_t output, uint32_t devi
         if((mLPADecodeOutput != -1 && (mLPADecodeOutput != output) &&
             mOutputs.valueFor(mLPADecodeOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
             setStrategyMute(STRATEGY_MEDIA, false, mLPADecodeOutput, delayMs);
-        } else if (output != mHardwareOutput) {
+        } else if((mHardwareOutput != -1 && (mHardwareOutput != output) &&
+            mOutputs.valueFor(mHardwareOutput)->isUsedByStrategy(STRATEGY_MEDIA))) {
+            LOGV("setOutputDevice: Unmuting mHardwareOutput:%d delayMs:%d", mHardwareOutput,delayMs);
             setStrategyMute(STRATEGY_MEDIA, false, mHardwareOutput, delayMs);
         }
     }
