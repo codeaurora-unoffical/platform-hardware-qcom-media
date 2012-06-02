@@ -73,6 +73,9 @@ class AudioBitstreamSM;
 #define MULTI_CHANNEL_MAX_PERIOD_SIZE 4032
 #define MULTI_CHANNEL_PERIOD_COUNT 8
 #define PCM_BUFFER_DURATION 10000
+#define DEFAULT_IN_BUFFER_SIZE_BROADCAST_PCM_STEREO   2048
+#define DEFAULT_IN_BUFFER_SIZE_BROADCAST_PCM_MCH   5376
+#define DEFAULT_IN_BUFFER_SIZE_BROADCAST_COMPRESSED   6208
 
 #define VOIP_SAMPLING_RATE_8K 8000
 #define VOIP_SAMPLING_RATE_16K 16000
@@ -128,8 +131,11 @@ class AudioBitstreamSM;
 #define TUNNEL_DECODER_BUFFER_SIZE 4800
 #define TUNNEL_DECODER_BUFFER_COUNT 512
 #define SIGNAL_EVENT_THREAD 2
+#define SIGNAL_PLAYBACK_THREAD 2
 //Values to exit poll via eventfd
 #define KILL_EVENT_THREAD 1
+#define KILL_PLAYBACK_THREAD 1
+#define KILL_CAPTURE_THREAD 1
 #define NUM_FDS 2
 #define AFE_PROXY_SAMPLE_RATE 48000
 #define AFE_PROXY_CHANNEL_COUNT 2
@@ -205,6 +211,7 @@ public:
     status_t    setPcmVolume(int);
     status_t    setCompressedVolume(int);
     status_t    setPlaybackFormat(const char *value, int device);
+    status_t    setCaptureFormat(const char *value);
     status_t    setWMAParams(alsa_handle_t* , int[], int);
     int         getALSABufferSize(alsa_handle_t *handle);
     status_t    setHDMIChannelCount();
@@ -212,7 +219,9 @@ public:
                                             uint32_t mode);
     void        setDeviceList(ALSAHandleList *mDeviceList);
     void        setUseCase(alsa_handle_t *handle, bool bIsUseCaseSet);
-
+    void        setUseCase(alsa_handle_t *handle, bool bIsUseCaseSet, char *device);
+    status_t    openCapture(alsa_handle_t *handle, bool isMmapMode,
+                            bool isCompressed);
 protected:
     friend class AudioHardwareALSA;
 
@@ -239,6 +248,8 @@ private:
     status_t    setMixerControl(const char *name, const char *value);
     void        getDevices(uint32_t devices, uint32_t mode,
                                     char **rxDevice, char **txDevice);
+    status_t    setCaptureHardwareParams(alsa_handle_t *handle, bool isCompressed);
+    status_t    setCaptureSoftwareParams(alsa_handle_t *handle, bool isCompressed);
 
     char        mic_type[128];
     char        curRxUCMDevice[50];
@@ -597,32 +608,144 @@ public:
     virtual status_t    getRenderPosition(uint32_t *dspFrames);
 
 private:
+    Mutex               mLock;
     uint32_t            mFrameCount;
     uint32_t            mSampleRate;
     uint32_t            mChannels;
-    size_t              mBufferSize;
+    int                 mInputFormat;
     int                 mFormat;
     int                 mDevices;
-    uint32_t            mSource;
+    uint32_t            mAudioSource;
     uint32_t            mStreamVol;
-    bool                mRoutePcmStereo;
-    bool                mRouteCompressedAudio;
-    bool                mRouteAudioToSpdif;
-    bool                mSetupDSPLoopback;
-    bool                mPullAudioFromDSP;
-    bool                mOpenMS11Decoder;
-    // ALSA device handle to PCM 2.0 playback
-    alsa_handle_t      *mPcmRxHandle;
-    // ALSA device handle to PCM 5.1 capture from DSP
-    alsa_handle_t      *mPcmTxHandle;
-    // ALSA device handle to Compressed audio playback
-    alsa_handle_t      *mComprRxHandle;
-    // ALSA device handle to Compressed audio capture from DSP
-    alsa_handle_t      *mComprTxHandle;
-    // ALSA device handle to Compressed audio routing to SPDIF device
-    alsa_handle_t      *mSpdifHandle;
-    void               *mMS11Decoder;
+    size_t              mBufferSize;
+    // Capture and Routing Flags
+    bool                mCapturePCMFromDSP;
+    bool                mCaptureCompressedFromDSP;
+    bool                mRoutePCMStereoToDSP;
+    bool                mUseMS11Decoder;
+    bool                mUseTunnelDecoder;
+    bool                mRoutePcmToSpdif;
+    bool                mRoutePcmToHdmi;
+    bool                mRouteCompreToSpdif;
+    bool                mRouteCompreToHdmi;
+    bool                mRoutePcmAudio;
+    bool                mRoutingSetupDone;
+    bool                mSignalToSetupRoutingPath;
+    int                 mInputBufferSize;
+    int                 mInputBufferCount;
+    int32_t             mMinBytesReqToDecode;
+    // HDMI and SPDIF specifics
+    char                mSpdifOutputFormat[128];
+    char                mHdmiOutputFormat[128];
+    unsigned char       mChannelStatus[24];
+    bool                mChannelStatusSet;
+    // Decoder Specifics
+    bool                mAacConfigDataSet;
+    bool                mWMAConfigDataSet;
+    bool                mPlaybackReachedEOS;
+    bool                isSessionPaused;
+
     bool                mRouteAudioToA2dp;
+
+    // ALSA device handle to route PCM 2.0 playback
+    alsa_handle_t      *mPcmRxHandle;
+    // ALSA device handle to Compressed audio playback
+    alsa_handle_t      *mCompreRxHandle;
+    // ALSA device handle to PCM 2.0 capture from DSP
+    alsa_handle_t      *mPcmTxHandle;
+    // ALSA device handle to Compressed audio capture from DSP
+    alsa_handle_t      *mCompreTxHandle;
+    // Common handle to handle the Capture thread
+    alsa_handle_t      *mCaptureHandle;
+    // Open the MS11 decoder for AAC, AC3 and EC3
+    SoftMS11           *mMS11Decoder;
+    // Bitstream state machine to handle the buffering on input
+    // and output
+    AudioBitstreamSM   *mBitstreamSM;
+
+    ALSADevice *        mALSADevice;
+    snd_use_case_mgr_t *mUcMgr;
+    AudioEventObserver *mObserver;
+
+    Mutex               mRoutingSetupMutex;
+    Condition           mRoutingSetupCv;
+
+    //Declare all the threads
+    //Capture
+    pthread_t           mCaptureThread;
+    Mutex               mCaptureMutex;
+    Condition           mCaptureCv;
+    struct              pollfd mCapturePfd[NUM_FDS];
+    struct              snd_xferi mX;
+    unsigned            mAvail;
+    long                mFrames;
+    int                 mCapturefd;
+    bool                mKillCaptureThread;
+    bool                mCaptureThreadAlive;
+    bool                mExitReadCapturePath;
+
+    //Playback
+    pthread_t           mPlaybackThread;
+    Mutex               mPlaybackMutex;
+    Condition           mPlaybackCv;
+    struct              pollfd mPlaybackPfd[NUM_FDS];
+    Mutex               mInputMemRequestMutex;
+    Mutex               mInputMemResponseMutex;
+    Condition           mWriteCv;
+    int                 mPlaybackfd;
+    bool                mKillPlaybackThread;
+    bool                mPlaybackThreadAlive;
+    bool                mSkipWrite;
+
+
+    void                updateSampleRateChannelMode();
+    void                initialization();
+    void                updateOutputFormat();
+    status_t            openCapturingAndRoutingDevices();
+    status_t            closeDevice(alsa_handle_t *pHandle);
+    //Capture
+    void                setCaptureFlagsBasedOnConfig();
+    status_t            openPCMCapturePath();
+    status_t            openCompressedCapturePath();
+    status_t            createCaptureThread();
+    void                captureThreadEntry();
+    static void *       captureThreadWrapper(void *me);
+    void                allocateCapturePollFd();
+    status_t            startCapturePath();
+    ssize_t             readFromCapturePath(char *buffer);
+    void                resetCapturePathVariables();
+    void                exitFromCaptureThread();
+    // Playback
+    void                setRoutingFlagsBasedOnConfig();
+    status_t            openRoutingDevice(char *useCase, bool bIsUseCase,
+                                          int devices);
+    status_t            openPcmDevice(int devices);
+    status_t            openTunnelDevice(int devices);
+    void                bufferAlloc(alsa_handle_t *handle);
+    void                bufferDeAlloc();
+    status_t            createPlaybackThread();
+    void                playbackThreadEntry();
+    static void *       playbackThreadWrapper(void *me);
+    void                allocatePlaybackPollFd();
+    status_t            openMS11Instance();
+    ssize_t             write_l(char *buffer, size_t bytes);
+    int32_t             writeToCompressedDriver(char *buffer, int bytes);
+    void                resetPlaybackPathVariables();
+    void                exitFromPlaybackThread();
+
+    //Structure to hold mem buffer information
+    class BuffersAllocated {
+        public:
+            BuffersAllocated(void *buf1, int32_t nSize) :
+                 memBuf(buf1), memBufsize(nSize), bytesToWrite(0) {}
+            void* memBuf;
+            int32_t memBufsize;
+            uint32_t bytesToWrite;
+    };
+    List<BuffersAllocated> mInputMemEmptyQueue;
+    List<BuffersAllocated> mInputMemFilledQueue;
+    List<BuffersAllocated> mInputBufPool;
+
 protected:
     AudioHardwareALSA  *mParent;
     bool                mPowerLock;
@@ -881,6 +1004,7 @@ public:
     bool    sufficientBitstreamToDecode(size_t minThreshBytesToDecode);
     bool    sufficientSamplesToRender(int format, int minSizeReqdToRender);
     char*   getInputBufferPtr();
+    char*   getInputBufferWritePtr();
     char*   getOutputBufferPtr (int format);
     size_t  bitStreamBufSize();
     void    copyResidueBitstreamToStart(size_t bytesConsumedInDecode);

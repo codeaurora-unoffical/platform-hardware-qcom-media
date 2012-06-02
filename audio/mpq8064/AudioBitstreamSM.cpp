@@ -176,6 +176,15 @@ char* AudioBitstreamSM::getInputBufferPtr()
 }
 
 /*
+Gets the writePtr of the bitstream buffer. This is used for calculating length of
+bitstream
+*/
+char* AudioBitstreamSM::getInputBufferWritePtr()
+{
+    return ms11InputBufferWritePtr;
+}
+
+/*
 Get the output buffer start pointer to start rendering the pcm sampled to driver
 */
 char* AudioBitstreamSM::getOutputBufferPtr(int format)

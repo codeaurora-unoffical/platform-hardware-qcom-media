@@ -18,7 +18,7 @@
 
 #define LOG_TAG "ALSADevice"
 #define LOG_NDEBUG 0
-//#define LOG_NDDEBUG 0
+#define LOG_NDDEBUG 0
 #include <utils/Log.h>
 #include <cutils/properties.h>
 #include <linux/ioctl.h>
@@ -85,6 +85,7 @@ ALSADevice::~ALSADevice()
 
 int ALSADevice::deviceName(alsa_handle_t *handle, unsigned flags, char **value)
 {
+    LOGV("deviceName");
     int ret = 0;
     char ident[70];
     char *rxDevice, useCase[70];
@@ -94,23 +95,7 @@ int ALSADevice::deviceName(alsa_handle_t *handle, unsigned flags, char **value)
     } else {
         strlcpy(ident, "PlaybackPCM/", sizeof(ident));
     }
-    if((!strncmp(handle->useCase,SND_USE_CASE_VERB_MI2S,
-                          strlen(SND_USE_CASE_VERB_MI2S)) ||
-        !strncmp(handle->useCase,SND_USE_CASE_MOD_PLAY_MI2S,
-                   strlen(SND_USE_CASE_MOD_PLAY_MI2S))) && !(flags & PCM_IN) ) {
-        rxDevice = getUCMDevice(handle->devices & AudioSystem::DEVICE_OUT_ALL, 0);
-        strlcpy(useCase,handle->useCase,sizeof(handle->useCase)+1);
-        if(rxDevice) {
-           strlcat(useCase,rxDevice,sizeof(useCase));
-        }
-        strlcat(ident, useCase, sizeof(ident));
-        if(rxDevice) {
-            free(rxDevice);
-            rxDevice = NULL;
-        }
-    } else {
-        strlcat(ident, handle->useCase, sizeof(ident));
-    }
+    strlcat(ident, handle->useCase, sizeof(ident));
     ret = snd_use_case_get(handle->ucMgr, ident, (const char **)value);
     LOGD("Device value returned is %s", (*value));
     return ret;
@@ -119,21 +104,27 @@ int ALSADevice::deviceName(alsa_handle_t *handle, unsigned flags, char **value)
 status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
 {
     struct snd_pcm_hw_params *params;
-    unsigned long bufferSize, reqBuffSize;
-    unsigned int periodTime, bufferTime;
-    unsigned int requestedRate = handle->sampleRate;
-    int status = 0;
     struct snd_compr_caps compr_cap;
     struct snd_compr_params compr_params;
-    int format = handle->format;
+
     int32_t minPeroid, maxPeroid;
+    unsigned long bufferSize, reqBuffSize;
+    unsigned int periodTime, bufferTime;
+
+    int status = 0;
     status_t err = NO_ERROR;
+    unsigned int requestedRate = handle->sampleRate;
+    int format = handle->format;
 
     reqBuffSize = handle->bufferSize;
     if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
         (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
-                          strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))))) {
+                          strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL2,
+                          strlen(SND_USE_CASE_VERB_HIFI_TUNNEL2)) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL2,
+                          strlen(SND_USE_CASE_MOD_PLAY_TUNNEL2))))) {
         if (ioctl(handle->handle->fd, SNDRV_COMPRESS_GET_CAPS, &compr_cap)) {
             LOGE("SNDRV_COMPRESS_GET_CAPS, failed Error no %d \n", errno);
             err = -errno;
@@ -216,7 +207,11 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
     if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI2,
                            strlen(SND_USE_CASE_VERB_HIFI2))) ||
         (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
-                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
+                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI3,
+                           strlen(SND_USE_CASE_VERB_HIFI3))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC3,
+                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC3)))) {
         int ALSAbufferSize = getALSABufferSize(handle);
         param_set_int(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, ALSAbufferSize);
         LOGD("ALSAbufferSize = %d",ALSAbufferSize);
@@ -253,7 +248,11 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
     if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI2,
                            strlen(SND_USE_CASE_VERB_HIFI2))) ||
         (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
-                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
+                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI3,
+                           strlen(SND_USE_CASE_VERB_HIFI3))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC3,
+                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC3)))) {
         handle->latency += (handle->handle->period_cnt * PCM_BUFFER_DURATION);
     }
     return NO_ERROR;
@@ -284,14 +283,18 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
           params->start_threshold = periodSize/2;
           params->stop_threshold = INT_MAX;
      } else {
-         params->avail_min = periodSize/2;
+         params->avail_min = handle->channels - 1 ? periodSize/2 : periodSize/4;
          params->start_threshold = handle->channels - 1 ? periodSize : periodSize/2;
          params->stop_threshold = INT_MAX;
      }
-    if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
-                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
+    if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
         (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
-                           strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
+                           strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL2,
+                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL2,
+                           strlen(SND_USE_CASE_MOD_PLAY_TUNNEL2)))) {
         params->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
         params->period_step = 1;
         params->xfer_align = (handle->handle->flags & PCM_MONO) ?
@@ -319,11 +322,14 @@ void ALSADevice::switchDevice(uint32_t devices, uint32_t mode)
                           strlen(SND_USE_CASE_VERB_HIFI2))) &&
            (strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
                           strlen(SND_USE_CASE_MOD_PLAY_MUSIC2))) &&
-           (strncmp(it->useCase, SND_USE_CASE_VERB_MI2S,
-                          strlen(SND_USE_CASE_VERB_MI2S))) &&
-           (strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MI2S,
-                          strlen(SND_USE_CASE_MOD_PLAY_MI2S))) )
-        {
+           (strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL2,
+                          strlen(SND_USE_CASE_VERB_HIFI_TUNNEL2))) &&
+           (strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL2,
+                          strlen(SND_USE_CASE_MOD_PLAY_TUNNEL2))) &&
+           (strncmp(it->useCase, SND_USE_CASE_VERB_HIFI3,
+                          strlen(SND_USE_CASE_VERB_HIFI3))) &&
+           (strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MUSIC3,
+                          strlen(SND_USE_CASE_MOD_PLAY_MUSIC3)))) {
             switchDeviceUseCase(&(*it),devices,mode);
         }
     }
@@ -334,7 +340,7 @@ void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
 {
     unsigned usecase_type = 0;
     bool inCallDevSwitch = false;
-    char useCase[MAX_STR_LEN],*use_case = NULL;
+    char useCase[MAX_STR_LEN] = {'\0'},*use_case = NULL;
     char *rxDeviceNew=NULL, *txDeviceNew=NULL;
     char *rxDeviceOld=NULL, *txDeviceOld=NULL;
 
@@ -435,6 +441,7 @@ void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
 
 status_t ALSADevice::open(alsa_handle_t *handle)
 {
+    LOGV("open");
     char *devName;
     unsigned flags = 0;
     int err = NO_ERROR;
@@ -476,7 +483,15 @@ status_t ALSADevice::open(alsa_handle_t *handle)
         (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
                             strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
         (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
-                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI3,
+                            strlen(SND_USE_CASE_VERB_HIFI3))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC3,
+                            strlen(SND_USE_CASE_MOD_PLAY_MUSIC3))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL2,
+                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL2,
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL2)))) {
         flags = PCM_OUT;
     } else {
         flags = PCM_IN;
@@ -489,6 +504,7 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     } else {
         flags |= PCM_STEREO;
     }
+    LOGD("s_open: handle %p", handle);
     if (deviceName(handle, flags, &devName) < 0) {
         LOGE("Failed to get pcm device node: %s", devName);
         return NO_INIT;
@@ -496,7 +512,11 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     if (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
         (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
-                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)))) {
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL2,
+                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL2))) ||
+        (!strncmp(handle->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL2,
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL2)))) {
         flags |= DEBUG_ON | PCM_MMAP;
     }
     handle->handle = pcm_open(flags, (char*)devName);
@@ -991,6 +1011,10 @@ int  ALSADevice::getUseCaseType(const char *useCase)
            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_HIFI2,
            strlen(SND_USE_CASE_VERB_HIFI2)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_TUNNEL2,
+           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL2)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI3,
+           strlen(SND_USE_CASE_VERB_HIFI3)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_DIGITAL_RADIO,
            strlen(SND_USE_CASE_VERB_DIGITAL_RADIO)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC,
@@ -1001,17 +1025,29 @@ int  ALSADevice::getUseCaseType(const char *useCase)
            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
            strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_TUNNEL2,
+           strlen(SND_USE_CASE_MOD_PLAY_TUNNEL2)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MUSIC3,
+           strlen(SND_USE_CASE_MOD_PLAY_MUSIC3)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_PLAY_FM,
            strlen(SND_USE_CASE_MOD_PLAY_FM))) {
         return USECASE_TYPE_RX;
     } else if (!strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC,
            strlen(SND_USE_CASE_VERB_HIFI_REC)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC2,
+           strlen(SND_USE_CASE_VERB_HIFI_REC2)) ||
+        !strncmp(useCase, SND_USE_CASE_VERB_HIFI_REC_COMPRESSED,
+           strlen(SND_USE_CASE_VERB_HIFI_REC_COMPRESSED)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_FM_REC,
            strlen(SND_USE_CASE_VERB_FM_REC)) ||
         !strncmp(useCase, SND_USE_CASE_VERB_FM_A2DP_REC,
            strlen(SND_USE_CASE_VERB_FM_A2DP_REC)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC,
            strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC2,
+           strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC2)) ||
+        !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED,
+           strlen(SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_FM,
            strlen(SND_USE_CASE_MOD_CAPTURE_FM)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_A2DP_FM,
@@ -1032,11 +1068,7 @@ int  ALSADevice::getUseCaseType(const char *useCase)
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_DL,
            strlen(SND_USE_CASE_MOD_CAPTURE_VOICE_DL)) ||
         !strncmp(useCase, SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL,
-           strlen(SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL)) ||
-        !strncmp(useCase, SND_USE_CASE_VERB_MI2S,
-           strlen(SND_USE_CASE_VERB_MI2S)) ||
-        !strncmp(useCase, SND_USE_CASE_MOD_PLAY_MI2S,
-           strlen(SND_USE_CASE_MOD_PLAY_MI2S))) {
+           strlen(SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL)) ) {
         return (USECASE_TYPE_RX | USECASE_TYPE_TX);
   } else {
        LOGE("unknown use case %s\n", useCase);
@@ -1541,6 +1573,19 @@ status_t ALSADevice::setPlaybackFormat(const char *value, int device)
     return err;
 }
 
+status_t ALSADevice::setCaptureFormat(const char *value)
+{
+    status_t err = NO_ERROR;
+
+    err = setMixerControl("MI2S TX Format",value);
+
+    if(err) {
+        LOGE("setPlaybackFormat error = %d",err);
+    }
+
+    return err;
+}
+
 status_t ALSADevice::setWMAParams(alsa_handle_t *handle, int params[], int size)
 {
     status_t err = NO_ERROR;
@@ -2034,6 +2079,218 @@ bool ALSADevice::resumeProxy() {
         }
    }
    return NO_ERROR;
+}
+
+void ALSADevice::setUseCase(alsa_handle_t *handle, bool bIsUseCaseSet, char *device)
+{
+    if(bIsUseCaseSet)
+        snd_use_case_set_case(handle->ucMgr, "_verb", handle->useCase, device);
+    else
+        snd_use_case_set_case(handle->ucMgr, "_enamod", handle->useCase, device);
+}
+
+status_t ALSADevice::openCapture(alsa_handle_t *handle,
+                                 bool isMmapMode,
+                                 bool isCompressed)
+{
+    char *devName = NULL;
+    unsigned flags = PCM_IN | DEBUG_ON;
+    int err = NO_ERROR;
+
+    close(handle);
+
+    LOGD("openCapture: handle %p", handle);
+
+    if (handle->channels == 1)
+        flags |= PCM_MONO;
+    else if (handle->channels == 4)
+        flags |= PCM_QUAD;
+    else if (handle->channels == 6)
+        flags |= PCM_5POINT1;
+    else
+        flags |= PCM_STEREO;
+
+    if(isMmapMode)
+        flags |= PCM_MMAP;
+    else
+        flags |= PCM_NMMAP;
+
+    if (deviceName(handle, flags, &devName) < 0) {
+        LOGE("Failed to get pcm device node: %s", devName);
+        return NO_INIT;
+    }
+    if(devName != NULL)
+        handle->handle = pcm_open(flags, (char*)devName);
+    LOGE("s_open: opening ALSA device '%s'", devName);
+
+    if(devName != NULL)
+        free(devName);
+
+    if (!handle->handle) {
+        LOGE("s_open: Failed to initialize ALSA device '%s'", devName);
+        return NO_INIT;
+    }
+
+    handle->handle->flags = flags;
+
+    LOGD("setting hardware parameters");
+    err = setCaptureHardwareParams(handle, isCompressed);
+    if (err == NO_ERROR) {
+        LOGD("setting software parameters");
+        err = setCaptureSoftwareParams(handle, isCompressed);
+    }
+    if(err != NO_ERROR) {
+        LOGE("Set HW/SW params failed: Closing the pcm stream");
+        standby(handle);
+        return err;
+    }
+
+    if(mmap_buffer(handle->handle)) {
+        LOGE("Failed to mmap the buffer");
+        standby(handle);
+        return NO_INIT;
+    }
+
+    if (pcm_prepare(handle->handle)) {
+        LOGE("Failed to pcm_prepare on caoture stereo device");
+        standby(handle);
+        return NO_INIT;
+    }
+
+    return NO_ERROR;
+}
+
+
+status_t ALSADevice::setCaptureHardwareParams(alsa_handle_t *handle, bool isCompressed)
+{
+    struct snd_pcm_hw_params *params;
+    struct snd_compr_caps compr_cap;
+    struct snd_compr_params compr_params;
+
+    int32_t minPeroid, maxPeroid;
+    unsigned long bufferSize, reqBuffSize;
+    unsigned int periodTime, bufferTime;
+
+    int status = 0;
+    status_t err = NO_ERROR;
+    unsigned int requestedRate = handle->sampleRate;
+    int format = handle->format;
+
+    reqBuffSize = handle->bufferSize;
+    if (isCompressed) {
+        if (ioctl(handle->handle->fd, SNDRV_COMPRESS_GET_CAPS, &compr_cap)) {
+            LOGE("SNDRV_COMPRESS_GET_CAPS, failed Error no %d \n", errno);
+            err = -errno;
+            return err;
+        }
+
+        minPeroid = compr_cap.min_fragment_size;
+        maxPeroid = compr_cap.max_fragment_size;
+        handle->channels = 2;
+//NOTE:
+// channels = 2 would set 1 MI2S line, greater than 2 will set more than
+// 1 MI2S lines
+        LOGV("Min peroid size = %d , Maximum Peroid size = %d",\
+            minPeroid, maxPeroid);
+        if (ioctl(handle->handle->fd, SNDRV_COMPRESS_SET_PARAMS,
+                  &compr_params)) {
+            LOGE("SNDRV_COMPRESS_SET_PARAMS,failed Error no %d \n", errno);
+            err = -errno;
+            return err;
+        }
+    }
+
+    params = (snd_pcm_hw_params*) calloc(1, sizeof(struct snd_pcm_hw_params));
+    if (!params) {
+        LOGE("Failed to allocate ALSA hardware parameters!");
+        return NO_INIT;
+    }
+
+    LOGD("setHardwareParamsCapture: reqBuffSize %d channels %d sampleRate %d",
+         (int) reqBuffSize, handle->channels, handle->sampleRate);
+
+    param_init(params);
+    param_set_mask(params, SNDRV_PCM_HW_PARAM_ACCESS,
+                   (handle->handle->flags & PCM_MMAP) ?
+                       SNDRV_PCM_ACCESS_MMAP_INTERLEAVED :
+                       SNDRV_PCM_ACCESS_RW_INTERLEAVED);
+    param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+                   SNDRV_PCM_FORMAT_S16_LE);
+    param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
+                   SNDRV_PCM_SUBFORMAT_STD);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES,
+                  handle->bufferSize);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_FRAME_BITS,
+                  handle->channels* 16);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_CHANNELS,
+                  handle->channels);
+    param_set_int(params, SNDRV_PCM_HW_PARAM_RATE,
+                  handle->sampleRate);
+    param_set_hw_refine(handle->handle, params);
+    if (param_set_hw_params(handle->handle, params)) {
+        LOGE("Failed to set hardware params on stereo capture device");
+        return NO_INIT;
+    }
+    handle->handle->buffer_size = pcm_buffer_size(params);
+    handle->handle->period_size = pcm_period_size(params);
+    handle->handle->period_cnt  = handle->handle->buffer_size /
+                                     handle->handle->period_size;
+    LOGV("period_size %d, period_cnt %d", handle->handle->period_size,
+              handle->handle->period_cnt);
+    handle->handle->rate = handle->sampleRate;
+    handle->handle->channels = handle->channels;
+    handle->periodSize = handle->handle->period_size;
+    handle->bufferSize = handle->handle->period_size;
+
+    return NO_ERROR;
+}
+
+status_t ALSADevice::setCaptureSoftwareParams(alsa_handle_t *handle,
+                                              bool isCompressed)
+{
+    struct snd_pcm_sw_params* params;
+    struct pcm* pcm = handle->handle;
+
+    unsigned long periodSize = pcm->period_size;
+    unsigned flags = pcm->flags;
+
+    params = (snd_pcm_sw_params*) calloc(1, sizeof(struct snd_pcm_sw_params));
+    if (!params) {
+        LOGE("Failed to allocate ALSA software parameters!");
+        return NO_INIT;
+    }
+
+    if(isCompressed)
+	params->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
+//NOTE: move this to TIME STAMP mode for compressed
+    else
+        params->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
+    params->period_step = 1;
+    if (flags & PCM_MONO) {
+        params->avail_min = pcm->period_size/2;
+        params->xfer_align = pcm->period_size/2;
+    } else if (flags & PCM_QUAD) {
+        params->avail_min = pcm->period_size/8;
+        params->xfer_align = pcm->period_size/8;
+    } else if (flags & PCM_5POINT1) {
+        params->avail_min = pcm->period_size/12;
+        params->xfer_align = pcm->period_size/12;
+    } else {
+        params->avail_min = pcm->period_size/4;
+        params->xfer_align = pcm->period_size/4;
+    }
+
+    params->start_threshold = 1;
+    params->stop_threshold = INT_MAX;
+    params->silence_threshold = 0;
+    params->silence_size = 0;
+
+    if (param_set_sw_params(handle->handle, params)) {
+        LOGE("cannot set sw params");
+        return NO_INIT;
+    }
+    return NO_ERROR;
 }
 
 }

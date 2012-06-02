@@ -547,7 +547,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         if(mFormat == AUDIO_FORMAT_AAC || mFormat == AUDIO_FORMAT_HE_AAC_V1 ||
            mFormat == AUDIO_FORMAT_AAC_ADIF || mFormat == AUDIO_FORMAT_HE_AAC_V2) {
             if(mAacConfigDataSet == false) {
-                if(mMS11Decoder->setAACConfig((unsigned char *)buffer, bytes) == true);
+                if(mMS11Decoder->setAACConfig((unsigned char *)buffer, bytes) == true)
                     mAacConfigDataSet = true;
                 return bytes;
             }
@@ -1523,7 +1523,7 @@ void AudioSessionOutALSA::reset() {
     mOpenMS11Decoder = false;
     mAacConfigDataSet = false;
     mWMAConfigDataSet = false;
-    mOpenMS11Decoder == false;
+    mOpenMS11Decoder = false;
 
 }
 
