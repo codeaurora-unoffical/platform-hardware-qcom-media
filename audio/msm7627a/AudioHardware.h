@@ -460,7 +460,6 @@ private:
             int         mTtyMode;
             int mVoipFd;
             int mNumVoipStreams;
-            int mVoipCallMode;
 
      friend class AudioStreamInMSM72xx;
             Mutex       mLock;

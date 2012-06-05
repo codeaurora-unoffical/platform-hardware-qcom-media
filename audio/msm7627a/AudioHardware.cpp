@@ -140,8 +140,7 @@ static uint32_t SND_DEVICE_FM_ANALOG_STEREO_HEADSET_CODEC=-1;
 AudioHardware::AudioHardware() :
     mInit(false), mMicMute(true), mBluetoothNrec(true), mBluetoothId(0),
     mOutput(0),mBluetoothVGS(false), mSndEndpoints(NULL), mCurSndDevice(-1), mDualMicEnabled(false),
-    mFmFd(-1),FmA2dpStatus(-1), mVoipFd(-1), mNumVoipStreams(0),mVoipCallMode(AudioSystem::MODE_NORMAL),
-    mDirectOutput(0)
+    mFmFd(-1),FmA2dpStatus(-1), mVoipFd(-1), mNumVoipStreams(0), mDirectOutput(0)
 {
    if (get_audpp_filter() == 0) {
            audpp_filter_inited = true;
@@ -1481,18 +1480,8 @@ status_t AudioHardware::doAudioRouteOrMute(uint32_t device)
         nEarmute = false;
     else if(mMode == AudioSystem::MODE_IN_COMMUNICATION){
         nEarmute = false;
-        mVoipCallMode = AudioSystem::MODE_IN_COMMUNICATION;
         LOGW("VoipCall in MODE_IN_COMMUNICATION");
-    }else if(mVoipCallMode == AudioSystem::MODE_IN_COMMUNICATION){
-        /* this is to work around the issue where SipAudioCall.java
-           which forces from IN_CALL to NORMAL mode right after the sipcall
-           is established.
-         */
-        LOGW("Ignoring Redundant setMode Update");
-        nEarmute = false;
-        mMicMute = false;
     }
-
 
     rc = do_route_audio_rpc(device,
                               nEarmute , mMicMute, m7xsnddriverfd);
@@ -2029,8 +2018,6 @@ status_t AudioHardware::AudioStreamInVoip::standby()
             mFd = mHardware->mVoipFd = -1;
             LOGE("MVS driver closed");
             isDriverClosed = true;
-            mHardware->mVoipCallMode = AudioSystem::MODE_NORMAL;
-
         }
         mState = AUDIO_INPUT_CLOSED;
     }
@@ -2505,7 +2492,6 @@ status_t AudioHardware::AudioStreamOutDirect::standby()
        LOGV("MVS stop returned %d \n", ret);
        ::close(mFd);
        mFd = mHardware->mVoipFd = -1;
-       mHardware->mVoipCallMode = AudioSystem::MODE_NORMAL;
        LOGE("MVS driver closed");
    }
 
