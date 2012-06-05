@@ -30,6 +30,8 @@
 
 extern "C" {
    #include <sound/asound.h>
+   #include <sound/compress_params.h>
+   #include <sound/compress_offload.h>
    #include "alsa_audio.h"
    // ToDo: For now we are depending on 8960, it should be made generic
    #include "msm8960_use_cases.h"
