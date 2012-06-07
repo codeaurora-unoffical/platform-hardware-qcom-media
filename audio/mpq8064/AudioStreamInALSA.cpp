@@ -128,7 +128,10 @@ ssize_t AudioStreamInALSA::read(void *buffer, ssize_t bytes)
             }
             bIsUseCaseSet = true;
         }
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
         if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
                                  strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||
             (!strncmp(mHandle->useCase, SND_USE_CASE_MOD_PLAY_VOIP,

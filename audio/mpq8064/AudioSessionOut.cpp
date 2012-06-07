@@ -74,17 +74,20 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mUcMgr          = mParent->mUcMgr;
     mFrameCount     = 0;
     mFormat         = format;
-    if(samplingRate > 48000) {
-        LOGW("Sample rate >48000, opening the driver with 48000Hz");
-        mSampleRate     = 48000;
-    } else {
-        mSampleRate     = samplingRate;
-    }
+    mSampleRate     = samplingRate;
     mChannels       = channels;
+    if(format == AUDIO_FORMAT_AAC || format == AUDIO_FORMAT_HE_AAC_V1 ||
+       format == AUDIO_FORMAT_HE_AAC_V2 || format == AUDIO_FORMAT_AAC_ADIF) {
+        if(samplingRate > 24000) {
+            mSampleRate     = 48000;
+            mChannels       = 2;
+        }
+    } else if (format == AUDIO_FORMAT_AC3 || format == AUDIO_FORMAT_AC3_PLUS) {
+        if(mChannels > 2)
+            mChannels   = 2;
+    }
     // NOTE: This has to be changed when Multi channel PCM has to be
     // sent over HDMI
-    if(mChannels > 2)
-        mChannels   = 2;
     mDevices        = devices;
     mBufferSize     = 0;
     *status         = BAD_VALUE;
@@ -129,6 +132,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mKillEventThread     = false;
     mMinBytesReqToDecode = 0;
     mObserver            = NULL;
+    mCurDevice           = 0;
 
     if(devices == 0) {
         LOGE("No output device specified");
@@ -207,22 +211,19 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
                 delete mMS11Decoder;
                 return;
             }
-            mBitstreamSM = new AudioBitstreamSM;
-            if(false == mBitstreamSM->initBitstreamPtr()) {
-                LOGE("Unable to allocate Memory for i/p and o/p buffering for MS11");
-                delete mBitstreamSM;
-                delete mMS11Decoder;
-                return;
-            }
             if(mMS11Decoder->setUseCaseAndOpenStream(FORMAT_EXTERNAL_PCM,channels,samplingRate)) {
                 LOGE("SetUseCaseAndOpen MS11 failed");
-                delete mBitstreamSM;
                 delete mMS11Decoder;
                 return;
             }
             mOpenMS11Decoder=true;
         }
-
+        mBitstreamSM = new AudioBitstreamSM;
+        if(false == mBitstreamSM->initBitstreamPtr()) {
+            LOGE("Unable to allocate Memory for i/p and o/p buffering for MS11");
+            delete mBitstreamSM;
+            return;
+        }
         updateRoutingFlags();
 
     } else {
@@ -246,7 +247,10 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         } else {
             *status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
         }
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
         if(*status != NO_ERROR) {
             LOGE("openDevice error return = %d", *status);
             return;
@@ -317,12 +321,27 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         err = mParent->startA2dpPlayback_l(AudioHardwareALSA::A2DPDirectOutput);
         *status = err;
     }
+    mCurDevice = devices;
 }
 
 AudioSessionOutALSA::~AudioSessionOutALSA()
 {
     LOGV("~AudioSessionOutALSA");
-    stop();
+
+    mSkipWrite = true;
+    mWriteCv.signal();
+
+    if (mRouteAudioToA2dp) {
+        LOGD("destructor - suspendA2dpPlayback - A2DPDirectOutput");
+        status_t err = mParent->suspendA2dpPlayback(AudioHardwareALSA::A2DPDirectOutput);
+        if(err) {
+            LOGE("destructor - suspendA2dpPlayback-A2DPDirectOutput return err = %d", err);
+        }
+        mRouteAudioToA2dp = false;
+    }
+
+    //TODO: This might need to be Locked using Parent lock
+    reset();
 }
 
 status_t AudioSessionOutALSA::setParameters(const String8& keyValuePairs)
@@ -422,7 +441,10 @@ status_t AudioSessionOutALSA::openTunnelDevice(int devices)
     } else {
         status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
     }
-    free(use_case);
+    if(use_case) {
+        free(use_case);
+        use_case = NULL;
+    }
     if(status != NO_ERROR) {
         return status;
     }
@@ -583,7 +605,10 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                     } else {
                         status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
                     }
-                    free(use_case);
+                    if(use_case) {
+                        free(use_case);
+                        use_case = NULL;
+                    }
                     if(status != NO_ERROR) {
                         LOGE("Error opening the driver");
                         break;
@@ -591,6 +616,28 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                     ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
                     mPcmRxHandle = &(*it);
                     mBufferSize = mPcmRxHandle->periodSize;
+                    if(mRoutePcmToSpdif) {
+                        if(!strncmp(mSpdifOutputFormat, "lpcm",
+                               sizeof(mSpdifOutputFormat))) {
+                            status = mALSADevice->setPlaybackFormat("LPCM",
+                                           AudioSystem::DEVICE_OUT_SPDIF);
+                            if(status != NO_ERROR)
+                                return status;
+                        } else {
+                            //ToDo: handle DTS;
+                        }
+                    }
+                    if(mRoutePcmToHdmi) {
+                        if(!strncmp(mHdmiOutputFormat, "lpcm",
+                                       sizeof(mHdmiOutputFormat))) {
+                            status = mALSADevice->setPlaybackFormat("LPCM",
+                                          AudioSystem::DEVICE_OUT_AUX_DIGITAL);
+                            if (status != NO_ERROR)
+                                return status;
+                        } else {
+                            //ToDo: handle DTS
+                        }
+                    }
                 }
                 mChannelStatusSet = false;
             }
@@ -690,11 +737,12 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
         if(mPcmRxHandle && mRoutePcmAudio) {
             int write_pending = bytes;
             period_size = mPcmRxHandle->periodSize;
-            do {
-                if (write_pending < period_size) {
-                    LOGE("write:: We should not be here !!!");
-                    write_pending = period_size;
-                }
+
+            mBitstreamSM->copyBitsreamToInternalBuffer((char *)buffer, bytes);
+
+            while(mPcmRxHandle->handle &&
+                  (mBitstreamSM->sufficientBitstreamToDecode(period_size)
+                                     == true)) {
                 LOGV("Calling pcm_write");
                 n = pcm_write(mPcmRxHandle->handle,
                          (char *)buffer + sent,
@@ -713,9 +761,9 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                 else {
                     mFrameCount++;
                     sent += static_cast<ssize_t>((period_size));
-                    write_pending -= period_size;
+                    mBitstreamSM->copyResidueBitstreamToStart(period_size);
                 }
-            } while ((mPcmRxHandle->handle) && (sent < bytes));
+            }
         }
     }
     return sent;
@@ -1116,56 +1164,7 @@ status_t AudioSessionOutALSA::stop()
     }
 
     //TODO: This might need to be Locked using Parent lock
-    if(mPcmRxHandle) {
-        closeDevice(mPcmRxHandle);
-        mPcmRxHandle = NULL;
-    }
-
-    if (mUseTunnelDecode || mRouteCompreToHdmi || mRouteCompreToSpdif)
-        requestAndWaitForEventThreadExit();
-
-    if(mCompreRxHandle) {
-        closeDevice(mCompreRxHandle);
-        mCompreRxHandle = NULL;
-    }
-
-    if(mPcmTxHandle) {
-        closeDevice(mPcmTxHandle);
-        mPcmTxHandle = NULL;
-    }
-
-    if(mOpenMS11Decoder == true) {
-        delete mMS11Decoder;
-        delete mBitstreamSM;
-    }
-
-    for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
-            it != mParent->mDeviceList.end(); ++it) {
-        if((!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
-                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
-           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
-                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) ||
-           (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI2,
-                            strlen(SND_USE_CASE_VERB_HIFI2))) ||
-           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
-                            strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
-            mParent->mDeviceList.erase(it);
-        }
-    }
-
-    mSessionId = -1;
-
-    mRoutePcmAudio = false;
-    mRouteCompreAudio = false;
-    mRoutePcmToSpdif = false;
-    mRouteCompreToSpdif = false;
-    mRoutePcmToHdmi = false;
-    mRouteCompreToHdmi = false;
-    mUseTunnelDecode = false;
-    mCaptureFromProxy = false;
-    mOpenMS11Decoder = false;
-    mAacConfigDataSet = false;
-    mWMAConfigDataSet = false;
+    reset();
 
     return NO_ERROR;
 }
@@ -1465,6 +1464,66 @@ void AudioSessionOutALSA::updateRoutingFlags()
 
     if(mUseTunnelDecode)
         mRoutePcmAudio = false;
+
+}
+
+void AudioSessionOutALSA::reset() {
+
+    if(mPcmRxHandle) {
+        closeDevice(mPcmRxHandle);
+        mPcmRxHandle = NULL;
+    }
+
+    if (mUseTunnelDecode || mRouteCompreToHdmi || mRouteCompreToSpdif)
+        requestAndWaitForEventThreadExit();
+
+    if(mCompreRxHandle) {
+        closeDevice(mCompreRxHandle);
+        mCompreRxHandle = NULL;
+    }
+
+    if(mPcmTxHandle) {
+        closeDevice(mPcmTxHandle);
+        mPcmTxHandle = NULL;
+    }
+
+    if(mMS11Decoder) {
+        delete mMS11Decoder;
+        mMS11Decoder = NULL;
+    }
+    if(mBitstreamSM) {
+        delete mBitstreamSM;
+        mBitstreamSM = NULL;
+    }
+
+    for(ALSAHandleList::iterator it = mParent->mDeviceList.begin();
+            it != mParent->mDeviceList.end(); ++it) {
+        if((!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
+                            strlen(SND_USE_CASE_VERB_HIFI_TUNNEL))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_TUNNEL,
+                            strlen(SND_USE_CASE_MOD_PLAY_TUNNEL))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_VERB_HIFI2,
+                            strlen(SND_USE_CASE_VERB_HIFI2))) ||
+           (!strncmp(it->useCase, SND_USE_CASE_MOD_PLAY_MUSIC2,
+                            strlen(SND_USE_CASE_MOD_PLAY_MUSIC2)))) {
+            mParent->mDeviceList.erase(it);
+        }
+    }
+
+    mSessionId = -1;
+
+    mRoutePcmAudio = false;
+    mRouteCompreAudio = false;
+    mRoutePcmToSpdif = false;
+    mRouteCompreToSpdif = false;
+    mRoutePcmToHdmi = false;
+    mRouteCompreToHdmi = false;
+    mUseTunnelDecode = false;
+    mCaptureFromProxy = false;
+    mOpenMS11Decoder = false;
+    mAacConfigDataSet = false;
+    mWMAConfigDataSet = false;
+    mOpenMS11Decoder == false;
 
 }
 

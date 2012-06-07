@@ -104,7 +104,10 @@ int ALSADevice::deviceName(alsa_handle_t *handle, unsigned flags, char **value)
            strlcat(useCase,rxDevice,sizeof(useCase));
         }
         strlcat(ident, useCase, sizeof(ident));
-        free(rxDevice);
+        if(rxDevice) {
+            free(rxDevice);
+            rxDevice = NULL;
+        }
     } else {
         strlcat(ident, handle->useCase, sizeof(ident));
     }
@@ -508,7 +511,10 @@ status_t ALSADevice::open(alsa_handle_t *handle)
     if(err != NO_ERROR) {
         LOGE("Set HW/SW params failed: Closing the pcm stream");
         standby(handle);
-        free(devName);
+        if(devName) {
+            free(devName);
+            devName = NULL;
+        }
         return err;
     }
 
@@ -563,7 +569,10 @@ status_t ALSADevice::startVoipCall(alsa_handle_t *handle)
      memset(&voc_pkt,0,sizeof(voc_pkt));
      pcm_write(handle->handle,&voc_pkt,handle->handle->period_size);
      handle->rxHandle = handle->handle;
-     free(devName);
+     if(devName) {
+         free(devName);
+         devName = NULL;
+     }
      LOGV("s_open: DEVICE_IN_COMMUNICATION ");
      flags = PCM_IN;
      flags |= PCM_MONO;
@@ -576,7 +585,14 @@ status_t ALSADevice::startVoipCall(alsa_handle_t *handle)
      handle->handle = pcm_open(flags, (char*)devName1);
 
      if (!handle->handle) {
-         free(devName);
+         if(devName) {
+             free(devName);
+             devName = NULL;
+         }
+         if(devName1) {
+             free(devName1);
+             devName1 = NULL;
+         }
          LOGE("s_open: Failed to initialize ALSA device '%s'", devName);
          return NO_INIT;
      }
@@ -601,6 +617,15 @@ status_t ALSADevice::startVoipCall(alsa_handle_t *handle)
      /* first read required start dsp */
      memset(&voc_pkt,0,sizeof(voc_pkt));
      pcm_read(handle->handle,&voc_pkt,handle->handle->period_size);
+
+     if(devName) {
+         free(devName);
+         devName = NULL;
+     }
+     if(devName1) {
+         free(devName1);
+         devName1 = NULL;
+     }
      return NO_ERROR;
 }
 
@@ -688,13 +713,18 @@ status_t ALSADevice::startVoiceCall(alsa_handle_t *handle)
         LOGE("startVoiceCall:SNDRV_PCM_IOCTL_START failed\n");
         goto Error;
     }
-
-    free(devName);
+    if(devName) {
+        free(devName);
+        devName = NULL;
+    }
     return NO_ERROR;
 
 Error:
     LOGE("startVoiceCall: Failed to initialize ALSA device '%s'", devName);
-    free(devName);
+    if(devName) {
+        free(devName);
+        devName = NULL;
+    }
     close(handle);
     return NO_INIT;
 }
@@ -795,12 +825,17 @@ status_t ALSADevice::startLoopback(alsa_handle_t *handle)
         LOGE("s_start_fm: SNDRV_PCM_IOCTL_START failed\n");
         goto Error;
     }
-
-    free(devName);
+    if(devName) {
+        free(devName);
+        devName = NULL;
+    }
     return NO_ERROR;
 
 Error:
-    free(devName);
+    if(devName) {
+        free(devName);
+        devName = NULL;
+    }
     close(handle);
     return NO_INIT;
 }

@@ -240,7 +240,7 @@ private:
     void        getDevices(uint32_t devices, uint32_t mode,
                                     char **rxDevice, char **txDevice);
 
-    char        mic_type[25];
+    char        mic_type[128];
     char        curRxUCMDevice[50];
     char        curTxUCMDevice[50];
     int         fluence_mode;
@@ -470,8 +470,8 @@ private:
     bool                mTunnelSeeking;
     bool                mReachedExtractorEOS;
     bool                mSkipWrite;
-    char                mSpdifOutputFormat[10];
-    char                mHdmiOutputFormat[10];
+    char                mSpdifOutputFormat[128];
+    char                mHdmiOutputFormat[128];
     uint32_t            mCurDevice;
 
     AudioHardwareALSA  *mParent;
@@ -503,6 +503,7 @@ private:
     void                updateRoutingFlags();
     status_t            pause_l();
     status_t            resume_l();
+    void                reset();
 
     //Structure to hold mem buffer information
     class BuffersAllocated {
@@ -622,7 +623,6 @@ private:
     alsa_handle_t      *mSpdifHandle;
     void               *mMS11Decoder;
     bool                mRouteAudioToA2dp;
-    bool                mCaptureFromProxy;
 protected:
     AudioHardwareALSA  *mParent;
     bool                mPowerLock;
@@ -842,8 +842,8 @@ protected:
     int                 mIsVoiceCallActive;
     int                 mIsFmActive;
     bool                mBluetoothVGS;
-    char                mSpdifOutputFormat[10];
-    char                mHdmiOutputFormat[10];
+    char                mSpdifOutputFormat[128];
+    char                mHdmiOutputFormat[128];
 
     //A2DP variables
     audio_stream_out   *mA2dpStream;

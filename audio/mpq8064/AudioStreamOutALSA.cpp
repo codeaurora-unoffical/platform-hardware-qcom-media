@@ -144,7 +144,10 @@ ssize_t AudioStreamOutALSA::write(const void *buffer, size_t bytes)
                  strlcpy(mHandle->useCase, SND_USE_CASE_MOD_PLAY_MUSIC, sizeof(mHandle->useCase));
              }
         }
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
         mHandle->activeDevice = mDevices;
         if((!strncmp(mHandle->useCase, SND_USE_CASE_VERB_IP_VOICECALL,
                                  strlen(SND_USE_CASE_VERB_IP_VOICECALL))) ||

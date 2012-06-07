@@ -1049,8 +1049,10 @@ audio_io_handle_t AudioPolicyManager::getOutput(AudioSystem::stream_type stream,
         outputDesc->mChannels = channels;
         outputDesc->mLatency = 0;
         outputDesc->mFlags = (AudioSystem::output_flags)(flags | AudioSystem::OUTPUT_FLAG_DIRECT);
-        outputDesc->mRefCount[stream] = 0;
-        outputDesc->mStopTime[stream] = 0;
+        if(stream != -1) {
+            outputDesc->mRefCount[stream] = 0;
+            outputDesc->mStopTime[stream] = 0;
+        }
         output = mpClientInterface->openOutput(&outputDesc->mDevice,
                                         &outputDesc->mSamplingRate,
                                         &outputDesc->mFormat,
