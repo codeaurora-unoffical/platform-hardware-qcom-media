@@ -61,7 +61,7 @@ using android::Mutex;
 #define MBADRC_ENABLE  0x0010
 #define MBADRC_DISABLE 0xFFEF
 #define SRS_ENABLE 0x0020
-#define SRS_DISABLE 0x0040
+#define SRS_DISABLE 0xFFDF
 
 #define AGC_ENABLE     0x0001
 #define NS_ENABLE      0x0002

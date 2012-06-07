@@ -82,7 +82,7 @@ static int msm72xx_enable_preproc(bool state);
 static struct rx_iir_filter iir_cfg[3];
 static struct adrc_filter adrc_cfg[3];
 static struct mbadrc_filter mbadrc_cfg[3];
-eqalizer eqalizer[3];
+eqalizer equalizer[3];
 static uint16_t adrc_flag[3];
 static uint16_t mbadrc_flag[3];
 static uint16_t eq_flag[3];
@@ -94,6 +94,7 @@ static bool audpp_filter_inited = false;
 static bool adrc_filter_exists[3];
 static bool mbadrc_filter_exists[3];
 static int post_proc_feature_mask = 0;
+static int new_post_proc_feature_mask = 0;
 static bool hpcm_playback_in_progress = false;
 static bool lpa_playback_in_progress = false;
 
@@ -744,10 +745,10 @@ int check_and_set_audpp_parameters(char *buf, int size)
             return -1;
         }
         eq_cal = (void *(*) (int32_t, int32_t, int32_t, uint16_t, int32_t, int32_t *, int32_t *, uint16_t *))::dlsym(audioeq, "audioeq_calccoefs");
-        memset(&eqalizer[device_id], 0, sizeof(eqalizer));
+        memset(&equalizer[device_id], 0, sizeof(eqalizer));
         /* Temp add the bands here */
-        eqalizer[device_id].bands = 8;
-        for (i = 0; i < eqalizer[device_id].bands; i++) {
+        equalizer[device_id].bands = 8;
+        for (i = 0; i < equalizer[device_id].bands; i++) {
 
             eq[i].gain = (uint16_t)strtol(p, &ps, 16);
 
@@ -768,12 +769,12 @@ int check_and_set_audpp_parameters(char *buf, int size)
 
             eq_cal(eq[i].gain, eq[i].freq, 48000, eq[i].type, eq[i].qf, (int32_t*)numerator, (int32_t *)denominator, shift);
             for (j = 0; j < 6; j++) {
-                eqalizer[device_id].params[ ( i * 6) + j] = numerator[j];
+                equalizer[device_id].params[ ( i * 6) + j] = numerator[j];
             }
             for (j = 0; j < 4; j++) {
-                eqalizer[device_id].params[(eqalizer[device_id].bands * 6) + (i * 4) + j] = denominator[j];
+                equalizer[device_id].params[(equalizer[device_id].bands * 6) + (i * 4) + j] = denominator[j];
             }
-            eqalizer[device_id].params[(eqalizer[device_id].bands * 10) + i] = shift[0];
+            equalizer[device_id].params[(equalizer[device_id].bands * 10) + i] = shift[0];
         }
         ::dlclose(audioeq);
 
@@ -1078,10 +1079,12 @@ static void msm72xx_enable_srs(int flags, bool state)
         return;
     }
 
-    int srs_feature_mask =0;
     LOGD("Enable SRS flags=0x%x state= %d",flags,state);
     if (state == false) {
-        srs_feature_mask |= SRS_DISABLE;
+        if(post_proc_feature_mask & SRS_ENABLE) {
+            new_post_proc_feature_mask &= SRS_DISABLE;
+            post_proc_feature_mask &= SRS_DISABLE;
+        }
         if(SRSParamsG) {
             unsigned short int backup = ((unsigned short int*)SRSParamsG)[2];
             ((unsigned short int*)SRSParamsG)[2] = 0;
@@ -1089,7 +1092,8 @@ static void msm72xx_enable_srs(int flags, bool state)
             ((unsigned short int*)SRSParamsG)[2] = backup;
         }
     } else {
-        srs_feature_mask |= SRS_ENABLE;
+        new_post_proc_feature_mask |= SRS_ENABLE;
+        post_proc_feature_mask |= SRS_ENABLE;
         if(SRSParamsW && (flags & SRS_PARAMS_W))
             ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsW);
         if(SRSParamsC && (flags & SRS_PARAMS_C))
@@ -1104,7 +1108,7 @@ static void msm72xx_enable_srs(int flags, bool state)
             ioctl(fd, AUDIO_SET_SRS_TRUMEDIA_PARAM, SRSParamsG);
     }
 
-    if (ioctl(fd, AUDIO_ENABLE_AUDPP, &srs_feature_mask) < 0) {
+    if (ioctl(fd, AUDIO_ENABLE_AUDPP, &post_proc_feature_mask) < 0) {
         LOGE("enable audpp error");
     }
 
@@ -1211,7 +1215,7 @@ static int msm72xx_enable_postproc(bool state)
     else if ((post_proc_feature_mask & EQ_ENABLE) && state)
     {
         LOGI("Setting EQ Filter");
-        if (ioctl(fd, AUDIO_SET_EQ, &eqalizer[device_id]) < 0) {
+        if (ioctl(fd, AUDIO_SET_EQ, &equalizer[device_id]) < 0) {
             LOGE("set Equalizer error.");
         }
     }
@@ -1246,15 +1250,13 @@ static int msm72xx_enable_postproc(bool state)
             return -EPERM;
         }
     } else{
-        int disable_mask = 0;
+        if(post_proc_feature_mask & MBADRC_ENABLE) post_proc_feature_mask &= MBADRC_DISABLE;
+        if(post_proc_feature_mask & ADRC_ENABLE) post_proc_feature_mask &= ADRC_DISABLE;
+        if(post_proc_feature_mask & EQ_ENABLE) post_proc_feature_mask &= EQ_DISABLE;
+        if(post_proc_feature_mask & RX_IIR_ENABLE) post_proc_feature_mask &= RX_IIR_DISABLE;
 
-        if(post_proc_feature_mask & MBADRC_ENABLE) disable_mask &= MBADRC_DISABLE;
-        if(post_proc_feature_mask & ADRC_ENABLE) disable_mask &= ADRC_DISABLE;
-        if(post_proc_feature_mask & EQ_ENABLE) disable_mask &= EQ_DISABLE;
-        if(post_proc_feature_mask & RX_IIR_ENABLE) disable_mask &= RX_IIR_DISABLE;
-
-        LOGI("disabling post proc features with mask 0x%04x", disable_mask);
-        if (ioctl(fd, AUDIO_ENABLE_AUDPP, &disable_mask) < 0) {
+        LOGI("disabling post proc features with mask 0x%04x", post_proc_feature_mask);
+        if (ioctl(fd, AUDIO_ENABLE_AUDPP, &post_proc_feature_mask) < 0) {
             LOGE("enable audpp error");
             close(fd);
             return -EPERM;
@@ -1521,7 +1523,6 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input)
     uint32_t outputDevices = mOutput->devices();
     status_t ret = NO_ERROR;
     int new_snd_device = -1;
-    int new_post_proc_feature_mask = 0;
     bool enableDgtlFmDriver = false;
 
 
@@ -2218,6 +2219,7 @@ ssize_t AudioHardware::AudioStreamOutMSM72xx::write(const void* buffer, size_t b
         if (--mStartCount == 0) {
             ioctl(mFd, AUDIO_START, 0);
             hpcm_playback_in_progress = true;
+            post_proc_feature_mask = new_post_proc_feature_mask;
             //enable post processing
             msm72xx_enable_postproc(true);
 #ifdef SRS_PROCESSING
@@ -2594,6 +2596,7 @@ status_t AudioHardware::AudioSessionOutMSM7xxx::set(
     if(LPADriverFd >= 0) {
         mLPADriverFd = LPADriverFd;
         lpa_playback_in_progress = true;
+        post_proc_feature_mask = new_post_proc_feature_mask;
         msm72xx_enable_postproc(true);
 #ifdef SRS_PROCESSING
         msm72xx_enable_srs(SRS_PARAMS_ALL, true);
