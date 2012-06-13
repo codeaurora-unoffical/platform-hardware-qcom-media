@@ -301,6 +301,10 @@ status_t ALSADevice::setSoftwareParams(alsa_handle_t *handle)
      } else {
          params->avail_min = handle->channels - 1 ? periodSize/2 : periodSize/4;
          params->start_threshold = handle->channels - 1 ? periodSize : periodSize/2;
+         //Data required in packets for WMA which could be upto 16K.
+         if (handle->format == AUDIO_FORMAT_WMA ||
+              handle->format == AUDIO_FORMAT_WMA_PRO)
+             params->start_threshold = params->start_threshold * 2;
          params->stop_threshold = INT_MAX;
      }
     if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
