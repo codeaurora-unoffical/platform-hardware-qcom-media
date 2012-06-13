@@ -166,6 +166,9 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
             compr_params.codec.format = mWMA_params[3];
             compr_params.codec.options.wma.bits_per_sample = mWMA_params[4];
             compr_params.codec.options.wma.channelmask = mWMA_params[5];
+            compr_params.codec.options.wma.encodeopt1 = mWMA_params[6];
+            compr_params.codec.options.wma.encodeopt2 = mWMA_params[7];
+			compr_params.codec.sample_rate = handle->sampleRate;
         } else if(format == AUDIO_FORMAT_AAC || format == AUDIO_FORMAT_HE_AAC_V1 ||
            format == AUDIO_FORMAT_HE_AAC_V2 || format == AUDIO_FORMAT_AAC_ADIF) {
             LOGV("AAC CODEC");
@@ -186,7 +189,10 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
             return err;
         }
     }
-
+	if(handle->sampleRate > 48000) {
+		LOGE("Sample rate >48000, opening the driver with 48000Hz");
+		handle->sampleRate     = 48000;
+	}
     params = (snd_pcm_hw_params*) calloc(1, sizeof(struct snd_pcm_hw_params));
     if (!params) {
 		//SMANI:: Commented to fix build issues. FIX IT.

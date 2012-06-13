@@ -248,7 +248,7 @@ private:
     uint32_t    mDevSettingsFlag;
     int         btsco_samplerate;
     int         callMode;
-    int         mWMA_params[6];
+    int         mWMA_params[8];
 
     struct mixer*  mMixer;
     ALSAUseCaseList mUseCaseList;
