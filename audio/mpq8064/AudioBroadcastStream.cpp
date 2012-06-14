@@ -178,7 +178,10 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
             } else {
                 strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC, sizeof(alsa_handle.useCase));
             }
-            free(use_case);
+            if(use_case) {
+                free(use_case);
+                use_case =  NULL;
+            }
             mParent->mDeviceList.push_back(alsa_handle);
             ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
             LOGD("useCase %s", it->useCase);
@@ -242,7 +245,10 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
         } else {
             strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_MUSIC2, sizeof(alsa_handle.useCase));
         }
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
         mParent->mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
         LOGD("useCase %s", it->useCase);
@@ -275,7 +281,10 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
             strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_MUSIC_COMPRESSED, sizeof(alsa_handle.useCase));
         }
 #endif
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case =  NULL;
+        }
         mParent->mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
         LOGD("useCase %s", it->useCase);
@@ -312,7 +321,10 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
 
         mParent->mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
         LOGD("useCase %s", it->useCase);
 
         mParent->mALSADevice->setUseCase(&(*it), bIsUseCaseSet);

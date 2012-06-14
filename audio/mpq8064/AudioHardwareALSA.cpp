@@ -110,12 +110,20 @@ AudioHardwareALSA::AudioHardwareALSA() :
     }
     mALSADevice->setDeviceList(&mDeviceList);
     mRouteAudioToA2dp = false;
+    mA2dpDevice = NULL;
+    mA2dpStream = NULL;
     mA2DPActiveUseCases = A2DPNone;
     mIsA2DPEnabled = false;
+    mKillA2DPThread = false;
+    mA2dpThreadAlive = false;
+    mA2dpThread = NULL;
 }
 
 AudioHardwareALSA::~AudioHardwareALSA()
 {
+
+    stopA2dpPlayback_l(mA2DPActiveUseCases);
+
     if (mUcMgr != NULL) {
         LOGD("closing ucm instance: %u", (unsigned)mUcMgr);
         snd_use_case_mgr_close(mUcMgr);
@@ -416,7 +424,10 @@ status_t AudioHardwareALSA::doRouting(int device)
         } else {
             strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_VOICE, sizeof(alsa_handle.useCase));
         }
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
 
         for (size_t b = 1; (bufferSize & ~b) != 0; b <<= 1)
         bufferSize &= ~b;
@@ -476,7 +487,10 @@ status_t AudioHardwareALSA::doRouting(int device)
         } else {
             strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_FM, sizeof(alsa_handle.useCase));
         }
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
 
         for (size_t b = 1; (bufferSize & ~b) != 0; b <<= 1)
         bufferSize &= ~b;
@@ -696,7 +710,10 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
           } else {
               strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_VOIP, sizeof(alsa_handle.useCase));
           }
-          free(use_case);
+          if(use_case) {
+              free(use_case);
+              use_case = NULL;
+          }
           mDeviceList.push_back(alsa_handle);
           it = mDeviceList.end();
           it--;
@@ -745,7 +762,10 @@ AudioHardwareALSA::openOutputStream(uint32_t devices,
       } else {
           strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_PLAY_MUSIC, sizeof(alsa_handle.useCase));
       }
-      free(use_case);
+      if(use_case) {
+          free(use_case);
+          use_case = NULL;
+      }
       mDeviceList.push_back(alsa_handle);
       ALSAHandleList::iterator it = mDeviceList.end();
       it--;
@@ -870,7 +890,10 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
            } else {
                 strcpy(alsa_handle.useCase, SND_USE_CASE_VERB_IP_VOICECALL);
            }
-           free(use_case);
+           if(use_case) {
+               free(use_case);
+               use_case = NULL;
+           }
            mDeviceList.push_back(alsa_handle);
            it = mDeviceList.end();
            it--;
@@ -966,7 +989,10 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
             }
             bIsUseCaseSet = true;
         }
-        free(use_case);
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
         mDeviceList.push_back(alsa_handle);
         ALSAHandleList::iterator it = mDeviceList.end();
         it--;
