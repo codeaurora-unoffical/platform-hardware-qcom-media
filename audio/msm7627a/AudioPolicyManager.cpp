@@ -102,15 +102,8 @@ void AudioPolicyManager::setPhoneState(int state)
     }
 
 #ifdef WITH_A2DP
+    AudioPolicyManagerBase::checkA2dpSuspend();
     AudioPolicyManagerBase::checkOutputForAllStrategies();
-    // suspend A2DP output if a SCO device is present.
-    if (mA2dpOutput != 0 && mScoDeviceAddress != "") {
-        if (oldState == AudioSystem::MODE_NORMAL) {
-            mpClientInterface->suspendOutput(mA2dpOutput);
-        } else if (state == AudioSystem::MODE_NORMAL) {
-            mpClientInterface->restoreOutput(mA2dpOutput);
-        }
-    }
 #endif
     AudioPolicyManagerBase::updateDeviceForStrategy();
 
@@ -520,12 +513,6 @@ status_t AudioPolicyManager::setDeviceConnectionState(AudioSystem::audio_devices
                     LOGV("setDeviceConnectionState() BT SCO  device, address %s", device_address);
                     // keep track of SCO device address
                     mScoDeviceAddress = String8(device_address, MAX_DEVICE_ADDRESS_LEN);
-#ifdef WITH_A2DP
-                    if (mA2dpOutput != 0 &&
-                        mPhoneState != AudioSystem::MODE_NORMAL) {
-                        mpClientInterface->suspendOutput(mA2dpOutput);
-                    }
-#endif
                 }
             }
             break;
@@ -569,12 +556,6 @@ status_t AudioPolicyManager::setDeviceConnectionState(AudioSystem::audio_devices
             {
                 if (AudioSystem::isBluetoothScoDevice(device)) {
                     mScoDeviceAddress = "";
-#ifdef WITH_A2DP
-                    if (mA2dpOutput != 0 &&
-                        mPhoneState != AudioSystem::MODE_NORMAL) {
-                        mpClientInterface->restoreOutput(mA2dpOutput);
-                    }
-#endif
                 }
             }
             } break;
@@ -601,6 +582,7 @@ status_t AudioPolicyManager::setDeviceConnectionState(AudioSystem::audio_devices
             }
         }
 #ifdef WITH_A2DP
+        AudioPolicyManagerBase::checkA2dpSuspend();
         AudioPolicyManagerBase::checkOutputForAllStrategies();
         // A2DP outputs must be closed after checkOutputForAllStrategies() is executed
         if (state == AudioSystem::DEVICE_STATE_UNAVAILABLE && AudioSystem::isA2dpDevice(device)) {
@@ -722,6 +704,7 @@ void AudioPolicyManager::setForceUse(AudioSystem::force_use usage, AudioSystem::
     // check for device and output changes triggered by new phone state
     uint32_t newDevice = getNewDevice(mHardwareOutput, false);
 #ifdef WITH_A2DP
+    AudioPolicyManagerBase::checkA2dpSuspend();
     checkOutputForAllStrategies();
 #endif
     updateDeviceForStrategy();
