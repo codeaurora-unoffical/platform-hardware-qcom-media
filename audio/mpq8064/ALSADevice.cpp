@@ -172,7 +172,8 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
            format == AUDIO_FORMAT_HE_AAC_V2 || format == AUDIO_FORMAT_AAC_ADIF) {
             LOGV("AAC CODEC");
             compr_params.codec.id = compr_cap.codecs[2];
-        } else if(format == AUDIO_FORMAT_AC3) {
+        } else if(format == AUDIO_FORMAT_AC3 ||
+                 (format == AUDIO_FORMAT_EAC3)) {
             LOGV("AC3 CODEC");
             compr_params.codec.id = compr_cap.codecs[2];
         } else if(format == AUDIO_FORMAT_MP3) {

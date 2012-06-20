@@ -82,7 +82,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
             mSampleRate     = 48000;
             mChannels       = 2;
         }
-    } else if (format == AUDIO_FORMAT_AC3 || format == AUDIO_FORMAT_AC3_PLUS) {
+    } else if (format == AUDIO_FORMAT_AC3 || format == AUDIO_FORMAT_EAC3) {
         if(mChannels > 2)
             mChannels   = 2;
     }
@@ -156,7 +156,7 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
 
     if(format == AUDIO_FORMAT_AAC || format == AUDIO_FORMAT_HE_AAC_V1 ||
        format == AUDIO_FORMAT_HE_AAC_V2 || format == AUDIO_FORMAT_AAC_ADIF ||
-       format == AUDIO_FORMAT_AC3 || format == AUDIO_FORMAT_AC3_PLUS) {
+       format == AUDIO_FORMAT_AC3 || format == AUDIO_FORMAT_EAC3) {
         // Instantiate MS11 decoder for single decode use case
         int32_t format_ms11;
         mMS11Decoder = new SoftMS11;
