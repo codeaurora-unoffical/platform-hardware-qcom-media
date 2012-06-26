@@ -47,7 +47,7 @@ include $(CLEAR_VARS)
 mm-venc-test720p-inc            := $(TARGET_OUT_HEADERS)/mm-core/omxcore
 mm-venc-test720p-inc            += $(LOCAL_PATH)/inc
 
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := debug
 LOCAL_MODULE                    := mm-venc-omx-test720p
 LOCAL_CFLAGS                    := $(libmm-venc-def)
 LOCAL_C_INCLUDES                := $(mm-venc-test720p-inc)
@@ -68,7 +68,7 @@ include $(CLEAR_VARS)
 
 venc-test-inc                   += $(LOCAL_PATH)/inc
 
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := debug
 LOCAL_MODULE                    := mm-video-encdrv-test
 LOCAL_C_INCLUDES                := $(venc-test-inc)
 

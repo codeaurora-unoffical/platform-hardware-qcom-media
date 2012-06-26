@@ -52,7 +52,7 @@ include $(CLEAR_VARS)
 mm-vdec-test-inc		:= $(TARGET_OUT_HEADERS)/mm-core/omxcore
 mm-vdec-test-inc		+= $(LOCAL_PATH)/inc
 
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := debug
 LOCAL_MODULE			:= mm-vdec-omx-test
 LOCAL_CFLAGS	  		:= $(libOmxVdec-def)
 LOCAL_C_INCLUDES  		:= $(mm-vdec-test-inc)
@@ -71,7 +71,7 @@ include $(CLEAR_VARS)
 mm-vdec-drv-test-inc		:= $(TARGET_OUT_HEADERS)/mm-core/omxcore
 mm-vdec-drv-test-inc		+= $(LOCAL_PATH)/inc
 
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := debug
 LOCAL_MODULE			:= mm-video-driver-test
 LOCAL_CFLAGS	  		:= $(libOmxVdec-def)
 LOCAL_C_INCLUDES  		:= $(mm-vdec-drv-test-inc)
