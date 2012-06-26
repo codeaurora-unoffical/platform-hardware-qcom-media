@@ -346,7 +346,7 @@ void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
 
     snd_use_case_get(handle->ucMgr, "_verb", (const char **)&use_case);
 
-    if (rxDeviceNew != NULL) {
+    if ((rxDeviceNew != NULL) && (rxDeviceOld != NULL)) {
         if ( ((strcmp(rxDeviceNew, rxDeviceOld)) || (inCallDevSwitch == true))) {
             if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
                     strlen(SND_USE_CASE_VERB_INACTIVE)))) {
@@ -363,7 +363,7 @@ void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
             }
         }
     }
-    if (txDeviceNew != NULL) {
+    if ((txDeviceNew != NULL) && (txDeviceOld != NULL)) {
         if ( ((strcmp(txDeviceNew, txDeviceOld)) || (inCallDevSwitch == true))) {
             if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
                     strlen(SND_USE_CASE_VERB_INACTIVE)))) {
@@ -383,7 +383,7 @@ void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
 
     disableDevice(handle);
 
-    if(rxDeviceNew != NULL) {
+    if (rxDeviceNew != NULL) {
         if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
             strlen(SND_USE_CASE_VERB_INACTIVE))) && (!strncmp(use_case, useCase, MAX_UC_LEN))) {
             snd_use_case_set_case(handle->ucMgr, "_verb", useCase,rxDeviceNew);
@@ -393,7 +393,7 @@ void ALSADevice::switchDeviceUseCase(alsa_handle_t *handle,
         handle->activeDevice = devices;
         handle->devices = devices;
     }
-    if(txDeviceNew != NULL) {
+    if (txDeviceNew != NULL) {
         if ((use_case != NULL) && (strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
             strlen(SND_USE_CASE_VERB_INACTIVE))) && (!strncmp(use_case, useCase, MAX_UC_LEN))) {
             snd_use_case_set_case(handle->ucMgr, "_verb", useCase,txDeviceNew);
