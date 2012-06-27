@@ -465,8 +465,10 @@ private:
     bool                mRouteCompreAudio;
     bool                mRoutePcmToSpdif;
     bool                mRouteCompreToSpdif;
+    bool                mRouteDtsToSpdif;
     bool                mRoutePcmToHdmi;
     bool                mRouteCompreToHdmi;
+    bool                mRouteDtsToHdmi;
     bool                mRouteAudioToA2dp;
     bool                mUseTunnelDecode;
     bool                mCaptureFromProxy;

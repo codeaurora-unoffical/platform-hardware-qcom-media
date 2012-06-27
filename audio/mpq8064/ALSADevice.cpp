@@ -116,6 +116,16 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
     unsigned int requestedRate = handle->sampleRate;
     int format = handle->format;
 
+    bool dtsTranscode = false;
+    char spdifFormat[20];
+    char hdmiFormat[20];
+
+    property_get("mpq.audio.spdif.format",spdifFormat,"0");
+    property_get("mpq.audio.hdmi.format",hdmiFormat,"0");
+    if (!strncmp(spdifFormat,"dts",sizeof(spdifFormat)) ||
+        !strncmp(hdmiFormat,"dts",sizeof(hdmiFormat)))
+        dtsTranscode = true;
+
     reqBuffSize = handle->bufferSize;
     if ((!strncmp(handle->useCase, SND_USE_CASE_VERB_HIFI_TUNNEL,
                           strlen(SND_USE_CASE_VERB_HIFI_TUNNEL)) ||
@@ -170,9 +180,15 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
         } else if(format == AUDIO_FORMAT_MP3) {
              LOGV("MP3 CODEC");
              compr_params.codec.id = compr_cap.codecs[0];
+        } else if(format == AUDIO_FORMAT_DTS) {
+             LOGV("DTS CODEC");
+             compr_params.codec.id = compr_cap.codecs[5];
         } else {
              LOGE("format not supported to open tunnel device");
              return BAD_VALUE;
+        }
+        if (dtsTranscode) {
+//            Handle transcode path here
         }
         if (ioctl(handle->handle->fd, SNDRV_COMPRESS_SET_PARAMS, &compr_params)) {
             LOGE("SNDRV_COMPRESS_SET_PARAMS,failed Error no %d \n", errno);
@@ -902,6 +918,15 @@ void ALSADevice::setDeviceList(ALSAHandleList *mParentDeviceList)
 status_t ALSADevice::start(alsa_handle_t *handle)
 {
     status_t err = NO_ERROR;
+    bool dtsTranscode = false;
+    char spdifFormat[128];
+    char hdmiFormat[128];
+
+    property_get("mpq.audio.spdif.format",spdifFormat,"0");
+    property_get("mpq.audio.hdmi.format",hdmiFormat,"0");
+    if (!strncmp(spdifFormat,"dts",sizeof(spdifFormat)) ||
+        !strncmp(hdmiFormat,"dts",sizeof(hdmiFormat)))
+        dtsTranscode = true;
 
     if(!handle->handle) {
         LOGE("No active PCM driver to start");

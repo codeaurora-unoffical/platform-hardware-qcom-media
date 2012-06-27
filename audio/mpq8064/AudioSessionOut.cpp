@@ -99,8 +99,10 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
     mRoutePcmAudio      = false;
     mRoutePcmToSpdif    = false;
     mRouteCompreToSpdif = false;
+    mRouteDtsToSpdif    = false;
     mRoutePcmToHdmi     = false;
     mRouteCompreToHdmi  = false;
+    mRouteDtsToHdmi     = false;
     mRouteAudioToA2dp   = false;
     mOpenMS11Decoder    = false;
     mChannelStatusSet   = false;
@@ -480,7 +482,7 @@ status_t AudioSessionOutALSA::openTunnelDevice(int devices)
         } else {
             //ToDo: handle DTS;
         }
-    } else if(mRouteCompreToSpdif) {
+    } else if(mRouteCompreToSpdif || mRouteDtsToSpdif) {
         status = mALSADevice->setPlaybackFormat("Compr", AudioSystem::DEVICE_OUT_SPDIF);
         if(status != NO_ERROR)
             return status;
@@ -491,10 +493,8 @@ status_t AudioSessionOutALSA::openTunnelDevice(int devices)
                                                   AudioSystem::DEVICE_OUT_AUX_DIGITAL);
             if (status != NO_ERROR)
                return status;
-        } else {
-            //ToDo: handle DTS;
         }
-    } else if (mRouteCompreToHdmi) {
+    } else if (mRouteCompreToHdmi || mRouteDtsToHdmi) {
         status = mALSADevice->setPlaybackFormat("Compr", AudioSystem::DEVICE_OUT_AUX_DIGITAL);
         if (status != NO_ERROR)
            return status;
@@ -805,6 +805,27 @@ int32_t AudioSessionOutALSA::writeToCompressedDriver(char *buffer, int bytes)
 
         LOGV("PCM write start");
         pcm * local_handle = (struct pcm *)mCompreRxHandle->handle;
+        // Set the channel status after first frame decode/transcode and for change
+        // in sample rate or channel mode as we close and open the device again
+        if(mChannelStatusSet == false) {
+            if(mRoutePcmToSpdif) {
+                if (mALSADevice->get_linearpcm_channel_status(mSampleRate,
+                                        mChannelStatus)) {
+                    LOGE("channel status set error ");
+                    return -1;
+                }
+                mALSADevice->setChannelStatus(mChannelStatus);
+            } else if(mRouteDtsToSpdif) {
+                if (mALSADevice->get_compressed_channel_status(
+                        buffer, bytes, mChannelStatus,
+                        AUDIO_PARSER_CODEC_DTS)) {
+                    LOGE("channel status set error ");
+                    return -1;
+                }
+                mALSADevice->setChannelStatus(mChannelStatus);
+            }
+            mChannelStatusSet = true;
+        }
         n = pcm_write(local_handle, buf.memBuf, local_handle->period_size);
         if (bytes < local_handle->period_size) {
         LOGD("Last buffer case");
@@ -1429,31 +1450,53 @@ void AudioSessionOutALSA::updateRoutingFlags()
     if(mDevices & AudioSystem::DEVICE_OUT_PROXY)
         mCaptureFromProxy = true;
 
-    if(!strncmp(mSpdifOutputFormat,"lpcm",sizeof(mSpdifOutputFormat)) ||
-          !strncmp(mSpdifOutputFormat,"dts",sizeof(mSpdifOutputFormat)) ) {
+    if(!strncmp(mSpdifOutputFormat,"lpcm",sizeof(mSpdifOutputFormat))) {
         if(mDevices & AudioSystem::DEVICE_OUT_SPDIF)
             mRoutePcmToSpdif = true;
     }
-    if(!strncmp(mHdmiOutputFormat,"lpcm",sizeof(mHdmiOutputFormat)) ||
-          !strncmp(mHdmiOutputFormat,"dts",sizeof(mHdmiOutputFormat)) ) {
+    if(!strncmp(mHdmiOutputFormat,"lpcm",sizeof(mHdmiOutputFormat))) {
         if(mDevices & AudioSystem::DEVICE_OUT_AUX_DIGITAL)
             mRoutePcmToHdmi = true;
     }
-    if(!strncmp(mSpdifOutputFormat,"ac3",sizeof(mSpdifOutputFormat)) &&
-                                !mUseTunnelDecode) {
+    if(!strncmp(mSpdifOutputFormat,"ac3",sizeof(mSpdifOutputFormat))) {
         if(mDevices & AudioSystem::DEVICE_OUT_SPDIF)
-            if(mSampleRate > 24000 && mFormat != AUDIO_FORMAT_PCM_16_BIT)
+            if(mSampleRate > 24000 && mOpenMS11Decoder)
                 mRouteCompreToSpdif = true;
-            else
+            else {
+                strlcpy(mSpdifOutputFormat,"lpcm",
+                    sizeof(mSpdifOutputFormat));
                 mRoutePcmToSpdif = true;
+            }
     }
-    if(!strncmp(mHdmiOutputFormat,"ac3",sizeof(mHdmiOutputFormat)) &&
-                                !mUseTunnelDecode) {
+    if(!strncmp(mHdmiOutputFormat,"ac3",sizeof(mHdmiOutputFormat))) {
         if(mDevices & AudioSystem::DEVICE_OUT_AUX_DIGITAL)
-            if(mSampleRate > 24000 && mFormat != AUDIO_FORMAT_PCM_16_BIT)
+            if(mSampleRate > 24000 && mOpenMS11Decoder)
                 mRouteCompreToHdmi = true;
-            else
+            else {
+                strlcpy(mHdmiOutputFormat,"lpcm",
+                        sizeof(mHdmiOutputFormat));
                 mRoutePcmToHdmi = true;
+            }
+    }
+    if(!strncmp(mSpdifOutputFormat,"dts",sizeof(mSpdifOutputFormat))) {
+        if(mDevices & AudioSystem::DEVICE_OUT_SPDIF)
+            if(mFormat != AUDIO_FORMAT_PCM_16_BIT && mUseTunnelDecode == true)
+                mRouteDtsToSpdif = true;
+            else {
+                strlcpy(mSpdifOutputFormat,"lpcm",
+                        sizeof(mSpdifOutputFormat));
+                mRoutePcmToSpdif = true;
+            }
+    }
+    if(!strncmp(mHdmiOutputFormat,"dts",sizeof(mHdmiOutputFormat))) {
+        if(mDevices & AudioSystem::DEVICE_OUT_AUX_DIGITAL)
+            if(mFormat != AUDIO_FORMAT_PCM_16_BIT && mUseTunnelDecode == true)
+                mRouteDtsToHdmi = true;
+            else {
+                strlcpy(mHdmiOutputFormat,"lpcm",
+                                      sizeof(mHdmiOutputFormat));
+                mRoutePcmToHdmi = true;
+            }
     }
 
     if( mRoutePcmToSpdif || mRoutePcmToHdmi ||
