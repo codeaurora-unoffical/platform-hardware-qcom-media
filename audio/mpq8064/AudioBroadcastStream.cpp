@@ -89,26 +89,36 @@ AudioBroadcastStreamALSA::AudioBroadcastStreamALSA(AudioHardwareALSA *parent,
 
     if(!(devices & AudioSystem::DEVICE_OUT_ALL) ||
        (mSampleRate == 0) || ((mChannels < 1) && (mChannels > 6)) ||
-       !(format & (QCOM_BROADCAST_AUDIO_FORMAT_LPCM |
-                   QCOM_BROADCAST_AUDIO_FORMAT_COMPRESSED |
-                   QCOM_BROADCAST_AUDIO_FORMAT_COMPRESSED_HBR)) ||
-       !(audioSource & (QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_AD |
-                        QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_ONLY |
-                        QCOM_AUDIO_SOURCE_ANALOG_BROADCAST |
-                        QCOM_AUDIO_SOURCE_HDMI_IN ))) {
+       ((audioSource != QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_AD) &&
+        (audioSource != QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_ONLY) &&
+        (audioSource != QCOM_AUDIO_SOURCE_ANALOG_BROADCAST) &&
+        (audioSource != QCOM_AUDIO_SOURCE_HDMI_IN ))) {
         LOGE("invalid config");
         *status = BAD_VALUE;
         return;
     }
-
-    if(mDevices & AudioSystem::DEVICE_OUT_ALL_A2DP) {
-        LOGD("Set Capture from proxy true");
-        mRouteAudioToA2dp = true;
-        devices &= ~AudioSystem::DEVICE_OUT_ALL_A2DP;
-        devices |=  AudioSystem::DEVICE_OUT_PROXY;
-        mDevices = devices;
+    if(audioSource == QCOM_AUDIO_SOURCE_HDMI_IN) {
+        if((format != QCOM_BROADCAST_AUDIO_FORMAT_LPCM) &&
+           (format != QCOM_BROADCAST_AUDIO_FORMAT_COMPRESSED) &&
+           (format != QCOM_BROADCAST_AUDIO_FORMAT_COMPRESSED_HBR)) {
+            LOGE("invalid config");
+            *status = BAD_VALUE;
+            return;
+        }
+    } else if(audioSource == QCOM_AUDIO_SOURCE_ANALOG_BROADCAST) {
+        if((format != QCOM_BROADCAST_AUDIO_FORMAT_LPCM) &&
+           (mChannels != 2)) {
+            LOGE("invalid config");
+            *status = BAD_VALUE;
+            return;
+        }
+    } else {
+        if(!(format & AudioSystem::MAIN_FORMAT_MASK)) {
+            LOGE("invalid config");
+            *status = BAD_VALUE;
+            return;
+        }
     }
-
     /* ------------------------------------------------------------------------
     Description: set the output device format
     -------------------------------------------------------------------------*/
@@ -151,11 +161,7 @@ AudioBroadcastStreamALSA::~AudioBroadcastStreamALSA()
     mSkipWrite = true;
     mWriteCv.signal();
 
-    if(mPcmRxHandle)
-        closeDevice(mPcmRxHandle);
-
-    if(mCompreRxHandle)
-        closeDevice(mCompreRxHandle);
+    exitFromCaptureThread();
 
     if(mPcmTxHandle)
         closeDevice(mPcmTxHandle);
@@ -163,18 +169,19 @@ AudioBroadcastStreamALSA::~AudioBroadcastStreamALSA()
     if(mCompreTxHandle)
         closeDevice(mCompreTxHandle);
 
+    exitFromPlaybackThread();
+
+    if(mPcmRxHandle)
+        closeDevice(mPcmRxHandle);
+
+    if(mCompreRxHandle)
+        closeDevice(mCompreRxHandle);
+
     if(mMS11Decoder)
         delete mMS11Decoder;
 
     if(mBitstreamSM)
         delete mBitstreamSM;
-
-    exitFromPlaybackThread();
-
-    exitFromCaptureThread();
-
-    resetCapturePathVariables();
-    resetPlaybackPathVariables();
 
     initialization();
 
@@ -584,9 +591,7 @@ void AudioBroadcastStreamALSA::setCaptureFlagsBasedOnConfig()
     // 1. Validate the audio source type
     if(mAudioSource == QCOM_AUDIO_SOURCE_ANALOG_BROADCAST) {
         mCapturePCMFromDSP = true;
-    } else if(mAudioSource == QCOM_AUDIO_SOURCE_HDMI_IN ||
-              mAudioSource == QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_ONLY ||
-              mAudioSource == QCOM_AUDIO_SOURCE_DIGITAL_BROADCAST_MAIN_AD) {
+    } else if(mAudioSource == QCOM_AUDIO_SOURCE_HDMI_IN) {
 //NOTE:
 // The format will be changed from decoder format to the format specified by
 // ADV driver through TVPlayer
@@ -980,15 +985,15 @@ status_t AudioBroadcastStreamALSA::openTunnelDevice(int devices)
     mCompreRxHandle = &(*it);
 
     //mmap the buffers for playback
-    status_t err = mmap_buffer(mCompreRxHandle->handle);
-    if(err) {
-        LOGE("MMAP buffer failed - playback err = %d", err);
-        return err;
+    status = mmap_buffer(mCompreRxHandle->handle);
+    if(status) {
+        LOGE("MMAP buffer failed - playback err = %d", status);
+        return status;
     }
     //prepare the driver for playback
     status = pcm_prepare(mCompreRxHandle->handle);
     if (status) {
-        LOGE("PCM Prepare failed - playback err = %d", err);
+        LOGE("PCM Prepare failed - playback err = %d", status);
         return status;
     }
     bufferAlloc(mCompreRxHandle);
@@ -1252,9 +1257,11 @@ void AudioBroadcastStreamALSA::captureThreadEntry()
             size = readFromCapturePath(tempBuffer);
             if(size <= 0) {
                 LOGE("capturePath returned size = %d", size);
-                status = pcm_prepare(mCaptureHandle->handle);
-                if(status != NO_ERROR)
-                    LOGE("DEVICE_OUT_DIRECTOUTPUT: pcm_prepare failed");
+                if(mCaptureHandle) {
+                    status = pcm_prepare(mCaptureHandle->handle);
+                    if(status != NO_ERROR)
+                        LOGE("DEVICE_OUT_DIRECTOUTPUT: pcm_prepare failed");
+                }
                 continue;
             } else if (mSignalToSetupRoutingPath ==  true) {
                 LOGD("Setup the Routing path based on the format from DSP");
@@ -1475,6 +1482,8 @@ void AudioBroadcastStreamALSA::exitFromCaptureThread()
     mCaptureCv.signal();
     pthread_join(mCaptureThread,NULL);
     LOGD("Capture thread killed");
+
+    resetCapturePathVariables();
     return;
 }
 
@@ -1493,6 +1502,8 @@ void AudioBroadcastStreamALSA::exitFromPlaybackThread()
     mPlaybackCv.signal();
     pthread_join(mPlaybackThread,NULL);
     LOGD("Playback thread killed");
+
+    resetPlaybackPathVariables();
     return;
 }
 
@@ -1531,6 +1542,7 @@ status_t AudioBroadcastStreamALSA::closeDevice(alsa_handle_t *pHandle)
     if(pHandle) {
         status = mALSADevice->close(pHandle);
     }
+    pHandle = NULL;
     return status;
 }
 
