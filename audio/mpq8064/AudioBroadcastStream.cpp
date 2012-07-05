@@ -833,17 +833,13 @@ status_t AudioBroadcastStreamALSA::openPCMCapturePath()
     LOGD("useCase %s", it->useCase);
     mPcmTxHandle = &(*it);
 
+    status = mALSADevice->setCaptureFormat("LPCM");
+    if(status != NO_ERROR) {
+        LOGE("set Capture format failed");
+        return BAD_VALUE;
+    }
     mALSADevice->setUseCase(mPcmTxHandle, bIsUseCaseSet,"MI2S");
     status = mALSADevice->openCapture(mPcmTxHandle, true, false);
-
-    if(status == NO_ERROR) {
-        status = mALSADevice->setCaptureFormat("LPCM");
-        if(status != NO_ERROR) {
-            LOGE("set Capture format failed");
-        }
-    } else {
-        LOGE("Open capture PCM stereo driver failed");
-    }
 
     return status;
 }
@@ -885,23 +881,22 @@ status_t AudioBroadcastStreamALSA::openCompressedCapturePath()
         strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC_COMPRESSED,
                     sizeof(alsa_handle.useCase));
     }
-    if(use_case)
+    if(use_case) {
         free(use_case);
+        use_case = NULL;
+    }
     mParent->mDeviceList.push_back(alsa_handle);
     ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
     LOGD("useCase %s", it->useCase);
     mCompreTxHandle = &(*it);
 
+    status = mALSADevice->setCaptureFormat("Compr");
+    if(status != NO_ERROR) {
+        LOGE("set Capture format failed");
+        return BAD_VALUE;
+    }
     mALSADevice->setUseCase(mCompreTxHandle, bIsUseCaseSet, "MI2S");
     status =  mALSADevice->openCapture(mCompreTxHandle, true, true);
-    if(status == NO_ERROR) {
-        status = mALSADevice->setCaptureFormat("Compr");
-        if(status != NO_ERROR) {
-            LOGE("set Capture format failed");
-        }
-    } else {
-        LOGE("Open compressed driver failed");
-    }
     return status;
 }
 
@@ -916,24 +911,6 @@ status_t AudioBroadcastStreamALSA::openPcmDevice(int devices)
     if(!mRoutePcmToHdmi) {
         devices = devices & ~AudioSystem::DEVICE_OUT_AUX_DIGITAL;
     }
-    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-    if ((use_case == NULL) ||
-        (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
-        status = openRoutingDevice(SND_USE_CASE_VERB_HIFI3, true,
-                     devices);
-    } else {
-        status = openRoutingDevice(SND_USE_CASE_MOD_PLAY_MUSIC3, false,
-                     devices);
-    }
-    if(use_case)
-        free(use_case);
-    if(status != NO_ERROR) {
-        return status;
-    }
-    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
-    mPcmRxHandle = &(*it);
-    mBufferSize = mPcmRxHandle->periodSize;
     if(mRoutePcmToSpdif) {
         if(!strncmp(mSpdifOutputFormat, "lpcm",
               sizeof(mSpdifOutputFormat))) {
@@ -956,6 +933,24 @@ status_t AudioBroadcastStreamALSA::openPcmDevice(int devices)
             //ToDo: handle DTS
         }
     }
+    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+    if ((use_case == NULL) ||
+        (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+        status = openRoutingDevice(SND_USE_CASE_VERB_HIFI3, true,
+                     devices);
+    } else {
+        status = openRoutingDevice(SND_USE_CASE_MOD_PLAY_MUSIC3, false,
+                     devices);
+    }
+    if(use_case)
+        free(use_case);
+    if(status != NO_ERROR) {
+        return status;
+    }
+    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+    mPcmRxHandle = &(*it);
+    mBufferSize = mPcmRxHandle->periodSize;
     return status;
 }
 
@@ -967,37 +962,6 @@ status_t AudioBroadcastStreamALSA::openTunnelDevice(int devices)
 
     mInputBufferSize    = TUNNEL_DECODER_BUFFER_SIZE;
     mInputBufferCount   = TUNNEL_DECODER_BUFFER_COUNT;
-    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
-        status = openRoutingDevice(SND_USE_CASE_VERB_HIFI_TUNNEL2, true,
-                     devices);
-    } else {
-        status = openRoutingDevice(SND_USE_CASE_MOD_PLAY_TUNNEL2, false,
-                     devices);
-    }
-    if(use_case)
-        free(use_case);
-    if(status != NO_ERROR) {
-        return status;
-    }
-    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
-    mCompreRxHandle = &(*it);
-
-    //mmap the buffers for playback
-    status = mmap_buffer(mCompreRxHandle->handle);
-    if(status) {
-        LOGE("MMAP buffer failed - playback err = %d", status);
-        return status;
-    }
-    //prepare the driver for playback
-    status = pcm_prepare(mCompreRxHandle->handle);
-    if (status) {
-        LOGE("PCM Prepare failed - playback err = %d", status);
-        return status;
-    }
-    bufferAlloc(mCompreRxHandle);
-    mBufferSize = mCompreRxHandle->periodSize;
     if(mRoutePcmToSpdif) {
         if(!strncmp(mSpdifOutputFormat,"lpcm",sizeof(mSpdifOutputFormat))) {
             status = mALSADevice->setPlaybackFormat("LPCM",
@@ -1035,6 +999,37 @@ status_t AudioBroadcastStreamALSA::openTunnelDevice(int devices)
         if (status != NO_ERROR)
            return status;
     }
+    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+            strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+        status = openRoutingDevice(SND_USE_CASE_VERB_HIFI_TUNNEL2, true,
+                     devices);
+    } else {
+        status = openRoutingDevice(SND_USE_CASE_MOD_PLAY_TUNNEL2, false,
+                     devices);
+    }
+    if(use_case)
+        free(use_case);
+    if(status != NO_ERROR) {
+        return status;
+    }
+    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+    mCompreRxHandle = &(*it);
+
+    //mmap the buffers for playback
+    status = mmap_buffer(mCompreRxHandle->handle);
+    if(status) {
+        LOGE("MMAP buffer failed - playback err = %d", status);
+        return status;
+    }
+    //prepare the driver for playback
+    status = pcm_prepare(mCompreRxHandle->handle);
+    if (status) {
+        LOGE("PCM Prepare failed - playback err = %d", status);
+        return status;
+    }
+    bufferAlloc(mCompreRxHandle);
+    mBufferSize = mCompreRxHandle->periodSize;
 
     return NO_ERROR;
 }

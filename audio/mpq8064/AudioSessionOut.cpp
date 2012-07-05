@@ -242,24 +242,6 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
         if(!mRoutePcmToHdmi) {
             devices = devices & ~AudioSystem::DEVICE_OUT_AUX_DIGITAL;
         }
-        snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-                                           strlen(SND_USE_CASE_VERB_INACTIVE)))) {
-            *status = openDevice(SND_USE_CASE_VERB_HIFI2, true, devices);
-        } else {
-            *status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
-        }
-        if(use_case) {
-            free(use_case);
-            use_case = NULL;
-        }
-        if(*status != NO_ERROR) {
-            LOGE("openDevice error return = %d", *status);
-            return;
-        }
-        ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
-        mPcmRxHandle = &(*it);
-        mBufferSize = mPcmRxHandle->periodSize;
         if(mRoutePcmToSpdif) {
             if(!strncmp(mSpdifOutputFormat,"lpcm",sizeof(mSpdifOutputFormat))) {
                 *status = mALSADevice->setPlaybackFormat("LPCM",
@@ -280,6 +262,24 @@ AudioSessionOutALSA::AudioSessionOutALSA(AudioHardwareALSA *parent,
                 //ToDo: handle DTS
             }
         }
+        snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+        if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                           strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+            *status = openDevice(SND_USE_CASE_VERB_HIFI2, true, devices);
+        } else {
+            *status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
+        }
+        if(use_case) {
+            free(use_case);
+            use_case = NULL;
+        }
+        if(*status != NO_ERROR) {
+            LOGE("openDevice error return = %d", *status);
+            return;
+        }
+        ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+        mPcmRxHandle = &(*it);
+        mBufferSize = mPcmRxHandle->periodSize;
     }
     if (mUseTunnelDecode) {
         createThreadsForTunnelDecode();
@@ -436,37 +436,6 @@ status_t AudioSessionOutALSA::openTunnelDevice(int devices)
     }
     mInputBufferSize    = TUNNEL_DECODER_BUFFER_SIZE;
     mInputBufferCount   = TUNNEL_DECODER_BUFFER_COUNT;
-    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-                                 strlen(SND_USE_CASE_VERB_INACTIVE)))) {
-        status = openDevice(SND_USE_CASE_VERB_HIFI_TUNNEL, true, devices);
-    } else {
-        status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
-    }
-    if(use_case) {
-        free(use_case);
-        use_case = NULL;
-    }
-    if(status != NO_ERROR) {
-        return status;
-    }
-    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
-    mCompreRxHandle = &(*it);
-
-    //mmap the buffers for playback
-    status_t err = mmap_buffer(mCompreRxHandle->handle);
-    if(err) {
-        LOGE("MMAP buffer failed - playback err = %d", err);
-        return err;
-    }
-    //prepare the driver for playback
-    status = pcm_prepare(mCompreRxHandle->handle);
-    if (status) {
-        LOGE("PCM Prepare failed - playback err = %d", err);
-        return status;
-    }
-    bufferAlloc(mCompreRxHandle);
-    mBufferSize = mCompreRxHandle->periodSize;
     if(mRoutePcmToSpdif) {
         if(!strncmp(mSpdifOutputFormat,"lpcm",sizeof(mSpdifOutputFormat))) {
             status = mALSADevice->setPlaybackFormat("LPCM",
@@ -499,6 +468,37 @@ status_t AudioSessionOutALSA::openTunnelDevice(int devices)
         if (status != NO_ERROR)
            return status;
     }
+    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                 strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+        status = openDevice(SND_USE_CASE_VERB_HIFI_TUNNEL, true, devices);
+    } else {
+        status = openDevice(SND_USE_CASE_MOD_PLAY_TUNNEL, false, devices);
+    }
+    if(use_case) {
+        free(use_case);
+        use_case = NULL;
+    }
+    if(status != NO_ERROR) {
+        return status;
+    }
+    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+    mCompreRxHandle = &(*it);
+
+    //mmap the buffers for playback
+    status_t err = mmap_buffer(mCompreRxHandle->handle);
+    if(err) {
+        LOGE("MMAP buffer failed - playback err = %d", err);
+        return err;
+    }
+    //prepare the driver for playback
+    status = pcm_prepare(mCompreRxHandle->handle);
+    if (status) {
+        LOGE("PCM Prepare failed - playback err = %d", err);
+        return status;
+    }
+    bufferAlloc(mCompreRxHandle);
+    mBufferSize = mCompreRxHandle->periodSize;
     return status;
 }
 
@@ -598,24 +598,6 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                     if(!mRoutePcmToHdmi) {
                         devices = devices & ~AudioSystem::DEVICE_OUT_AUX_DIGITAL;
                     }
-                    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-                    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
-                                                 strlen(SND_USE_CASE_VERB_INACTIVE)))) {
-                        status = openDevice(SND_USE_CASE_VERB_HIFI2, true, devices);
-                    } else {
-                        status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
-                    }
-                    if(use_case) {
-                        free(use_case);
-                        use_case = NULL;
-                    }
-                    if(status != NO_ERROR) {
-                        LOGE("Error opening the driver");
-                        break;
-                    }
-                    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
-                    mPcmRxHandle = &(*it);
-                    mBufferSize = mPcmRxHandle->periodSize;
                     if(mRoutePcmToSpdif) {
                         if(!strncmp(mSpdifOutputFormat, "lpcm",
                                sizeof(mSpdifOutputFormat))) {
@@ -638,6 +620,24 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                             //ToDo: handle DTS
                         }
                     }
+                    snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
+                    if ((use_case == NULL) || (!strncmp(use_case, SND_USE_CASE_VERB_INACTIVE,
+                                                 strlen(SND_USE_CASE_VERB_INACTIVE)))) {
+                        status = openDevice(SND_USE_CASE_VERB_HIFI2, true, devices);
+                    } else {
+                        status = openDevice(SND_USE_CASE_MOD_PLAY_MUSIC2, false, devices);
+                    }
+                    if(use_case) {
+                        free(use_case);
+                        use_case = NULL;
+                    }
+                    if(status != NO_ERROR) {
+                        LOGE("Error opening the driver");
+                        break;
+                    }
+                    ALSAHandleList::iterator it = mParent->mDeviceList.end(); it--;
+                    mPcmRxHandle = &(*it);
+                    mBufferSize = mPcmRxHandle->periodSize;
                 }
                 mChannelStatusSet = false;
             }
