@@ -3183,7 +3183,7 @@ status_t AudioHardware::AudioStreamInMSM72xx::standby()
     }
     if (!mHardware) return -1;
     // restore output routing if necessary
-    if (!mHardware->IsFmon()) {
+    if (!mHardware->isFMAnalog() && !mHardware->IsFmon()) {
         mHardware->clearCurDevice();
         mHardware->doRouting(this);
     }
