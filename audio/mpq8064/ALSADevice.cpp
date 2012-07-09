@@ -143,8 +143,6 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
 
         minPeroid = compr_cap.min_fragment_size;
         maxPeroid = compr_cap.max_fragment_size;
-        if (handle->channels > 2)
-            handle->channels = 2;
         LOGV("Min peroid size = %d , Maximum Peroid size = %d",\
             minPeroid, maxPeroid);
         //TODO: what if codec not supported or the array has wrong codec!!!!
@@ -195,6 +193,8 @@ status_t ALSADevice::setHardwareParams(alsa_handle_t *handle)
             err = -errno;
             return err;
         }
+        if (handle->channels > 2)
+            handle->channels = 2;
     }
 	if(handle->sampleRate > 48000) {
 		LOGE("Sample rate >48000, opening the driver with 48000Hz");
