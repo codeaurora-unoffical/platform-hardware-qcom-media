@@ -19,7 +19,6 @@
 #include <OMX_IVCommon.h>
 #include <string.h>
 #include <dlfcn.h>
-#include <OMX_QCOMExtns.h>
 #include <ColorConverter.h>
 #include <utils/Log.h>
 #include <MediaDebug.h>
@@ -39,7 +38,7 @@ public:
     static int mRefCount;
 
     static int getDecoderOutputFormat() {
-        return QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka;
+        return OMX_QCOM_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka;
     }
 
     static int convertDecoderOutputToI420(
