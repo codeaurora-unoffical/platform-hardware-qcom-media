@@ -1053,7 +1053,7 @@ status_t AudioSessionOutALSA::pause_l()
 status_t AudioSessionOutALSA::drainTunnel()
 {
     status_t err = OK;
-    if (!(mCompreRxHandle && mUseTunnelDecode))
+    if (!mCompreRxHandle)
         return -1;
     mCompreRxHandle->handle->start = 0;
     err = pcm_prepare(mCompreRxHandle->handle);
@@ -1081,7 +1081,7 @@ status_t AudioSessionOutALSA::flush()
     Mutex::Autolock autoLock(mLock);
     LOGD("AudioSessionOutALSA::flush E");
     int err = 0;
-    if (mUseTunnelDecode && mCompreRxHandle) {
+    if (mCompreRxHandle) {
         struct pcm * local_handle = mCompreRxHandle->handle;
         LOGV("Paused case, %d",mTunnelPaused);
 
