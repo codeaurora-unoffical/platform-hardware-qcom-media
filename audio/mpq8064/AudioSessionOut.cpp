@@ -745,7 +745,7 @@ ssize_t AudioSessionOutALSA::write(const void *buffer, size_t bytes)
                                      == true)) {
                 LOGV("Calling pcm_write");
                 n = pcm_write(mPcmRxHandle->handle,
-                         (char *)buffer + sent,
+                         mBitstreamSM->getInputBufferPtr(),
                           period_size);
                 LOGD("pcm_write returned with %d", n);
                 if (n == -EBADFD) {
