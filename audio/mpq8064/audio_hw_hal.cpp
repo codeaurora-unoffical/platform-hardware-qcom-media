@@ -61,6 +61,8 @@ struct qcom_stream_in {
 
 struct qcom_audio_device *qadev = NULL;
 
+static int qadevRefCount = 0;
+
 /** audio_stream_out implementation **/
 static uint32_t out_get_sample_rate(const struct audio_stream *stream)
 {
@@ -744,10 +746,13 @@ static int qcom_adev_close(hw_device_t* device)
     if (!qadev)
         return 0;
 
-    if (qadev->hwif)
-        delete qadev->hwif;
+    if((--qadevRefCount) == 0) {
+        if (qadev->hwif)
+            delete qadev->hwif;
 
-    free(qadev);
+        free(qadev);
+        qadev = NULL;
+    }
     return 0;
 }
 
@@ -763,6 +768,7 @@ static int qcom_adev_open(const hw_module_t* module, const char* name,
     if(qadev) {
         // If the device is already opened use the same
         *device = &qadev->device.common;
+        qadevRefCount++;
         return 0;
     }
     qadev = (struct qcom_audio_device *)calloc(1, sizeof(*qadev));
@@ -801,11 +807,13 @@ static int qcom_adev_open(const hw_module_t* module, const char* name,
     }
 
     *device = &qadev->device.common;
+    qadevRefCount++;
 
     return 0;
 
 err_create_audio_hw:
     free(qadev);
+    qadev = NULL;
     return ret;
 }
 
