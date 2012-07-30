@@ -850,8 +850,13 @@ status_t AudioPolicyManager::stopInput(audio_io_handle_t input)
         inputDesc->mRefCount = 0;
 
         newDevice = AudioPolicyManagerBase::getNewDevice(mHardwareOutput);
-        param.addInt(String8(AudioParameter::keyRouting), (int)newDevice);
-        mpClientInterface->setParameters(mHardwareOutput, param.toString());
+        if ((newDevice == 0) && (mLPADecodeOutput != -1))  {
+           newDevice = AudioPolicyManagerBase::getNewDevice(mLPADecodeOutput, false);
+        }
+        if (newDevice != 0) {
+           param.addInt(String8(AudioParameter::keyRouting), (int)newDevice);
+           mpClientInterface->setParameters(mHardwareOutput, param.toString());
+        }
     }
     return NO_ERROR;
 }
