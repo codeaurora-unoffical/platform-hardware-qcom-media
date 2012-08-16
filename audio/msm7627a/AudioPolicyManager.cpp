@@ -729,6 +729,18 @@ void AudioPolicyManager::setForceUse(AudioSystem::force_use usage, AudioSystem::
 
 }
 
+bool AudioPolicyManager::needsDirectOuput(AudioSystem::stream_type stream,
+                            uint32_t samplingRate,
+                            uint32_t format,
+                            uint32_t channels,
+                            AudioSystem::output_flags flags,
+                            uint32_t device)
+{
+return ((flags & AudioSystem::OUTPUT_FLAG_DIRECT) ||
+    (format !=0 && !AudioSystem::isLinearPCM(format)));
+}
+
+
 uint32_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
 {
     uint32_t device;
@@ -737,6 +749,7 @@ uint32_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
     case AUDIO_SOURCE_DEFAULT:
     case AUDIO_SOURCE_MIC:
     case AUDIO_SOURCE_VOICE_RECOGNITION:
+    case AUDIO_SOURCE_VOICE_COMMUNICATION:
         if (mForceUse[AudioSystem::FOR_RECORD] == AudioSystem::FORCE_BT_SCO &&
             mAvailableInputDevices & AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET) {
             device = AudioSystem::DEVICE_IN_BLUETOOTH_SCO_HEADSET;
@@ -745,9 +758,6 @@ uint32_t AudioPolicyManager::getDeviceForInputSource(int inputSource)
         } else {
             device = AudioSystem::DEVICE_IN_BUILTIN_MIC;
         }
-        break;
-    case AUDIO_SOURCE_VOICE_COMMUNICATION:
-        device = AudioSystem::DEVICE_IN_COMMUNICATION;
         break;
     case AUDIO_SOURCE_CAMCORDER:
         if (hasBackMicrophone()) {

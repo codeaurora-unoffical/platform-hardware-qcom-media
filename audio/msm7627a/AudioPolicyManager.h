@@ -59,6 +59,13 @@ public:
         virtual void resumeSession(audio_io_handle_t output, AudioSystem::stream_type stream);
         virtual void releaseSession(audio_io_handle_t output);
         virtual void setForceUse(AudioSystem::force_use usage, AudioSystem::forced_config config);
+        virtual bool needsDirectOuput(AudioSystem::stream_type stream,
+                                    uint32_t samplingRate,
+                                    uint32_t format,
+                                    uint32_t channels,
+                                    AudioSystem::output_flags flags,
+                                    uint32_t device);
+
 protected:
         fm_modes fmMode;
 
