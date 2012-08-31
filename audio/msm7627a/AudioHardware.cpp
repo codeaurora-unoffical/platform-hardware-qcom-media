@@ -2574,8 +2574,7 @@ status_t AudioHardware::AudioStreamInMSM72xx::standby()
     if (!mHardware) return -1;
     // restore output routing if necessary
     if (!mHardware->isFMAnalog() && !mHardware->IsFmon()) {
-        mHardware->clearCurDevice();
-        mHardware->doRouting(this);
+        mHardware->doRouting(NULL);
     }
     if(mHardware->IsFmA2dpOn())
         mHardware->SwitchOffFmA2dp();
