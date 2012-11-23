@@ -423,8 +423,12 @@ uint32_t AudioPolicyManager::getDeviceForStrategy(routing_strategy strategy, boo
         if (mPhoneState == AudioSystem::MODE_IN_CALL &&
             !AudioSystem::isA2dpDevice((AudioSystem::audio_devices)device) &&
             device != getDeviceForStrategy(STRATEGY_PHONE)) {
-            device = getDeviceForStrategy(STRATEGY_PHONE);
-            LOGV("getDeviceForStrategy() incompatible media and phone devices");
+            if (strategy == STRATEGY_ENFORCED_AUDIBLE) {
+                LOGV("getDeviceForStrategy() no change to phone device for ENFORCED_AUDIBLE");
+            } else {
+                device = getDeviceForStrategy(STRATEGY_PHONE);
+                LOGV("getDeviceForStrategy() incompatible media and phone devices");
+            }
         }
         } break;
 
