@@ -112,7 +112,7 @@ extern "C"{
 #include "ts_parser.h"
 
 #include <binder/IServiceManager.h>
-#include <ihwc.h>
+//#include <ihwc.h>
 
 extern "C" {
   OMX_API void * get_omx_component_factory_fn(void);
