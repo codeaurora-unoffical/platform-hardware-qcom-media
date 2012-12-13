@@ -65,7 +65,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #if defined (_ANDROID_ICS_)
 #include <genlock.h>
-#include <qdMetaData.h>
+//#include <qdMetaData.h>
 #endif
 
 #ifdef _ANDROID_
@@ -8327,11 +8327,11 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
       case EXTRADATA_INTERLACE_VIDEO:
         struct extradata_interlace_video_payload *payload;
         payload = (struct extradata_interlace_video_payload *)data->data;
-        if (payload->format != INTERLACE_FRAME_PROGRESSIVE) {
+/*        if (payload->format != INTERLACE_FRAME_PROGRESSIVE) {
           int enable = 1;
           setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
               PP_PARAM_INTERLACED, (void*)&enable);
-        }
+        } */
         if (!secure_mode && (client_extradata & OMX_INTERLACE_EXTRADATA)) {
           append_interlace_extradata(p_extra, payload->format);
           p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);

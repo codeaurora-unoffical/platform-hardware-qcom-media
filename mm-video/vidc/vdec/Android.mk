@@ -80,8 +80,8 @@ libmm-vdec-inc          += hardware/qcom/display/libgenlock
 libmm-vdec-inc          += frameworks/native/include/media/openmax
 libmm-vdec-inc          += frameworks/native/include/media/hardware
 libmm-vdec-inc          += $(vdec-inc)
-libmm-vdec-inc          += hardware/qcom/display/libqdutils
-libmm-vdec-inc          += hardware/qcom/display/libhwcomposer
+#libmm-vdec-inc          += hardware/qcom/display/libqdutils
+#libmm-vdec-inc          += hardware/qcom/display/libhwcomposer
 
 LOCAL_MODULE                    := libOmxVdec
 LOCAL_MODULE_TAGS               := optional
@@ -93,15 +93,15 @@ LOCAL_SHARED_LIBRARIES  := liblog libutils libbinder libcutils
 
 LOCAL_SHARED_LIBRARIES += libgenlock
 LOCAL_SHARED_LIBRARIES  += libdivxdrmdecrypt
-LOCAL_SHARED_LIBRARIES  += libqdMetaData
-LOCAL_SHARED_LIBRARIES  += libhardware
-LOCAL_SHARED_LIBRARIES  += libhwcservice
+#LOCAL_SHARED_LIBRARIES  += libqdMetaData
+#LOCAL_SHARED_LIBRARIES  += libhardware
+#LOCAL_SHARED_LIBRARIES  += libhwcservice
 
 LOCAL_SRC_FILES         := src/frameparser.cpp
 LOCAL_SRC_FILES         += src/h264_utils.cpp
 LOCAL_SRC_FILES         += src/ts_parser.cpp
 LOCAL_SRC_FILES         += src/mp4_utils.cpp
-LOCAL_SRC_FILES         += src/power_module.cpp
+#LOCAL_SRC_FILES         += src/power_module.cpp
 ifeq ($(TARGET_BOARD_PLATFORM),msm8974)
 LOCAL_SRC_FILES         += src/omx_vdec_msm8974.cpp
 else
