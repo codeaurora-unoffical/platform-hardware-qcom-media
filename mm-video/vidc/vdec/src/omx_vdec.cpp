@@ -319,6 +319,8 @@ omx_vdec::omx_vdec(): m_state(OMX_StateInvalid),
   memset (&h264_scratch,0,sizeof (OMX_BUFFERHEADERTYPE));
   memset (m_hwdevice_name,0,sizeof(m_hwdevice_name));
   driver_context.video_driver_fd = -1;
+  msg_thread_created = false;
+  async_thread_created = false;
   m_vendor_config.pData = NULL;
   pthread_mutex_init(&m_lock, NULL);
   sem_init(&m_cmd_lock,0,0);
@@ -347,10 +349,20 @@ omx_vdec::~omx_vdec()
   if(m_pipe_out) close(m_pipe_out);
   m_pipe_in = -1;
   m_pipe_out = -1;
-  DEBUG_PRINT_HIGH("\n Waiting on OMX Msg Thread exit");
-  pthread_join(msg_thread_id,NULL);
-  DEBUG_PRINT_HIGH("\n Waiting on OMX Async Thread exit");
-  pthread_join(async_thread_id,NULL);
+  if (msg_thread_created)
+  {
+    DEBUG_PRINT_HIGH("Waiting on OMX Msg Thread exit");
+    pthread_join(msg_thread_id,NULL);
+  }
+  if (async_thread_created)
+  {
+    DEBUG_PRINT_HIGH("Waiting on OMX Async Thread exit");
+    pthread_join(async_thread_id,NULL);
+  }
+  DEBUG_PRINT_HIGH("Calling close() on Video Driver");
+  close (drv_ctx.video_driver_fd);
+  drv_ctx.video_driver_fd = -1;
+
   pthread_mutex_destroy(&m_lock);
   sem_destroy(&m_cmd_lock);
   DEBUG_PRINT_HIGH("\n Exit OMX vdec Destructor");
@@ -1084,7 +1096,6 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
       m_pipe_in = fds[0];
       m_pipe_out = fds[1];
       r = pthread_create(&msg_thread_id,0,message_thread,this);
-
       if(r < 0)
       {
         DEBUG_PRINT_ERROR("\n component_init(): message_thread creation failed");
@@ -1092,11 +1103,16 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
       }
       else
       {
+        msg_thread_created = true;
         r = pthread_create(&async_thread_id,0,async_message_thread,this);
         if(r < 0)
         {
           DEBUG_PRINT_ERROR("\n component_init(): async_message_thread creation failed");
           eRet = OMX_ErrorInsufficientResources;
+        }
+        else
+        {
+          async_thread_created = true;
         }
       }
     }
@@ -1108,9 +1124,6 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
     DEBUG_PRINT_HIGH("\n Calling VDEC_IOCTL_STOP_NEXT_MSG");
     (void)ioctl(driver_context.video_driver_fd, VDEC_IOCTL_STOP_NEXT_MSG,
         NULL);
-    DEBUG_PRINT_HIGH("\n Calling close() on Video Driver");
-    close (driver_context.video_driver_fd);
-    driver_context.video_driver_fd = -1;
   }
   else
   {
@@ -4849,8 +4862,6 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     DEBUG_PRINT_LOW("\n Calling VDEC_IOCTL_STOP_NEXT_MSG");
     (void)ioctl(driver_context.video_driver_fd, VDEC_IOCTL_STOP_NEXT_MSG,
         NULL);
-    DEBUG_PRINT_HIGH("\n Close the driver instance");
-    close(driver_context.video_driver_fd);
 
 #if BITSTREAM_LOG
     fclose (outputBufferFile1);
