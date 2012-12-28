@@ -1188,6 +1188,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
   int fds[2];
   int r;
   OMX_STRING device_name = "/dev/msm_vidc_dec";
+  sp<IServiceManager> sm;
+  sp<hwcService::IHWComposer> hwcBinder = NULL;
 
   if(!strncmp(role, "OMX.qcom.video.decoder.avc.secure",OMX_MAX_STRINGNAME_SIZE)){
       secure_mode = true;
@@ -1196,6 +1198,19 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
       device_name =  "/dev/msm_vidc_dec_sec";
 	  is_secure = 1;
   }
+
+  if (secure_mode) {
+    sm = defaultServiceManager();
+    hwcBinder =
+      interface_cast<hwcService::IHWComposer>(sm->getService(String16("display.hwcservice")));
+    if (hwcBinder != NULL) {
+        hwcBinder->setOpenSecureStart();
+    } else {
+        DEBUG_PRINT_HIGH("Failed to get ref to hwcBinder, "
+                         "cannot call secure display start");
+    }
+  }
+
   DEBUG_PRINT_HIGH("omx_vdec::component_init(): Start of New Playback : role  = %s : DEVICE = %s",
         role, device_name);
 
@@ -1294,7 +1309,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1311,7 +1327,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1328,7 +1345,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1348,7 +1366,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1597,6 +1616,21 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
   }
 
   memset(&h264_mv_buff,0,sizeof(struct h264_mv_buffer));
+
+cleanup:
+  if (!secure_mode) {
+      return eRet;
+  }
+
+  if (hwcBinder != NULL) {
+      (eRet == OMX_ErrorNone) ?
+          hwcBinder->setOpenSecureEnd() :
+          hwcBinder->setCloseSecureEnd();
+  } else {
+      DEBUG_PRINT_HIGH("hwcBinder not found, "
+                       "not calling secure end");
+  }
+
   return eRet;
 }
 
@@ -4107,7 +4141,6 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         drv_ctx.ptr_outputbuffer[i].bufferaddr = buff;
         drv_ctx.ptr_outputbuffer[i].mmaped_size =
             drv_ctx.ptr_outputbuffer[i].buffer_len = drv_ctx.op_buf.buffer_size;
-
 #if defined(_ANDROID_ICS_)
         if (drv_ctx.interlace != VDEC_InterlaceFrameProgressive) {
             int enable = 1;
@@ -5935,6 +5968,8 @@ RETURN VALUE
 ========================================================================== */
 OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
 {
+  sp<IServiceManager> sm;
+  sp<hwcService::IHWComposer> hwcBinder = NULL;
 #ifdef _ANDROID_
     if(iDivXDrmDecrypt)
     {
@@ -5954,6 +5989,17 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
       DEBUG_PRINT_HIGH("Playback Ended - PASSED");
     }
 
+    if (secure_mode) {
+      sm = defaultServiceManager();
+      hwcBinder =
+        interface_cast<hwcService::IHWComposer>(sm->getService(String16("display.hwcservice")));
+      if (hwcBinder != NULL) {
+          hwcBinder->setCloseSecureStart();
+      } else {
+        DEBUG_PRINT_HIGH("Failed to get hwcbinder, "
+                         "failed to call close secure start");
+      }
+    }
     /*Check if the output buffers have to be cleaned up*/
     if(m_out_mem_ptr)
     {
@@ -6061,6 +6107,15 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     fclose (outputExtradataFile);
 #endif
   DEBUG_PRINT_HIGH("omx_vdec::component_deinit() complete");
+
+  if (secure_mode) {
+      if (hwcBinder != NULL) {
+          hwcBinder->setCloseSecureEnd();
+      } else {
+        DEBUG_PRINT_HIGH("Failed to get hwcbinder, "
+                         "failed to call close secure start");
+      }
+  }
   return OMX_ErrorNone;
 }
 
@@ -8301,7 +8356,7 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
   {
     p_buf_hdr->nFlags |= OMX_BUFFERFLAG_EXTRADATA;
     append_interlace_extradata(p_extra,
-         ((struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate)->interlaced_format);
+         ((struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate)->interlaced_format, index);
     p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
   }
   if (client_extradata & OMX_FRAMEINFO_EXTRADATA && p_extra &&
@@ -8514,10 +8569,17 @@ void omx_vdec::print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra)
 }
 
 void omx_vdec::append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
-                                          OMX_U32 interlaced_format_type)
+                                          OMX_U32 interlaced_format_type, OMX_U32 buf_index)
 {
   OMX_STREAMINTERLACEFORMAT *interlace_format;
   OMX_U32 mbaff = 0;
+#if defined(_ANDROID_ICS_)
+  OMX_U32 enable = 0;
+  private_handle_t *handle = NULL;
+  handle = (private_handle_t *)native_buffer[buf_index].nativehandle;
+  if(!handle)
+    DEBUG_PRINT_LOW("%s: Native Buffer handle is NULL",__func__);
+#endif
   extra->nSize = OMX_INTERLACE_EXTRADATA_SIZE;
   extra->nVersion.nVersion = OMX_SPEC_VERSION;
   extra->nPortIndex = OMX_CORE_OUTPUT_PORT_INDEX;
@@ -8533,12 +8595,25 @@ void omx_vdec::append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
     interlace_format->bInterlaceFormat = OMX_FALSE;
     interlace_format->nInterlaceFormats = OMX_InterlaceFrameProgressive;
     drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
+#if defined(_ANDROID_ICS_)
+    if(handle)
+    {
+      setMetaData(handle, PP_PARAM_INTERLACED, (void*)&enable);
+    }
+#endif
   }
   else
   {
     interlace_format->bInterlaceFormat = OMX_TRUE;
     interlace_format->nInterlaceFormats = OMX_InterlaceInterleaveFrameTopFieldFirst;
     drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
+#if defined(_ANDROID_ICS_)
+    enable = 1;
+    if(handle)
+    {
+      setMetaData(handle, PP_PARAM_INTERLACED, (void*)&enable);
+    }
+#endif
   }
   print_debug_extradata(extra);
 }

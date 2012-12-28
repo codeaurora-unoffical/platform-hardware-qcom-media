@@ -124,6 +124,9 @@ extern "C"{
 #include "extra_data_handler.h"
 #include "ts_parser.h"
 
+#include <binder/IServiceManager.h>
+#include <ihwc.h>
+
 extern "C" {
   OMX_API void * get_omx_component_factory_fn(void);
 }
@@ -602,8 +605,13 @@ private:
     void handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr);
     OMX_ERRORTYPE enable_extradata(OMX_U32 requested_extradata, bool enable = true);
     void print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra);
+#ifdef _MSM8974_
     void append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
                                     OMX_U32 interlaced_format_type);
+#else
+    void append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
+                                    OMX_U32 interlaced_format_type, OMX_U32 buf_index);
+#endif
     void append_frame_info_extradata(OMX_OTHER_EXTRADATATYPE *extra,
                                OMX_U32 num_conceal_mb,
                                OMX_U32 picture_type,
