@@ -610,6 +610,8 @@ private:
     unsigned char m_hwdevice_name[80];
     FILE *m_device_file_ptr;
     enum vc1_profile_type m_vc1_profile;
+    bool msg_thread_created;
+    bool async_thread_created;
 };
 
 #endif // __OMX_VDEC_H__
