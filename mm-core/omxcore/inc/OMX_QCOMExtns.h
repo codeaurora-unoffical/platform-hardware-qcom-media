@@ -307,6 +307,8 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     OMX_QcomIndexParamVideoVp = 0x7F00000D,
 
     OMX_QcomIndexQueryNumberOfVideoDecInstance = 0x7F00000E
+
+    OMX_QcomIndexEnableH263PlusPType = 0x7F000023,
 };
 
 /**
