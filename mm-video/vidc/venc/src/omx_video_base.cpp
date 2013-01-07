@@ -4312,6 +4312,11 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
         eRet = OMX_ErrorNoMore;
       }
     }
+    else
+    {
+      DEBUG_PRINT_ERROR("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported ret NoMore\n");
+      eRet = OMX_ErrorNoMore;
+    }
   }
   else
   {
