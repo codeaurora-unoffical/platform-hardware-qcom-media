@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -8,7 +8,7 @@ modification, are permitted provided that the following conditions are met:
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of Code Aurora nor
+    * Neither the name of the Linux Foundation nor
       the names of its contributors may be used to endorse or promote
       products derived from this software without specific prior written
       permission.
@@ -67,21 +67,6 @@ extern "C"{
 #define LOG_TAG "OMX-VDEC-1080P"
 #else
 #define LOG_TAG "OMX-VDEC"
-#endif
-#ifdef ENABLE_DEBUG_LOW
-#define DEBUG_PRINT_LOW ALOGE
-#else
-#define DEBUG_PRINT_LOW
-#endif
-#ifdef ENABLE_DEBUG_HIGH
-#define DEBUG_PRINT_HIGH ALOGE
-#else
-#define DEBUG_PRINT_HIGH
-#endif
-#ifdef ENABLE_DEBUG_ERROR
-#define DEBUG_PRINT_ERROR ALOGE
-#else
-#define DEBUG_PRINT_ERROR
 #endif
 
 #else //_ANDROID_
@@ -194,6 +179,7 @@ extern "C" {
 #define OMX_INTERLACE_EXTRADATA 0x00020000
 #define OMX_TIMEINFO_EXTRADATA  0x00040000
 #define OMX_PORTDEF_EXTRADATA   0x00080000
+#define OMX_EXTNUSER_EXTRADATA  0x00100000
 #define DRIVER_EXTRADATA_MASK   0x0000FFFF
 
 #define OMX_INTERLACE_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
@@ -607,6 +593,8 @@ private:
     void append_terminator_extradata(OMX_OTHER_EXTRADATATYPE *extra);
     OMX_ERRORTYPE update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn);
     void append_portdef_extradata(OMX_OTHER_EXTRADATATYPE *extra);
+    void append_extn_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_extn);
+    void append_user_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_user);
     void insert_demux_addr_offset(OMX_U32 address_offset);
     void extract_demux_addr_offsets(OMX_BUFFERHEADERTYPE *buf_hdr);
     OMX_ERRORTYPE handle_demux_data(OMX_BUFFERHEADERTYPE *buf_hdr);
@@ -775,6 +763,8 @@ private:
     OMX_U32 h264_last_au_flags;
     OMX_U32 m_demux_offsets[8192];
     OMX_U32 m_demux_entries;
+    OMX_U32 m_disp_hor_size;
+    OMX_U32 m_disp_vert_size;
 
     OMX_S64 prev_ts;
     bool rst_prev_ts;
