@@ -1180,6 +1180,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
   int fds[2];
   int r;
   OMX_STRING device_name = "/dev/msm_vidc_dec";
+  sp<IServiceManager> sm;
+  sp<hwcService::IHWComposer> hwcBinder = NULL;
 
   if(!strncmp(role, "OMX.qcom.video.decoder.avc.secure",OMX_MAX_STRINGNAME_SIZE)){
       secure_mode = true;
@@ -1188,6 +1190,19 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
       device_name =  "/dev/msm_vidc_dec_sec";
 	  is_secure = 1;
   }
+
+  if (secure_mode) {
+    sm = defaultServiceManager();
+    hwcBinder =
+      interface_cast<hwcService::IHWComposer>(sm->getService(String16("display.hwcservice")));
+    if (hwcBinder != NULL) {
+        hwcBinder->setOpenSecureStart();
+    } else {
+        DEBUG_PRINT_HIGH("Failed to get ref to hwcBinder, "
+                         "cannot call secure display start");
+    }
+  }
+
   DEBUG_PRINT_HIGH("omx_vdec::component_init(): Start of New Playback : role  = %s : DEVICE = %s",
         role, device_name);
 
@@ -1286,7 +1301,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1303,7 +1319,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1320,7 +1337,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1340,7 +1358,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      OMX_ERRORTYPE err = createDivxDrmContext();
      if( err != OMX_ErrorNone ) {
          DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
-         return err;
+         eRet = err;
+         goto cleanup;
      }
 #endif //_ANDROID_
   }
@@ -1589,6 +1608,21 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
   }
 
   memset(&h264_mv_buff,0,sizeof(struct h264_mv_buffer));
+
+cleanup:
+  if (!secure_mode) {
+      return eRet;
+  }
+
+  if (hwcBinder != NULL) {
+      (eRet == OMX_ErrorNone) ?
+          hwcBinder->setOpenSecureEnd() :
+          hwcBinder->setCloseSecureEnd();
+  } else {
+      DEBUG_PRINT_HIGH("hwcBinder not found, "
+                       "not calling secure end");
+  }
+
   return eRet;
 }
 
@@ -5908,6 +5942,8 @@ RETURN VALUE
 ========================================================================== */
 OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
 {
+  sp<IServiceManager> sm;
+  sp<hwcService::IHWComposer> hwcBinder = NULL;
 #ifdef _ANDROID_
     if(iDivXDrmDecrypt)
     {
@@ -5927,6 +5963,17 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
       DEBUG_PRINT_HIGH("Playback Ended - PASSED");
     }
 
+    if (secure_mode) {
+      sm = defaultServiceManager();
+      hwcBinder =
+        interface_cast<hwcService::IHWComposer>(sm->getService(String16("display.hwcservice")));
+      if (hwcBinder != NULL) {
+          hwcBinder->setCloseSecureStart();
+      } else {
+        DEBUG_PRINT_HIGH("Failed to get hwcbinder, "
+                         "failed to call close secure start");
+      }
+    }
     /*Check if the output buffers have to be cleaned up*/
     if(m_out_mem_ptr)
     {
@@ -6034,6 +6081,15 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     fclose (outputExtradataFile);
 #endif
   DEBUG_PRINT_HIGH("omx_vdec::component_deinit() complete");
+
+  if (secure_mode) {
+      if (hwcBinder != NULL) {
+          hwcBinder->setCloseSecureEnd();
+      } else {
+        DEBUG_PRINT_HIGH("Failed to get hwcbinder, "
+                         "failed to call close secure start");
+      }
+  }
   return OMX_ErrorNone;
 }
 
