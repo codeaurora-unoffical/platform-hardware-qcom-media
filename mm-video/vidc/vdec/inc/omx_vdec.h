@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -46,6 +46,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <inttypes.h>
 #include <cstddef>
 
+#ifdef USE_ION
+#include <linux/msm_ion.h>
+#endif
 static ptrdiff_t x;
 
 #ifdef _ANDROID_
@@ -57,11 +60,6 @@ static ptrdiff_t x;
 #define LOG_TAG "OMX-VDEC"
 #endif
 
-#ifdef USE_ION
-#include <linux/msm_ion.h>
-//#include <binder/MemoryHeapIon.h>
-//#else
-#endif
 #include <binder/MemoryHeapBase.h>
 #include <ui/ANativeObjectBase.h>
 extern "C"{
@@ -87,7 +85,7 @@ extern "C"{
 #endif
 
 #else //_ANDROID_
-#define DEBUG_PRINT_LOW printf
+#define DEBUG_PRINT_LOW
 #define DEBUG_PRINT_HIGH printf
 #define DEBUG_PRINT_ERROR printf
 #endif // _ANDROID_
