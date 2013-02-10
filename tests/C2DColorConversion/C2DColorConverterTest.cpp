@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 /*--------------------------------------------------------------------------
-Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+Copyright (c) 2012, The Linux Foundation. All rights reserved.
 --------------------------------------------------------------------------*/
 
 #include <cutils/memory.h>
