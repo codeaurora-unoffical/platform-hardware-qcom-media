@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
- * Copyright (C) 2012 Code Aurora Forum
+ * Copyright (C) 2012 The Linux Foundation
  *
  * Not a Contribution, Apache license notifications and license are
  * retained for attribution purposes only.
