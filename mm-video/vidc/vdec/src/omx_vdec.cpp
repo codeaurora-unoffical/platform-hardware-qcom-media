@@ -3020,7 +3020,6 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
               {
                 drv_ctx.op_buf.actualcount = portDefn->nBufferCountActual;
                 drv_ctx.op_buf.buffer_size = portDefn->nBufferSize;
-                drv_ctx.op_buf.buffer_type = VDEC_BUFFER_TYPE_OUTPUT;
                 eRet = set_buffer_req(&drv_ctx.op_buf);
                 if (eRet == OMX_ErrorNone)
                     m_port_def = *portDefn;
