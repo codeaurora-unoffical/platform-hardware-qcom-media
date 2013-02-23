@@ -85,9 +85,9 @@ extern "C"{
 #endif
 
 #else //_ANDROID_
-#define DEBUG_PRINT_LOW
-#define DEBUG_PRINT_HIGH printf
-#define DEBUG_PRINT_ERROR printf
+#define DEBUG_PRINT_LOW fprintf (stderr, fmt, "\n",##args)
+#define DEBUG_PRINT_HIGH fprintf (stderr, fmt, "\n",##args)
+#define DEBUG_PRINT_ERROR fprintf (stderr, fmt, "\n",##args)
 #endif // _ANDROID_
 
 #ifdef _MSM8974_

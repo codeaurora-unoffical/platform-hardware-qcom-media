@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -45,6 +45,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <semaphore.h>
 #include "OMX_QCOMExtns.h"
 #include <sys/time.h>
+#include <linux/msm_ion.h>
 
 #include <linux/android_pmem.h>
 
@@ -68,9 +69,9 @@ extern "C"{
 #include <glib.h>
 #define strlcpy g_strlcpy
 
-#define ALOGE(fmt, args...) fprintf(stderr, fmt, ##args)
-#define DEBUG_PRINT printf
-#define DEBUG_PRINT_ERROR printf
+#define ALOGE(fmt, args...) fprintf(stderr, "\n ", fmt,##args)
+#define DEBUG_PRINT ALOGE
+#define DEBUG_PRINT_ERROR ALOGE
 #endif /* _ANDROID_ */
 
 #include "OMX_Core.h"
@@ -123,6 +124,14 @@ static int previous_vc1_au = 0;
 #define PMEM_DEVICE "/dev/pmem_adsp"
 #elif MAX_RES_1080P
 #define PMEM_DEVICE "/dev/pmem_smipool"
+#endif
+#ifdef USE_ION
+    #define PMEM_ION_DEVICE "/dev/ion"
+    #ifdef MAX_RES_720P
+    #define MEM_HEAP_ID ION_CAMERA_HEAP_ID
+    #else
+    #define MEM_HEAP_ID ION_CP_MM_HEAP_ID
+    #endif
 #endif
 
 //#define USE_EXTERN_PMEM_BUF
@@ -264,8 +273,21 @@ typedef enum {
   FREE_HANDLE_AT_PAUSE
 } freeHandle_test;
 
+#ifdef USE_ION
+struct vdec_ion
+{
+    int ion_device_fd;
+    struct ion_fd_data fd_ion_data;
+    struct ion_allocation_data ion_alloc_data;
+};
+#endif
 struct temp_egl {
+#ifdef USE_ION
+    struct vdec_ion ion_buf_info;
+    unsigned char* pbuff;
+#else
     int pmem_fd;
+#endif
     int offset;
 };
 
@@ -328,6 +350,8 @@ static struct mdp_overlay overlay, *overlayp;
 static struct msmfb_overlay_data ov_front;
 static int vid_buf_front_id;
 static char tempbuf[16];
+int secure_mode = false;
+
 int overlay_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr);
 void overlay_set();
 void overlay_unset();
@@ -468,6 +492,10 @@ static bool align_pmem_buffers(int pmem_fd, OMX_U32 buffer_size,
 void getFreePmem();
 static int overlay_vsync_ctrl(int enable);
 
+int alloc_map_ion_memory(OMX_U32 buffer_size,
+              OMX_U32 alignment, struct ion_allocation_data *alloc_data,
+              struct ion_fd_data *fd_data,int flag);
+void free_ion_memory(struct vdec_ion *buf_ion_info);
 static  int clip2(int x)
     {
         x = x -1;
@@ -2527,6 +2555,98 @@ static OMX_ERRORTYPE use_input_buffer ( OMX_COMPONENTTYPE *dec_handle,
     return error;
 }
 
+#ifdef USE_ION
+int alloc_map_ion_memory(OMX_U32 buffer_size,
+                OMX_U32 alignment, struct ion_allocation_data *alloc_data,
+                struct ion_fd_data *fd_data,int flag)
+{
+  int fd = -EINVAL;
+  int rc = -EINVAL;
+  int ion_dev_flag;
+  struct vdec_ion ion_buf_info;
+  if (!alloc_data || buffer_size <= 0 || !fd_data) {
+     printf("\nInvalid arguments to alloc_map_ion_memory");
+     return -EINVAL;
+  }
+
+  ion_dev_flag = O_RDONLY;
+  fd = open (PMEM_ION_DEVICE, ion_dev_flag);
+  if (fd < 0) {
+     printf("\nopening ion device failed with fd = %d", fd);
+     return fd;
+  }
+  alloc_data->flags = 0;
+  if(!secure_mode && (flag & ION_FLAG_CACHED))
+  {
+     alloc_data->flags |= ION_FLAG_CACHED;
+  }
+
+  alloc_data->len = buffer_size;
+  alloc_data->align = clip2(alignment);
+  if (alloc_data->align < 4096)
+  {
+    alloc_data->align = 4096;
+  }
+  if(secure_mode) {
+    alloc_data->heap_mask = ION_HEAP(MEM_HEAP_ID);
+    alloc_data->flags |= ION_SECURE;
+  } else {
+#ifdef MAX_RES_720P
+    alloc_data->len = (buffer_size + (alloc_data->align - 1)) & ~(alloc_data->align - 1);
+    alloc_data->heap_mask = ION_HEAP(MEM_HEAP_ID);
+#else
+    alloc_data->heap_mask = (ION_HEAP(MEM_HEAP_ID) | ION_HEAP(ION_IOMMU_HEAP_ID));
+#endif
+  }
+
+  rc = ioctl(fd,ION_IOC_ALLOC,alloc_data);
+  if (rc || !alloc_data->handle) {
+    printf("\n ION ALLOC memory failed ");
+    alloc_data->handle = NULL;
+    close(fd);
+    fd = -ENOMEM;
+    return fd;
+  }
+  fd_data->handle = alloc_data->handle;
+  rc = ioctl(fd,ION_IOC_MAP,fd_data);
+  if (rc) {
+    printf("\n ION MAP failed ");
+    ion_buf_info.ion_alloc_data = *alloc_data;
+    ion_buf_info.ion_device_fd = fd;
+    ion_buf_info.fd_ion_data = *fd_data;
+    free_ion_memory(&ion_buf_info);
+    fd_data->fd =-1;
+    close(fd);
+    fd = -ENOMEM;
+  }
+  printf("\nION: alloc_data: handle(0x%X), len(%u), align(%u), "
+     "flags(0x%x), fd_data: handle(0x%x), fd(0x%x)",
+     alloc_data->handle, alloc_data->len, alloc_data->align,
+     alloc_data->flags, fd_data->handle, fd_data->fd);
+  return fd;
+}
+
+void free_ion_memory(struct vdec_ion *buf_ion_info) {
+
+     if(!buf_ion_info) {
+       printf("\n ION: free called with invalid fd/allocdata");
+       return;
+     }
+     printf("\nION: free: handle(0x%X), len(%u), fd(0x%x)",
+       buf_ion_info->ion_alloc_data.handle,
+       buf_ion_info->ion_alloc_data.len,
+       buf_ion_info->fd_ion_data.fd);
+     if(ioctl(buf_ion_info->ion_device_fd,ION_IOC_FREE,
+             &buf_ion_info->ion_alloc_data.handle)) {
+       printf("\n ION: free failed" );
+     }
+     close(buf_ion_info->ion_device_fd);
+     buf_ion_info->ion_device_fd = -1;
+     buf_ion_info->ion_alloc_data.handle = NULL;
+     buf_ion_info->fd_ion_data.fd = -1;
+}
+#endif
+
 static OMX_ERRORTYPE use_output_buffer ( OMX_COMPONENTTYPE *dec_handle,
                                   OMX_BUFFERHEADERTYPE  ***pBufHdrs,
                                   OMX_U32 nPortIndex,
@@ -2551,8 +2671,33 @@ static OMX_ERRORTYPE use_output_buffer ( OMX_COMPONENTTYPE *dec_handle,
         DEBUG_PRINT_ERROR("\n EGL allocation failed");
         return OMX_ErrorInsufficientResources;
     }
+#ifdef USE_ION
+    pPlatformList = (OMX_QCOM_PLATFORM_PRIVATE_LIST *)
+        malloc(sizeof(OMX_QCOM_PLATFORM_PRIVATE_LIST)* bufCntMin);
 
-    for(bufCnt=0; bufCnt < bufCntMin; ++bufCnt) {
+    if(pPlatformList == NULL){
+        DEBUG_PRINT_ERROR("\n pPlatformList Allocation failed ");
+        return OMX_ErrorInsufficientResources;
+     }
+
+    pPlatformEntry = (OMX_QCOM_PLATFORM_PRIVATE_ENTRY *)
+        malloc(sizeof(OMX_QCOM_PLATFORM_PRIVATE_ENTRY)* bufCntMin);
+
+    if(pPlatformEntry == NULL){
+        DEBUG_PRINT_ERROR("\n pPlatformEntry Allocation failed ");
+        return OMX_ErrorInsufficientResources;
+    }
+
+    pPMEMInfo = (OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *)
+        malloc(sizeof(OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO)* bufCntMin);
+
+    if(pPMEMInfo == NULL){
+        DEBUG_PRINT_ERROR("\n pPMEMInfo Allocation failed ");
+        return OMX_ErrorInsufficientResources;
+     }
+    DEBUG_PRINT_ERROR("\n%s  All use buffer allocations done !!! ",__func__);
+#endif
+    for(bufCnt=0; bufCnt < bufCntMin; bufCnt++) {
         // allocate input buffers
       DEBUG_PRINT("OMX_UseBuffer No %d %d \n", bufCnt, bufSize);
       p_eglHeaders[bufCnt] = (struct temp_egl*)
@@ -2561,30 +2706,101 @@ static OMX_ERRORTYPE use_output_buffer ( OMX_COMPONENTTYPE *dec_handle,
           DEBUG_PRINT_ERROR("\n EGL allocation failed");
           return OMX_ErrorInsufficientResources;
       }
-      p_eglHeaders[bufCnt]->pmem_fd = open(PMEM_DEVICE,O_RDWR);
-      p_eglHeaders[bufCnt]->offset = 0;
-      if(p_eglHeaders[bufCnt]->pmem_fd < 0) {
-          DEBUG_PRINT_ERROR("\n open failed %s",PMEM_DEVICE);
-          return OMX_ErrorInsufficientResources;
-      }
+#ifdef USE_ION
+    p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd = alloc_map_ion_memory(
+                        bufSize, 8192,
+                        &p_eglHeaders[bufCnt]->ion_buf_info.ion_alloc_data,
+                        &p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data,ION_FLAG_CACHED);
+    if(p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd < 0) {
+        error = OMX_ErrorInsufficientResources;
+        goto ion_fail;
+    }
+
+    int pmem_fd = -1;
+    p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd = pmem_fd = p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data.fd;
+    DEBUG_PRINT_ERROR("\n fd is 0x%x ", p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd);
+
+    printf("\n outside of alloc alloc_data: handle(0x%X), len(%u), align(%u), "
+        "flags(0x%x), fd_data: handle(0x%x), fd(0x%x)",
+        p_eglHeaders[bufCnt]->ion_buf_info.ion_alloc_data.handle,
+        p_eglHeaders[bufCnt]->ion_buf_info.ion_alloc_data.len,
+        p_eglHeaders[bufCnt]->ion_buf_info.ion_alloc_data.align,
+        p_eglHeaders[bufCnt]->ion_buf_info.ion_alloc_data.flags,
+        p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data.handle,
+        p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data.fd);
+
+    if (!secure_mode)
+        p_eglHeaders[bufCnt]->pbuff = (unsigned char *)mmap(NULL,
+        bufSize, PROT_READ|PROT_WRITE, MAP_SHARED,
+        pmem_fd, 0);
+
+    DEBUG_PRINT_ERROR("\n buffer is 0x%x ", (OMX_U32 )p_eglHeaders[bufCnt]->pbuff );
+    pvirt = p_eglHeaders[bufCnt]->pbuff;
+
+    if (p_eglHeaders[bufCnt]->pbuff == MAP_FAILED)
+    {
+        close(p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd);
+#ifdef USE_ION
+        free_ion_memory(&p_eglHeaders[bufCnt]->ion_buf_info);
+#endif
+        DEBUG_PRINT_ERROR("\n Map Failed to allocate input buffer");
+        return OMX_ErrorInsufficientResources;
+    }
+#else
+    p_eglHeaders[bufCnt]->pmem_fd = open(PMEM_DEVICE,O_RDWR);
+    p_eglHeaders[bufCnt]->offset = 0;
+    if(p_eglHeaders[bufCnt]->pmem_fd < 0) {
+        DEBUG_PRINT_ERROR("\n open failed %s",PMEM_DEVICE);
+        return OMX_ErrorInsufficientResources;
+    }
 
 #ifndef USE_ION
-      /* TBD - this commenting is dangerous */
-      align_pmem_buffers(p_eglHeaders[bufCnt]->pmem_fd, bufSize,
-                                  8192);
+    /* TBD - this commenting is dangerous */
+    align_pmem_buffers(p_eglHeaders[bufCnt]->pmem_fd, bufSize,
+                                8192);
 #endif
-      DEBUG_PRINT_ERROR("\n allocation size %d pmem fd %d",bufSize,p_eglHeaders[bufCnt]->pmem_fd);
-      pvirt = (unsigned char *)mmap(NULL,bufSize,PROT_READ|PROT_WRITE,
-                      MAP_SHARED,p_eglHeaders[bufCnt]->pmem_fd,0);
-      DEBUG_PRINT_ERROR("\n Virtaul Address %p Size %d",pvirt,bufSize);
-      if (pvirt == MAP_FAILED) {
-        DEBUG_PRINT_ERROR("\n mmap failed for buffers");
-        return OMX_ErrorInsufficientResources;
-      }
-        use_buf_virt_addr[bufCnt] = (unsigned)pvirt;
-        error = OMX_UseEGLImage(dec_handle, &((*pBufHdrs)[bufCnt]),
-                              nPortIndex, pvirt,(void *)p_eglHeaders[bufCnt]);
-       }
+    DEBUG_PRINT_ERROR("\n allocation size %d pmem fd %d",bufSize,p_eglHeaders[bufCnt]->pmem_fd);
+    pvirt = (unsigned char *)mmap(NULL,bufSize,PROT_READ|PROT_WRITE,
+                    MAP_SHARED,p_eglHeaders[bufCnt]->pmem_fd,0);
+    DEBUG_PRINT_ERROR("\n Virtaul Address %p Size %d",pvirt,bufSize);
+    if (pvirt == MAP_FAILED) {
+      DEBUG_PRINT_ERROR("\n mmap failed for buffers");
+      return OMX_ErrorInsufficientResources;
+    }
+#endif
+    use_buf_virt_addr[bufCnt] = (unsigned)pvirt;
+
+    DEBUG_PRINT_ERROR("\nCalling OMX_UseEGLImage bufCnt %d pvirt 0x%x fd 0x%x ", bufCnt,
+        p_eglHeaders[bufCnt]->pbuff, p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd);
+
+#if USE_EGL_IMAGE_TEST
+    error = OMX_UseEGLImage(dec_handle, &((*pBufHdrs)[bufCnt]),
+                    nPortIndex, pvirt,(void *)p_eglHeaders[bufCnt]);
+#else
+
+    pPlatformEntry[bufCnt].type       = OMX_QCOM_PLATFORM_PRIVATE_PMEM;
+    pPlatformEntry[bufCnt].entry      = &pPMEMInfo[bufCnt];
+    // Initialize the Platform List
+    pPlatformList[bufCnt].nEntries    = 1;
+    pPlatformList[bufCnt].entryList   = &pPlatformEntry[bufCnt];
+    pPMEMInfo[bufCnt].offset          =  0;
+
+    pPMEMInfo[bufCnt].pmem_fd = pmem_fd;
+    pPMEMInfo[bufCnt].offset = 0;
+
+    DEBUG_PRINT("\n use_output_buffer i -> %d pmem_info.pmem_fd 0x%x pvirt 0x%x",
+        bufCnt, pPMEMInfo[bufCnt].pmem_fd,pvirt);
+    error = OMX_UseBuffer(dec_handle, &((*pBufHdrs)[bufCnt]),
+                    nPortIndex, &pPlatformList[bufCnt], bufSize, pvirt);
+    if (OMX_ErrorNone != error)
+        DEBUG_PRINT("\n use buffer call failed \n");
+#endif
+    }
+    return error;
+ion_fail:
+    for(int i=0; i < bufCnt; ++i) {
+        free_ion_memory(&p_eglHeaders[i]->ion_buf_info);
+    }
     return error;
 }
 
@@ -2700,9 +2916,14 @@ static void do_freeHandle_and_clean_up(bool isDueToError)
         if (output_use_buffer && p_eglHeaders) {
             if(p_eglHeaders[bufCnt]) {
                munmap (pOutYUVBufHdrs[bufCnt]->pBuffer,
-                       pOutYUVBufHdrs[bufCnt]->nAllocLen);
+                    pOutYUVBufHdrs[bufCnt]->nAllocLen);
+#ifdef USE_ION
+               close(p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd);
+               free_ion_memory(&p_eglHeaders[bufCnt]->ion_buf_info);
+#else
                close(p_eglHeaders[bufCnt]->pmem_fd);
                p_eglHeaders[bufCnt]->pmem_fd = -1;
+#endif
                free(p_eglHeaders[bufCnt]);
                p_eglHeaders[bufCnt] = NULL;
             }
@@ -4189,7 +4410,13 @@ void free_output_buffers()
            munmap((void *)use_buf_virt_addr[index],pBuffer->nAllocLen);
            if(p_eglHeaders[index])
            {
-               close(p_eglHeaders[index]->pmem_fd);
+
+#ifdef USE_ION
+       close(p_eglHeaders[index]->ion_buf_info.ion_device_fd);
+       free_ion_memory(&p_eglHeaders[index]->ion_buf_info);
+#else
+       close(p_eglHeaders[index]->pmem_fd);
+#endif
                free(p_eglHeaders[index]);
                p_eglHeaders[index] = NULL;
            }
