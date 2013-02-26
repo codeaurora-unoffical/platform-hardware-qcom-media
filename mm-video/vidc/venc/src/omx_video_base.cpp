@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -53,6 +53,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <glib.h>
 #define strlcpy g_strlcpy
 #endif
+#ifndef _ANDROID_
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#endif
+
 #define H264_SUPPORTED_WIDTH (480)
 #define H264_SUPPORTED_HEIGHT (368)
 
@@ -1857,12 +1862,14 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
          eRet = OMX_ErrorBadParameter;
          break;
        }
+#ifdef _ANDROID_ICS_
        if (get_syntaxhdr_enable == false)
        {
          DEBUG_PRINT_ERROR("ERROR: get_parameter: Get syntax header disabled");
          eRet = OMX_ErrorUnsupportedIndex;
          break;
        }
+#endif
        BITMASK_SET(&m_flags, OMX_COMPONENT_LOADED_START_PENDING);
        if(dev_loaded_start())
        {
