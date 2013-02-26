@@ -145,14 +145,15 @@ char ouputextradatafilename [] = "/data/extradata";
     }
 #endif//_ANDROID_
 */
-
+#if 0
 #undef DEBUG_PRINT_LOW
 #undef DEBUG_PRINT_HIGH
 #undef DEBUG_PRINT_ERROR
 
-#define DEBUG_PRINT_LOW
+#define DEBUG_PRINT_LOW ALOGE
 #define DEBUG_PRINT_HIGH ALOGE
 #define DEBUG_PRINT_ERROR ALOGE
+#endif
 
 #ifndef _ANDROID_
 #include <glib.h>
@@ -4117,7 +4118,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
     } else
 #endif
 
-    if (!ouput_egl_buffers && !m_use_output_pmem) {
+    if (!ouput_egl_buffers && !m_use_output_pmem && !output_use_buffer) {
 #ifdef USE_ION
         drv_ctx.op_buf_ion_info[i].ion_device_fd = alloc_map_ion_memory(
                 drv_ctx.op_buf.buffer_size,drv_ctx.op_buf.alignment,
@@ -4352,8 +4353,10 @@ OMX_ERRORTYPE  omx_vdec::use_buffer(
   }
   if(port == OMX_CORE_INPUT_PORT_INDEX)
     error = use_input_heap_buffers(hComp, bufferHdr, port, appData, bytes, buffer);
-  else if(port == OMX_CORE_OUTPUT_PORT_INDEX)
-    error = use_output_buffer(hComp,bufferHdr,port,appData,bytes,buffer); //not tested
+  else if(port == OMX_CORE_OUTPUT_PORT_INDEX) {
+    output_use_buffer = true;
+    error = use_output_buffer(hComp,bufferHdr,port,appData,bytes,buffer);
+  }
   else
   {
     DEBUG_PRINT_ERROR("Error: Invalid Port Index received %d\n",(int)port);
@@ -6112,15 +6115,20 @@ OMX_ERRORTYPE  omx_vdec::use_EGL_image(OMX_IN OMX_HANDLETYPE                hCom
    egl_queryfunc(m_display_id, eglImage, EGL_BITMAP_POINTER_KHR,&pmemPtr);
 #else //with OMX test app
     struct temp_egl {
+#ifdef USE_ION
+        struct vdec_ion ion_buf_info;
+        unsigned char* pbuff;
+#else
         int pmem_fd;
-        int offset;
+#endif
+	int offset;
     };
     struct temp_egl *temp_egl_id = NULL;
-    void * pmemPtr = (void *) eglImage;
     temp_egl_id = (struct temp_egl *)eglImage;
+    void * pmemPtr = (void *) temp_egl_id->pbuff;
     if (temp_egl_id != NULL)
     {
-        fd = temp_egl_id->pmem_fd;
+        fd = temp_egl_id->ion_buf_info.ion_device_fd;
         offset = temp_egl_id->offset;
     }
 #endif
@@ -6873,12 +6881,15 @@ int omx_vdec::async_message_process (void *context, void* message)
         output_respbuf->aspect_ratio_info =
            vdec_msg->msgdata.output_frame.aspect_ratio_info;
 
-
+#ifndef USE_ION
         if (omx->output_use_buffer)
+        {
           memcpy ( omxhdr->pBuffer,
                    (vdec_msg->msgdata.output_frame.bufferaddr +
                     vdec_msg->msgdata.output_frame.offset),
                     vdec_msg->msgdata.output_frame.len );
+        }
+#endif
       }
       else
         omxhdr->nFilledLen = 0;
