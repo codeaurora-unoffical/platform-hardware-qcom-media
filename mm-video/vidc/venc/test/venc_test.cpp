@@ -834,9 +834,11 @@ result = OMX_SetParameter(m_hHandle,
 // MPEG4
 //      eResyncMarkerType = RESYNC_MARKER_BYTE;
 //      nResyncMarkerSpacing = 1920;
+#ifdef _MSM8974_
       eResyncMarkerType = RESYNC_MARKER_MB;
       nResyncMarkerSpacing = 50;
       enableHEC = OMX_TRUE;
+#endif
    }
    else if (m_sProfile.eCodec == OMX_VIDEO_CodingH263)
    {
