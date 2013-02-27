@@ -29,12 +29,21 @@ AM_CPPFLAGS += -I../../../mm-core/src/common
 
 sources = src/omx_video_base.cpp
 sources += src/omx_video_encoder.cpp
-sources += src/omx_video_encoder.cpp
 sources += src/video_encoder_device.cpp
+sources += ../common/src/extra_data_handler.cpp
 
 lib_LTLIBRARIES = libOmxVenc.la
-libOmxVenc_la_SOURCES = $(c_sources)
+libOmxVenc_la_SOURCES = $(sources)
 libOmxVenc_la_CFLAGS = $(AM_CFLAGS) -fPIC
-libOmxVenc_la_LDLIBS = -lOmxCore -lstdc++ -lpthread
+#libOmxVenc_la_LDLIBS = -lOmxCore -lstdc++ -lpthread
 libOmxVenc_la_LDFLAGS = -shared -version-info $(OMXVIDEO_LIBRARY_VERSION)
 
+bin_PROGRAMS = mm-venc-omx-test720p
+
+mm_venc_omx_test720p_SOURCES := test/venc_test.cpp
+mm_venc_omx_test720p_SOURCES += test/camera_test.cpp
+mm_venc_omx_test720p_SOURCES += test/venc_util.c
+mm_venc_omx_test720p_SOURCES += test/fb_test.c
+
+mm_venc_omx_test720p_LDADD = -ldl -lpthread libOmxVenc.la
+mm_venc_omx_test720p_LDADD += ../../../mm-core/libOmxCore.la

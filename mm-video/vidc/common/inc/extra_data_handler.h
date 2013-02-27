@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -59,9 +59,10 @@ extern "C"{
 #endif
 
 #else //_ANDROID_
-#define DEBUG_PRINT_LOW printf
-#define DEBUG_PRINT_HIGH printf
-#define DEBUG_PRINT_ERROR printf
+#define ALOGE(fmt, args...) fprintf(stderr, "\n ",fmt,##args)
+#define DEBUG_PRINT_LOW
+#define DEBUG_PRINT_HIGH ALOGE
+#define DEBUG_PRINT_ERROR ALOGE
 #endif // _ANDROID_
 
 #define SEI_PAYLOAD_FRAME_PACKING_ARRANGEMENT 0x2D

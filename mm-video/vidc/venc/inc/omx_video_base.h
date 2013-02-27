@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -89,9 +89,10 @@ public:
 #endif
 
 #else //_ANDROID_
+#define ALOGE(fmt, args...) fprintf(stderr, "\n ",fmt,##args)
 #define DEBUG_PRINT_LOW
-#define DEBUG_PRINT_HIGH
-#define DEBUG_PRINT_ERROR
+#define DEBUG_PRINT_HIGH  ALOGE
+#define DEBUG_PRINT_ERROR  ALOGE
 #endif // _ANDROID_
 
 #ifdef USE_ION

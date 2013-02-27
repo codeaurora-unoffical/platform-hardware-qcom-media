@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -72,8 +72,10 @@ omx_venc::omx_venc()
 
 omx_venc::~omx_venc()
 {
+#ifdef _ANDROID_ICS_
   get_syntaxhdr_enable = false;
   //nothing to do
+#endif
 }
 
 /* ======================================================================
