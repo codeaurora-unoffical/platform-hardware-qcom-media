@@ -138,6 +138,13 @@ char ouputextradatafilename [] = "/data/extradata";
 #define DEVICE_SCRATCH 64
 #endif
 
+
+#ifdef MAX_RES_720P
+#define DEVICE_SCRATCH 0
+#else
+#define DEVICE_SCRATCH 64
+#endif
+
 /*
 #ifdef _ANDROID_
     extern "C"{
