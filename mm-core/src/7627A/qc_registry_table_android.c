@@ -478,38 +478,6 @@ omx_core_cb_type core[] =
       "audio_encoder.qcelp13"
     }
   },
-  {
-    "OMX.qcom.audio.decoder.ac3",
-    NULL,   // Create instance function
-    // Unique instance handle
-    {
-      NULL,
-      NULL,
-      NULL,
-      NULL
-    },
-    NULL,   // Shared object library handle
-    "libOmxAc3HwDec.so",
-    {
-      "audio_decoder.ac3"
-    }
-  },
-  {
-    "OMX.qcom.audio.decoder.eac3",
-    NULL,   // Create instance function
-    // Unique instance handle
-    {
-      NULL,
-      NULL,
-      NULL,
-      NULL
-    },
-    NULL,   // Shared object library handle
-    "libOmxAc3HwDec.so",
-    {
-      "audio_decoder.eac3"
-    }
-  },
 #ifndef _ANDROID_
   {
     "OMX.qcom.audio.decoder.amrnb",
