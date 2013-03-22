@@ -861,7 +861,7 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                DEBUG_PRINT_ERROR("\n empty_buffer_done failure");
                pThis->omx_report_error ();
             }
-            if(!pThis->arbitrary_bytes && pThis->m_inp_err_count > MAX_INPUT_ERROR)
+            if(pThis->m_inp_err_count > MAX_INPUT_ERROR)
             {
                DEBUG_PRINT_ERROR("\n Input bitstream error for consecutive %d frames.", MAX_INPUT_ERROR);
                pThis->omx_report_error ();
@@ -3839,7 +3839,7 @@ OMX_ERRORTYPE  omx_vdec::get_config(OMX_IN OMX_HANDLETYPE      hComp,
         (OMX_QCOM_EXTRADATA_FRAMEINFO *) configData;
 
       if(m_extradata == NULL){
-          DEBUG_PRINT_ERROR("get_config: m_extradata not set. "
+          DEBUG_PRINT_LOW("get_config: m_extradata not set. "
                             "Aspect Ratio information missing!!");
       }
       else {
@@ -4645,11 +4645,11 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
                     munmap (drv_ctx.ptr_outputbuffer[index].bufferaddr,
                             drv_ctx.ptr_outputbuffer[index].mmaped_size);
                }
+               close (drv_ctx.ptr_outputbuffer[index].pmem_fd);
+               drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
 #ifdef USE_ION
                 free_ion_memory(&drv_ctx.op_buf_ion_info[index]);
 #endif
-                close (drv_ctx.ptr_outputbuffer[index].pmem_fd);
-                drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
 #ifdef _ANDROID_
                 m_heap_ptr[index].video_heap_ptr = NULL;
                 m_heap_count = m_heap_count - 1;
@@ -9827,7 +9827,7 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::allocate_buffers_color_conve
   op_buf_ion_info[i].ion_device_fd = omx->alloc_map_ion_memory(
     buffer_size_req,buffer_alignment_req,
     &op_buf_ion_info[i].ion_alloc_data,&op_buf_ion_info[i].fd_ion_data,
-    ION_FLAG_CACHED);
+    0);
 
   pmem_fd[i] = op_buf_ion_info[i].fd_ion_data.fd;
   if (op_buf_ion_info[i].ion_device_fd < 0) {
