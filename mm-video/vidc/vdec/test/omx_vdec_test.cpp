@@ -1403,7 +1403,7 @@ int main(int argc, char **argv)
 #endif
       fflush(stdin);
       fgets(tempbuf,sizeof(tempbuf),stdin);
-      sscanf(tempbuf,"%d",&file_type_option); 
+      sscanf(tempbuf,"%d",&file_type_option);
 #ifdef _MSM8974_
       if (codec_format_option == CODEC_FORMAT_VP8)
       {
@@ -4068,6 +4068,9 @@ void overlay_unset()
     if (ioctl(fb_fd, MSMFB_OVERLAY_UNSET, &vid_buf_front_id))
     {
         printf("\nERROR! MSMFB_OVERLAY_UNSET failed! (Line %d)\n", __LINE__);
+    }
+    if (ioctl(fb_fd, FBIOPAN_DISPLAY, &vinfo) < 0) {
+       DEBUG_PRINT_ERROR("FBIOPAN_DISPLAY failed! line=%d\n", __LINE__);
     }
 }
 
