@@ -2711,13 +2711,11 @@ static OMX_ERRORTYPE use_output_buffer ( OMX_COMPONENTTYPE *dec_handle,
                         bufSize, 8192,
                         &p_eglHeaders[bufCnt]->ion_buf_info.ion_alloc_data,
                         &p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data,ION_FLAG_CACHED);
-    if(p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd < 0) {
-        error = OMX_ErrorInsufficientResources;
-        goto ion_fail;
-    }
+    if(p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd < 0)
+        return OMX_ErrorInsufficientResources;
 
     int pmem_fd = -1;
-    p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd = pmem_fd = p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data.fd;
+    pmem_fd = p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data.fd;
     DEBUG_PRINT_ERROR("\n fd is 0x%x ", p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd);
 
     printf("\n outside of alloc alloc_data: handle(0x%X), len(%u), align(%u), "
@@ -2739,7 +2737,7 @@ static OMX_ERRORTYPE use_output_buffer ( OMX_COMPONENTTYPE *dec_handle,
 
     if (p_eglHeaders[bufCnt]->pbuff == MAP_FAILED)
     {
-        close(p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd);
+        close(p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data.fd);
 #ifdef USE_ION
         free_ion_memory(&p_eglHeaders[bufCnt]->ion_buf_info);
 #endif
@@ -2795,11 +2793,6 @@ static OMX_ERRORTYPE use_output_buffer ( OMX_COMPONENTTYPE *dec_handle,
     if (OMX_ErrorNone != error)
         DEBUG_PRINT("\n use buffer call failed \n");
 #endif
-    }
-    return error;
-ion_fail:
-    for(int i=0; i < bufCnt; ++i) {
-        free_ion_memory(&p_eglHeaders[i]->ion_buf_info);
     }
     return error;
 }
@@ -2918,7 +2911,7 @@ static void do_freeHandle_and_clean_up(bool isDueToError)
                munmap (pOutYUVBufHdrs[bufCnt]->pBuffer,
                     pOutYUVBufHdrs[bufCnt]->nAllocLen);
 #ifdef USE_ION
-               close(p_eglHeaders[bufCnt]->ion_buf_info.ion_device_fd);
+               close(p_eglHeaders[bufCnt]->ion_buf_info.fd_ion_data.fd);
                free_ion_memory(&p_eglHeaders[bufCnt]->ion_buf_info);
 #else
                close(p_eglHeaders[bufCnt]->pmem_fd);
@@ -4415,7 +4408,7 @@ void free_output_buffers()
            {
 
 #ifdef USE_ION
-       close(p_eglHeaders[index]->ion_buf_info.ion_device_fd);
+       close(p_eglHeaders[index]->ion_buf_info.fd_ion_data.fd);
        free_ion_memory(&p_eglHeaders[index]->ion_buf_info);
 #else
        close(p_eglHeaders[index]->pmem_fd);

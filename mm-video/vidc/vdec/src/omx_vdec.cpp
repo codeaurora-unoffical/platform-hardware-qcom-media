@@ -4503,7 +4503,8 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
         drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
     } else {
 #endif
-            if (drv_ctx.ptr_outputbuffer[index].pmem_fd > 0 && !ouput_egl_buffers && !m_use_output_pmem)
+            if (drv_ctx.ptr_outputbuffer[index].pmem_fd > 0 && !ouput_egl_buffers
+                        && !m_use_output_pmem && !output_use_buffer)
             {
                if(!secure_mode) {
                     DEBUG_PRINT_LOW("unmap the output buffer fd = %d",
