@@ -1234,8 +1234,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
   if(drv_ctx.video_driver_fd < 0)
   {
       DEBUG_PRINT_ERROR("\n Omx_vdec::Comp Init Returning failure, errno %d", errno);
-      eRet = OMX_ErrorInsufficientResources;
-      goto cleanup;
+      return OMX_ErrorInsufficientResources;
   }
   drv_ctx.frame_rate.fps_numerator = DEFAULT_FPS;
   drv_ctx.frame_rate.fps_denominator = 1;
