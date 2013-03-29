@@ -313,12 +313,7 @@ boolean H264_Utils::extract_rbsp(OMX_IN   OMX_U8  *buffer,
 
   if( nal_unit->nalu_type == NALU_TYPE_EOSEQ ||
       nal_unit->nalu_type == NALU_TYPE_EOSTREAM)
-  {
-    if (nal_len + sizeofNalLengthField)
-      return true;
-    else
-      return false;
-  }
+    return (nal_len + sizeofNalLengthField);
 
   zero_count = 0;
   while (pos < (nal_len+sizeofNalLengthField))    //similar to for in p-42
@@ -333,10 +328,7 @@ boolean H264_Utils::extract_rbsp(OMX_IN   OMX_U8  *buffer,
         if( start_code ) {
           *rbsp_length -= 2;
           pos -= 2;
-          if (pos)
-            return true;
-          else
-            return false;
+          return pos;
         }
       }
       zero_count = 0;
