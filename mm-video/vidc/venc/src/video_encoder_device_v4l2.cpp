@@ -48,7 +48,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define H264_BP_START 0
 #define H264_HP_START (H264_BP_START + 13)
 #define H264_MP_START (H264_BP_START + 26)
-#define POLL_TIMEOUT 0x7fffffff
+#define POLL_TIMEOUT 1000
 
 /* MPEG4 profile and level table*/
 static const unsigned int mpeg4_profile_level_table[][5]=
@@ -174,6 +174,10 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 	etb_count=0;
 	for (i = 0; i < MAX_PORT; i++)
 		streaming[i] = false;
+
+	paused = false;
+	pthread_mutex_init(&pause_resume_mlock, NULL);
+	pthread_cond_init(&pause_resume_cond, NULL);
 }
 
 venc_dev::~venc_dev()
@@ -181,9 +185,8 @@ venc_dev::~venc_dev()
   //nothing to do
 }
 
-void* async_venc_message_thread (void *input)
+void* venc_dev::async_venc_message_thread (void *input)
 {
-  struct venc_timeout timeout;
   struct venc_msg venc_msg;
   omx_video* omx_venc_base = NULL;
   omx_venc *omx = reinterpret_cast<omx_venc*>(input);
@@ -191,7 +194,6 @@ void* async_venc_message_thread (void *input)
   OMX_BUFFERHEADERTYPE* omxhdr = NULL;
 
   prctl(PR_SET_NAME, (unsigned long)"VideoEncCallBackThread", 0, 0, 0);
-  timeout.millisec = VEN_TIMEOUT_INFINITE;
   struct v4l2_plane plane[VIDEO_MAX_PLANES];
   struct pollfd pfd;
   struct v4l2_buffer v4l2_buf;
@@ -203,10 +205,36 @@ void* async_venc_message_thread (void *input)
   memset(&v4l2_buf, 0, sizeof(v4l2_buf));
   while(1)
   {
+	  pthread_mutex_lock(&omx->handle->pause_resume_mlock);
+	  if (omx->handle->paused) {
+		  venc_msg.msgcode = VEN_MSG_PAUSE;
+		  venc_msg.statuscode = VEN_S_SUCCESS;
+		  if(omx->async_message_process(input, &venc_msg) < 0)
+		  {
+			  DEBUG_PRINT_ERROR("\nERROR: Failed to process pause msg");
+			  pthread_mutex_unlock(&omx->handle->pause_resume_mlock);
+			  break;
+		  }
+
+		  /* Block here until the IL client resumes us again */
+		  pthread_cond_wait(&omx->handle->pause_resume_cond,
+				  &omx->handle->pause_resume_mlock);
+
+		  venc_msg.msgcode = VEN_MSG_RESUME;
+		  venc_msg.statuscode = VEN_S_SUCCESS;
+		  if(omx->async_message_process(input, &venc_msg) < 0)
+		  {
+			  DEBUG_PRINT_ERROR("\nERROR: Failed to process resume msg");
+			  pthread_mutex_unlock(&omx->handle->pause_resume_mlock);
+			  break;
+		  }
+	  }
+	  pthread_mutex_unlock(&omx->handle->pause_resume_mlock);
+
 	  rc = poll(&pfd, 1, POLL_TIMEOUT);
 		if (!rc) {
-			DEBUG_PRINT_ERROR("Poll timedout\n");
-			break;
+			DEBUG_PRINT_HIGH("Poll timedout\n");
+			continue;
 		} else if (rc < 0) {
 			DEBUG_PRINT_ERROR("Error while polling: %d\n", rc);
 			break;
@@ -1302,12 +1330,19 @@ unsigned venc_dev::venc_stop( void)
 
 unsigned venc_dev::venc_pause(void)
 {
-  return 0;
+	pthread_mutex_lock(&pause_resume_mlock);
+	paused = true;
+	pthread_mutex_unlock(&pause_resume_mlock);
+	return 0;
 }
 
 unsigned venc_dev::venc_resume(void)
 {
-  return 0;
+	pthread_mutex_lock(&pause_resume_mlock);
+	paused = false;
+	pthread_mutex_unlock(&pause_resume_mlock);
+
+	return pthread_cond_signal(&pause_resume_cond);
 }
 
 unsigned venc_dev::venc_start_done(void)
@@ -1692,9 +1727,17 @@ bool venc_dev::venc_set_extradata(OMX_U32 extra_data)
 	control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
 	control.value = V4L2_MPEG_VIDC_EXTRADATA_MULTISLICE_INFO;
 	DEBUG_PRINT_HIGH("venc_set_extradata:: %x", (int) extra_data);
-	if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
-		DEBUG_PRINT_ERROR("ERROR: Request for setting extradata failed");
-		return false;
+	if(multislice.mslice_mode && multislice.mslice_mode != V4L2_MPEG_VIDEO_MULTI_SLICE_MODE_SINGLE)
+	{
+		if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
+			DEBUG_PRINT_ERROR("ERROR: Request for setting extradata failed");
+			return false;
+		}
+	}
+	else
+	{
+		DEBUG_PRINT_ERROR("Failed to set slice extradata, slice_mode "
+						  "is set to [%lu]", multislice.mslice_mode);
 	}
 	return true;
 }
