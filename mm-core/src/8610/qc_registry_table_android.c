@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2012 - 2013, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -310,6 +310,38 @@ omx_core_cb_type core[] =
     "libOmxWmaDec.so",
     {
      "audio_decoder.wma"
+    }
+  },
+  {
+    "OMX.qcom.audio.decoder.wmaLossLess",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+     NULL,
+     NULL,
+     NULL,
+     NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxWmaDec.so",
+    {
+     "audio_decoder.wma"
+    }
+  },
+  {
+    "OMX.qcom.audio.decoder.amrwbplus",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+     NULL,
+     NULL,
+     NULL,
+     NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxAmrwbplusDec.so",
+    {
+     "audio_decoder.awbplus"
     }
   },
   {
