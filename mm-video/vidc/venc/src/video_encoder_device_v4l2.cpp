@@ -38,6 +38,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/msm_ion.h>
 #endif
 #include <media/msm_media_info.h>
+#include <cutils/properties.h>
 
 #define EXTRADATA_IDX(__num_planes) (__num_planes  - 1)
 
@@ -254,8 +255,7 @@ void* venc_dev::async_venc_message_thread (void *input)
 				venc_msg.buf.flags = 0;
 				venc_msg.buf.ptrbuffer = (OMX_U8 *)omx_venc_base->m_pOutput_pmem[v4l2_buf.index].buffer;
 				venc_msg.buf.clientdata=(void*)omxhdr;
-				venc_msg.buf.timestamp = v4l2_buf.timestamp.tv_sec * 1000000 + v4l2_buf.timestamp.tv_usec;
-
+				venc_msg.buf.timestamp = (uint64_t) v4l2_buf.timestamp.tv_sec * (uint64_t) 1000000 + (uint64_t) v4l2_buf.timestamp.tv_usec;
 				/* TODO: ideally report other types of frames as well
 				 * for now it doesn't look like IL client cares about
 				 * other types
@@ -438,12 +438,19 @@ bool venc_dev::venc_open(OMX_U32 codec)
   int r;
   unsigned int alignment = 0,buffer_size = 0, temp =0;
   struct v4l2_control control;
+  OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_enc";
 
-  m_nDriver_fd = open ("/dev/video33",O_RDWR);
+  char platform_name[64];
+  property_get("ro.board.platform", platform_name, "0");
+  if (!strncmp(platform_name, "msm8610", 7)) {
+    device_name = (OMX_STRING)"/dev/video/q6_enc";
+  }
+
+  m_nDriver_fd = open (device_name, O_RDWR);
   if(m_nDriver_fd == 0)
   {
     DEBUG_PRINT_ERROR("ERROR: Got fd as 0 for msm_vidc_enc, Opening again\n");
-    m_nDriver_fd = open ("/dev/video33",O_RDWR);
+    m_nDriver_fd = open (device_name, O_RDWR);
   }
 
   if((int)m_nDriver_fd < 0)
@@ -582,6 +589,26 @@ if (codec == OMX_VIDEO_CodingVPX)
   DEBUG_PRINT_LOW("Calling IOCTL to disable seq_hdr in sync_frame id=%d, val=%d\n", control.id, control.value);
   if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control))
 	  DEBUG_PRINT_ERROR("Failed to set control\n");
+
+  struct v4l2_frmsizeenum frmsize;
+
+  //Get the hardware capabilities
+  memset((void *)&frmsize,0,sizeof(frmsize));
+  frmsize.index = 0;
+  frmsize.pixel_format = m_sVenc_cfg.codectype;
+  ret = ioctl(m_nDriver_fd, VIDIOC_ENUM_FRAMESIZES, &frmsize);
+  if(ret || frmsize.type != V4L2_FRMSIZE_TYPE_STEPWISE) {
+      DEBUG_PRINT_ERROR("Failed to get framesizes\n");
+      return false;
+  }
+
+  if (frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE) {
+      capability.min_width = frmsize.stepwise.min_width;
+      capability.max_width = frmsize.stepwise.max_width;
+      capability.min_height = frmsize.stepwise.min_height;
+      capability.max_height = frmsize.stepwise.max_height;
+  }
+
   return true;
 }
 
@@ -3053,3 +3080,20 @@ bool venc_dev::venc_set_meta_mode(bool mode)
 	return true;
 }
 #endif
+
+bool venc_dev::venc_is_video_session_supported(unsigned long width,
+                                             unsigned long height)
+{
+	if (width < capability.min_width || width > capability.max_width ||
+	    height < capability.min_height || height > capability.max_height) {
+	    DEBUG_PRINT_ERROR("\n Unsupported video resolution width = %u height = %u\n",
+                               width, height);
+	    DEBUG_PRINT_ERROR("\n supported range width - min(%u) max(%u\n",
+                               capability.min_width, capability.max_width);
+	    DEBUG_PRINT_ERROR("\n supported range height - min(%u) max(%u)\n",
+                               capability.min_height, capability.max_height);
+	    return false;
+	}
+	DEBUG_PRINT_LOW("\n video session supported\n");
+	return true;
+}

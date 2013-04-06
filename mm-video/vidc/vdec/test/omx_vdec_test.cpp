@@ -282,6 +282,8 @@ int takeYuvLog = 0;
 int displayYuv = 0;
 int displayWindow = 0;
 int realtime_display = 0;
+int num_frames_to_decode = 0;
+int thumbnailMode = 0;
 
 Queue *etb_queue = NULL;
 Queue *fbd_queue = NULL;
@@ -389,7 +391,7 @@ static unsigned use_buf_virt_addr[32];
 OMX_QCOM_PLATFORM_PRIVATE_LIST      *pPlatformList = NULL;
 OMX_QCOM_PLATFORM_PRIVATE_ENTRY     *pPlatformEntry = NULL;
 OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *pPMEMInfo = NULL;
-
+OMX_CONFIG_RECTTYPE crop_rect = {0,0,0,0};
 
 static int bHdrflag = 0;
 
@@ -664,6 +666,7 @@ void PrintFramePackArrangement(OMX_QCOM_FRAME_PACK_ARRANGEMENT framePackingArran
 }
 void* ebd_thread(void* pArg)
 {
+  int signal_eos = 0;
   while(currentStatus != ERROR_STATE)
   {
     int readBytes =0;
@@ -685,8 +688,14 @@ void* ebd_thread(void* pArg)
       DEBUG_PRINT_ERROR("Error - No etb pBuffer to dequeue\n");
       continue;
     }
+
+    if (num_frames_to_decode && (etb_count >= num_frames_to_decode)) {
+        printf("\n Signal EOS %d frames decoded \n", num_frames_to_decode);
+       signal_eos = 1;
+    }
+
     pBuffer->nOffset = 0;
-    if((readBytes = Read_Buffer(pBuffer)) > 0) {
+    if(((readBytes = Read_Buffer(pBuffer)) > 0) && !signal_eos) {
         pBuffer->nFilledLen = readBytes;
         DEBUG_PRINT("%s: Timestamp sent(%lld)", __FUNCTION__, pBuffer->nTimeStamp);
         OMX_EmptyThisBuffer(dec_handle,pBuffer);
@@ -834,17 +843,22 @@ void* fbd_thread(void* pArg)
       {
           if (color_fmt == (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m)
           {
-             unsigned int stride = ((width + 127) & (~127));
-             unsigned int scanlines = ((height+31) & (~31));
+             printf("\n width: %d height: %d\n", crop_rect.nWidth, crop_rect.nHeight);
+             unsigned int stride = ((crop_rect.nWidth + 127) & (~127));
+             unsigned int scanlines = ((crop_rect.nHeight + 31) & (~31));
              char *temp = (char *) pBuffer->pBuffer;
              int i = 0;
-             for (i = 0; i < height; i++) {
-                bytes_written = fwrite(temp, width, 1, outputBufferFile);
+
+             temp += (stride * (int)crop_rect.nTop) +  (int)crop_rect.nLeft;
+             for (i = 0; i < crop_rect.nHeight; i++) {
+                bytes_written = fwrite(temp, crop_rect.nWidth, 1, outputBufferFile);
                 temp += stride;
              }
+
              temp = (char *)pBuffer->pBuffer + stride * scanlines;
-             for(i = 0; i < height/2; i++) {
-                 bytes_written += fwrite(temp, width, 1, outputBufferFile);
+             temp += (stride * (int)crop_rect.nTop) +  (int)crop_rect.nLeft;
+             for(i = 0; i < crop_rect.nHeight/2; i++) {
+                 bytes_written += fwrite(temp, crop_rect.nWidth, 1, outputBufferFile);
                  temp += stride;
              }
          }
@@ -1152,6 +1166,23 @@ OMX_ERRORTYPE EventHandler(OMX_IN OMX_HANDLETYPE hComponent,
             break;
         case OMX_EventPortSettingsChanged:
             DEBUG_PRINT("OMX_EventPortSettingsChanged port[%d]\n", nData1);
+            if (nData2 == OMX_IndexConfigCommonOutputCrop) {
+                OMX_U32 outPortIndex = 1;
+                 if (nData1 == outPortIndex) {
+                     crop_rect.nPortIndex = outPortIndex;
+                     OMX_ERRORTYPE ret = OMX_GetConfig(dec_handle,
+                                                       OMX_IndexConfigCommonOutputCrop, &crop_rect);
+                     if (FAILED(ret)) {
+                         DEBUG_PRINT_ERROR("Failed to get crop rectangle\n");
+                         break;
+                     } else
+                         DEBUG_PRINT("Got Crop Rect: (%d, %d) (%d x %d)\n",
+                             crop_rect.nLeft, crop_rect.nTop, crop_rect.nWidth, crop_rect.nHeight);
+                 }
+                 currentStatus = GOOD_STATE;
+                 break;
+            }
+
 #ifdef _MSM8974_
             if (nData2 != OMX_IndexParamPortDefinition)
               break;
@@ -1274,6 +1305,12 @@ int main(int argc, char **argv)
     sliceheight = height = 144;
     stride = width = 176;
 
+    crop_rect.nLeft = 0;
+    crop_rect.nTop = 0;
+    crop_rect.nWidth = width;
+    crop_rect.nHeight = height;
+
+
     if (argc < 2)
     {
       printf("To use it: ./mm-vdec-omx-test <clip location> \n");
@@ -1289,10 +1326,10 @@ int main(int argc, char **argv)
     if(argc > 2)
     {
       codec_format_option = (codec_format)atoi(argv[2]);
-      // file_type, out_op, tst_op, nal_sz, disp_win, rt_dis, (fps), color, pic_order
-      int param[9] = {2, 1, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF};
+      // file_type, out_op, tst_op, nal_sz, disp_win, rt_dis, (fps), color, pic_order, num_frames_to_decode
+      int param[10] = {2, 1, 1, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF};
       int next_arg = 3, idx = 0;
-      while (argc > next_arg && idx < 9)
+      while (argc > next_arg && idx < 10)
       {
         if (strlen(argv[next_arg]) > 2)
         {
@@ -1315,10 +1352,12 @@ int main(int argc, char **argv)
       }
       outputOption = param[idx++];
       test_option = param[idx++];
-      displayWindow = param[idx++];
-      if (displayWindow > 0)
-        printf("Only entire display window supported! Ignoring value\n");
-      realtime_display = param[idx++];
+      if (test_option != 3) {
+          displayWindow = param[idx++];
+          if (displayWindow > 0)
+              printf("Only entire display window supported! Ignoring value\n");
+          realtime_display = param[idx++];
+      }
       if (realtime_display)
       {
         takeYuvLog = 0;
@@ -1329,7 +1368,10 @@ int main(int argc, char **argv)
         }
       }
       color_fmt_type = (param[idx] != 0xFF)? param[idx++] : color_fmt_type;
-      pic_order = (param[idx] != 0xFF)? param[idx++] : 0;
+      if (test_option != 3) {
+          pic_order = (param[idx] != 0xFF)? param[idx++] : 0;
+          num_frames_to_decode = param[idx++];
+      }
       printf("Executing DynPortReconfig QCIF 144 x 176 \n");
     }
     else
@@ -1436,12 +1478,15 @@ int main(int argc, char **argv)
       printf(" 1 --> Play the clip till the end\n");
       printf(" 2 --> Run compliance test. Do NOT expect any display for most option. \n");
       printf("       Please only see \"TEST SUCCESSFULL\" to indicate test pass\n");
+      printf(" 3 --> Thumbnail decode mode\n");
       fflush(stdin);
       fgets(tempbuf,sizeof(tempbuf),stdin);
       sscanf(tempbuf,"%d",&test_option);
       fflush(stdin);
+      if (test_option == 3)
+          thumbnailMode = 1;
 
-      if (outputOption == 1 || outputOption == 3)
+      if ((outputOption == 1 || outputOption == 3) && thumbnailMode == 0)
       {
           printf(" *********************************************\n");
           printf(" ENTER THE PORTION OF DISPLAY TO USE\n");
@@ -1463,7 +1508,7 @@ int main(int argc, char **argv)
           }
       }
 
-      if (outputOption == 1 || outputOption == 3)
+      if ((outputOption == 1 || outputOption == 3) && thumbnailMode == 0)
       {
           printf(" *********************************************\n");
           printf(" DO YOU WANT TEST APP TO RENDER in Real time \n");
@@ -1500,14 +1545,25 @@ int main(int argc, char **argv)
       sscanf(tempbuf,"%d",&color_fmt_type);
       fflush(stdin);
 
-      printf(" *********************************************\n");
-      printf(" Output picture order option: \n");
-      printf(" *********************************************\n");
-      printf(" 0 --> Display order\n 1 --> Decode order\n");
-      fflush(stdin);
-      fgets(tempbuf,sizeof(tempbuf),stdin);
-      sscanf(tempbuf,"%d",&pic_order);
-      fflush(stdin);
+      if (thumbnailMode != 1) {
+          printf(" *********************************************\n");
+          printf(" Output picture order option: \n");
+          printf(" *********************************************\n");
+          printf(" 0 --> Display order\n 1 --> Decode order\n");
+          fflush(stdin);
+          fgets(tempbuf,sizeof(tempbuf),stdin);
+          sscanf(tempbuf,"%d",&pic_order);
+          fflush(stdin);
+
+          printf(" *********************************************\n");
+          printf(" Number of frames to decode: \n");
+          printf(" 0 ---> decode all frames: \n");
+          printf(" *********************************************\n");
+          fflush(stdin);
+          fgets(tempbuf,sizeof(tempbuf),stdin);
+          sscanf(tempbuf,"%d",&num_frames_to_decode);
+          fflush(stdin);
+      }
     }
     if (file_type_option >= FILE_TYPE_COMMON_CODEC_MAX)
     {
@@ -1993,6 +2049,13 @@ int Init_Decoder()
       DEBUG_PRINT_ERROR("Error: Unsupported codec %d\n", codec_format_option);
     }
 
+    if (thumbnailMode == 1) {
+        QOMX_ENABLETYPE thumbNailMode;
+        thumbNailMode.bEnable = OMX_TRUE;
+        OMX_SetParameter(dec_handle,(OMX_INDEXTYPE)OMX_QcomIndexParamVideoSyncFrameDecodingMode,
+                     (OMX_PTR)&thumbNailMode);
+        DEBUG_PRINT("Enabled Thumbnail mode\n");
+    }
 
     return 0;
 }
@@ -2135,6 +2198,38 @@ int Play_Decoder()
             stride = width;
     }
 #endif
+#ifdef _MSM8974_
+    if( (codec_format_option == CODEC_FORMAT_VC1) &&
+        (file_type_option == FILE_TYPE_RCV) ) {
+        //parse struct_A data to get height and width information
+        unsigned int temp;
+        lseek64(inputBufferFileFd, 0, SEEK_SET);
+        if (read(inputBufferFileFd, &temp, 4) < 0) {
+            DEBUG_PRINT_ERROR("\nFailed to read vc1 data\n");
+            return -1;
+        }
+        //Refer to Annex L of SMPTE 421M-2006 VC1 decoding standard
+        //We need to skip 12 bytes after 0xC5 in sequence layer data
+        //structure to read struct_A, which includes height and
+        //width information.
+        if ((temp & 0xFF000000) == 0xC5000000) {
+            lseek64(inputBufferFileFd, 12, SEEK_SET);
+
+            if ( read(inputBufferFileFd, &height, 4 ) < -1 ) {
+                DEBUG_PRINT_ERROR("\nFailed to read height for vc-1\n");
+                return  -1;
+            }
+            if ( read(inputBufferFileFd, &width, 4 ) == -1 ) {
+                DEBUG_PRINT_ERROR("\nFailed to read width for vc-1\n");
+                return  -1;
+            }
+            lseek64(inputBufferFileFd, 0, SEEK_SET);
+        }
+        DEBUG_PRINT("\n RCV clip width = %u height = %u \n",width, height);
+    }
+#endif
+    crop_rect.nWidth = width;
+    crop_rect.nHeight = height;
 
     bufCnt = 0;
     portFmt.format.video.nFrameHeight = height;
@@ -2388,8 +2483,9 @@ int Play_Decoder()
 
       pInputBufHdrs[0]->nInputPortIndex = 0;
       pInputBufHdrs[0]->nOffset = 0;
+#ifndef _MSM8974_
       pInputBufHdrs[0]->nFlags = 0;
-
+#endif
       ret = OMX_EmptyThisBuffer(dec_handle, pInputBufHdrs[0]);
       if (ret != OMX_ErrorNone)
       {
@@ -2403,6 +2499,9 @@ int Play_Decoder()
           DEBUG_PRINT("OMX_EmptyThisBuffer success!\n");
       }
       i = 1;
+#ifdef _MSM8974_
+      pInputBufHdrs[0]->nFlags = 0;
+#endif
     }
     else
     {
@@ -3175,7 +3274,11 @@ static int Read_Buffer_From_RCV_File_Seq_Layer(OMX_BUFFERHEADERTYPE  *pBufHdr)
     unsigned int readOffset = 0, size_struct_C = 0;
     unsigned int startcode = 0;
     pBufHdr->nFilledLen = 0;
+#ifdef _MSM8974_
+    pBufHdr->nFlags |= OMX_BUFFERFLAG_CODECCONFIG;
+#else
     pBufHdr->nFlags = 0;
+#endif
 
     DEBUG_PRINT("Inside %s \n", __FUNCTION__);
 
@@ -3184,16 +3287,20 @@ static int Read_Buffer_From_RCV_File_Seq_Layer(OMX_BUFFERHEADERTYPE  *pBufHdr)
     /* read size of struct C as it need not be 4 always*/
     read(inputBufferFileFd, &size_struct_C, 4);
 
+#ifndef _MSM8974_
     /* reseek to beginning of sequence header */
     lseek64(inputBufferFileFd, -8, SEEK_CUR);
-
+#endif
     if ((startcode & 0xFF000000) == 0xC5000000)
     {
 
       DEBUG_PRINT("Read_Buffer_From_RCV_File_Seq_Layer size_struct_C: %d\n", size_struct_C);
-
+#ifdef _MSM8974_
+      readOffset = read(inputBufferFileFd, pBufHdr->pBuffer, size_struct_C);
+      lseek64(inputBufferFileFd, 24, SEEK_CUR);
+#else
       readOffset = read(inputBufferFileFd, pBufHdr->pBuffer, VC1_SEQ_LAYER_SIZE_WITHOUT_STRUCTC + size_struct_C);
-
+#endif
     }
     else if((startcode & 0xFF000000) == 0x85000000)
     {
@@ -3202,8 +3309,12 @@ static int Read_Buffer_From_RCV_File_Seq_Layer(OMX_BUFFERHEADERTYPE  *pBufHdr)
       rcv_v1 = 1;
 
       DEBUG_PRINT("Read_Buffer_From_RCV_File_Seq_Layer size_struct_C: %d\n", size_struct_C);
-
+#ifdef _MSM8974_
+      readOffset = read(inputBufferFileFd, pBufHdr->pBuffer, size_struct_C);
+      lseek64(inputBufferFileFd, 8, SEEK_CUR);
+#else
       readOffset = read(inputBufferFileFd, pBufHdr->pBuffer, VC1_SEQ_LAYER_SIZE_V1_WITHOUT_STRUCTC + size_struct_C);
+#endif
 
     }
     else
@@ -4188,6 +4299,9 @@ int output_port_reconfig()
     width = portFmt.format.video.nFrameWidth;
     stride = portFmt.format.video.nStride;
     sliceheight = portFmt.format.video.nSliceHeight;
+
+    crop_rect.nWidth = width;
+    crop_rect.nHeight = height;
 
     if (displayYuv == 2)
     {

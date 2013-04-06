@@ -1295,6 +1295,12 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
           DEBUG_PRINT_ERROR("\n OMX_COMPONENT_GENERATE_HARDWARE_ERROR");
           pThis->omx_report_error ();
           break;
+
+        case OMX_COMPONENT_GENERATE_UNSUPPORTED_SETTING:
+          DEBUG_PRINT_ERROR("\n OMX_COMPONENT_GENERATE_UNSUPPORTED_SETTING\n");
+          pThis->omx_report_unsupported_setting();
+          break;
+
         case OMX_COMPONENT_GENERATE_INFO_PORT_RECONFIG:
         {
           DEBUG_PRINT_HIGH("\n Rxd OMX_COMPONENT_GENERATE_INFO_PORT_RECONFIG");
@@ -1331,6 +1337,27 @@ void omx_vdec::update_resolution(int width, int height)
     rectangle.nHeight = drv_ctx.video_resolution.frame_height;
 }
 
+OMX_ERRORTYPE omx_vdec::is_video_session_supported()
+{
+  if (drv_ctx.video_resolution.frame_width < m_decoder_capability.min_width ||
+      drv_ctx.video_resolution.frame_width > m_decoder_capability.max_width ||
+      drv_ctx.video_resolution.frame_height < m_decoder_capability.min_height ||
+      drv_ctx.video_resolution.frame_height > m_decoder_capability.max_height) {
+      DEBUG_PRINT_ERROR("\n Unsupported video resolution width = %u height = %u\n",
+                        drv_ctx.video_resolution.frame_width,
+                        drv_ctx.video_resolution.frame_height);
+      DEBUG_PRINT_ERROR("\n supported range width - min(%u) max(%u\n",
+                        m_decoder_capability.min_width,
+                        m_decoder_capability.max_width);
+      DEBUG_PRINT_ERROR("\n supported range height - min(%u) max(%u)\n",
+                        m_decoder_capability.min_height,
+                        m_decoder_capability.max_height);
+      return OMX_ErrorUnsupportedSetting;
+  }
+  DEBUG_PRINT_HIGH("\n video session supported\n");
+  return OMX_ErrorNone;
+}
+
 /* ======================================================================
 FUNCTION
   omx_vdec::ComponentInit
@@ -1357,11 +1384,21 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 	struct v4l2_format fmt;
 	struct v4l2_requestbuffers bufreq;
 	struct v4l2_control control;
+	struct v4l2_frmsizeenum frmsize;
 	unsigned int   alignment = 0,buffer_size = 0;
 	int fds[2];
 	int r,ret=0;
 	bool codec_ambiguous = false;
-	OMX_STRING device_name = (OMX_STRING)"/dev/video32";
+	OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_dec";
+
+#ifdef _ANDROID_
+	char platform_name[64];
+	property_get("ro.board.platform", platform_name, "0");
+	if (!strncmp(platform_name, "msm8610", 7)) {
+	    device_name = (OMX_STRING)"/dev/video/q6_dec";
+	}
+#endif
+
 	if(!strncmp(role, "OMX.qcom.video.decoder.avc.secure",OMX_MAX_STRINGNAME_SIZE)){
 		struct v4l2_control control;
 		secure_mode = true;
@@ -1369,13 +1406,14 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 		role = (OMX_STRING)"OMX.qcom.video.decoder.avc";
 	}
 
-	drv_ctx.video_driver_fd = open("/dev/video32", O_RDWR);
+	drv_ctx.video_driver_fd = open(device_name, O_RDWR);
 
 	DEBUG_PRINT_HIGH("\n omx_vdec::component_init(): Open returned fd %d, errno %d",
 			drv_ctx.video_driver_fd, errno);
 
 	if(drv_ctx.video_driver_fd == 0){
-		drv_ctx.video_driver_fd = open(device_name, O_RDWR);
+	    DEBUG_PRINT_ERROR("Omx_vdec:: Got fd as 0 for msm_vidc_dec, Opening again\n");
+	    drv_ctx.video_driver_fd = open(device_name, O_RDWR);
 	}
 
 	if(drv_ctx.video_driver_fd < 0)
@@ -1637,6 +1675,24 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 			} else {
 				DEBUG_PRINT_ERROR("Codec should not be ambiguous");
 			}
+		}
+
+		//Get the hardware capabilities
+		memset((void *)&frmsize,0,sizeof(frmsize));
+		frmsize.index = 0;
+		frmsize.pixel_format = output_capability;
+		ret = ioctl(drv_ctx.video_driver_fd,
+			VIDIOC_ENUM_FRAMESIZES, &frmsize);
+		if (ret || frmsize.type != V4L2_FRMSIZE_TYPE_STEPWISE) {
+			DEBUG_PRINT_ERROR("Failed to get framesizes\n");
+			return OMX_ErrorHardware;
+		}
+
+		if (frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE) {
+		    m_decoder_capability.min_width = frmsize.stepwise.min_width;
+		    m_decoder_capability.max_width = frmsize.stepwise.max_width;
+		    m_decoder_capability.min_height = frmsize.stepwise.min_height;
+		    m_decoder_capability.max_height = frmsize.stepwise.max_height;
 		}
 
 		fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -3115,6 +3171,9 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
              {
                  update_resolution(portDefn->format.video.nFrameWidth,
                     portDefn->format.video.nFrameHeight);
+                 eRet = is_video_session_supported();
+                 if (eRet)
+                    break;
 			fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 			fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
 			fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
@@ -6641,16 +6700,21 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
   if (!output_flush_progress)
   {
     /* This is the error check for non-recoverable errros */
+    bool is_duplicate_ts_valid = true;
+    if (output_capability == V4L2_PIX_FMT_MPEG4 ||
+      output_capability == V4L2_PIX_FMT_DIVX ||
+      output_capability == V4L2_PIX_FMT_DIVX_311)
+      is_duplicate_ts_valid = false;
     if (buffer->nFilledLen > 0)
       time_stamp_dts.get_next_timestamp(buffer,
-      (drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
-        ?true:false);
+      ((drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
+        ?true:false) && is_duplicate_ts_valid);
     else {
       m_inp_err_count++;
       time_stamp_dts.remove_time_stamp(
               buffer->nTimeStamp,
-              (drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
-                ?true:false);
+              ((drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
+                ?true:false) && is_duplicate_ts_valid);
     }
     if (m_debug_timestamp)
     {
@@ -6985,12 +7049,19 @@ int omx_vdec::async_message_process (void *context, void* message)
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     ret = ioctl(omx->drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
     omx->update_resolution(fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height);
-    omx->drv_ctx.video_resolution.stride = fmt.fmt.pix_mp.plane_fmt[0].bytesperline;
-    omx->drv_ctx.video_resolution.scan_lines = fmt.fmt.pix_mp.plane_fmt[0].reserved[0];
-    omx->m_port_def.nPortIndex = 1;
-    eRet = omx->update_portdef(&(omx->m_port_def));
-    omx->post_event ((unsigned)NULL, vdec_msg->status_code,\
-                OMX_COMPONENT_GENERATE_INFO_PORT_RECONFIG);
+    ret = omx->is_video_session_supported();
+    if (ret) {
+      omx->post_event (NULL, vdec_msg->status_code,
+                       OMX_COMPONENT_GENERATE_UNSUPPORTED_SETTING);
+    }
+    else {
+      omx->drv_ctx.video_resolution.stride = fmt.fmt.pix_mp.plane_fmt[0].bytesperline;
+      omx->drv_ctx.video_resolution.scan_lines = fmt.fmt.pix_mp.plane_fmt[0].reserved[0];
+      omx->m_port_def.nPortIndex = 1;
+      eRet = omx->update_portdef(&(omx->m_port_def));
+      omx->post_event ((unsigned)NULL,vdec_msg->status_code,\
+                  OMX_COMPONENT_GENERATE_INFO_PORT_RECONFIG);
+    }
     break;
   }
   default:
@@ -7846,6 +7917,11 @@ OMX_ERRORTYPE omx_vdec::get_buffer_req(vdec_allocatorproperty *buffer_prop)
   else
   {
     int extra_idx = 0;
+
+    eRet = is_video_session_supported();
+    if (eRet)
+      return eRet;
+
     buffer_prop->buffer_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
     buf_size = buffer_prop->buffer_size;
     extra_idx = EXTRADATA_IDX(drv_ctx.num_planes);
