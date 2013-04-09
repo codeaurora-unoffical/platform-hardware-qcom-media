@@ -1269,6 +1269,12 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
       role = "OMX.qcom.video.decoder.mpeg2";
       device_name =  "/dev/msm_vidc_dec_sec";
 	  is_secure = 1;
+  } else if (!strncmp(role, "OMX.qcom.video.decoder.mpeg4.secure",OMX_MAX_STRINGNAME_SIZE)){
+      secure_mode = true;
+      arbitrary_bytes = false;
+      role = "OMX.qcom.video.decoder.mpeg4";
+      device_name =  "/dev/msm_vidc_dec_sec";
+      is_secure = 1;
   }
 
   if (secure_mode) {
@@ -5731,7 +5737,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
   }
 
 #ifdef MAX_RES_1080P
-  if(codec_type_parse == CODEC_TYPE_MPEG4 || codec_type_parse == CODEC_TYPE_DIVX){
+  if(!secure_mode && (codec_type_parse == CODEC_TYPE_MPEG4 || codec_type_parse == CODEC_TYPE_DIVX)){
     mp4StreamType psBits;
     psBits.data = (unsigned char *)(buffer->pBuffer + buffer->nOffset);
     psBits.numBytes = buffer->nFilledLen;
