@@ -47,8 +47,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MPEG4_720P_LEVEL 6
 #define H263_BP_START 0
 #define H264_BP_START 0
-#define H264_HP_START (H264_BP_START + 13)
-#define H264_MP_START (H264_BP_START + 26)
+#define H264_HP_START (H264_BP_START + 17)
+#define H264_MP_START (H264_BP_START + 34)
 #define POLL_TIMEOUT 1000
 
 /* MPEG4 profile and level table*/
@@ -1505,7 +1505,7 @@ bool venc_dev::venc_use_buf(void *buf_addr, unsigned port,unsigned index)
 
 		rc = ioctl(m_nDriver_fd, VIDIOC_PREPARE_BUF, &buf);
 		if (rc)
-			DEBUG_PRINT_ERROR("VIDIOC_PREPARE_BUF Failed\n");
+			DEBUG_PRINT_LOW("VIDIOC_PREPARE_BUF Failed\n");
 	}
 	else if(port == PORT_INDEX_OUT)
 	{
@@ -1540,7 +1540,7 @@ bool venc_dev::venc_use_buf(void *buf_addr, unsigned port,unsigned index)
 		}
 		rc = ioctl(m_nDriver_fd, VIDIOC_PREPARE_BUF, &buf);
 		if (rc)
-			DEBUG_PRINT_ERROR("VIDIOC_PREPARE_BUF Failed\n");
+			DEBUG_PRINT_LOW("VIDIOC_PREPARE_BUF Failed\n");
 	} else {
 		DEBUG_PRINT_ERROR("\nERROR: venc_use_buf:Invalid Port Index ");
 		return false;
