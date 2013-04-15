@@ -364,6 +364,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /*"OMX.QCOM.index.param.video.EnableSmoothStreaming"*/
     OMX_QcomIndexParamEnableSmoothStreaming = 0x7F000022,
+
+    /*"OMX.QCOM.index.config.TurboMode"*/
+    OMX_QcomIndexConfigTurboMode = 0x7F000023,
 };
 
 /**
