@@ -59,9 +59,11 @@ enum {
     kKeyDTSSubtype           = 'dtss',  //int32_t
 
     //Extractor sets this
-    kKeyUseArbitraryMode     = 'ArbM',  //bool (int32_t)
-    kKeySmoothStreaming      = 'ESmS',  //bool (int32_t)
+    kKeyUseArbitraryMode     = 'ArbM',  // bool (int32_t)
+    kKeySmoothStreaming      = 'ESmS',  // bool (int32_t)
     kKeyHFR                  = 'hfr ',  // int32_t
+    kKeyEnableDecodeOrder    = 'EDeO',  // bool (int32_t)
+    kKeyConfigTurboMode      = 'turb'   // bool (int32_t)
 };
 
 enum {

@@ -844,6 +844,8 @@ private:
     int output_capability;
     bool streaming[MAX_PORT];
 #endif
+    bool m_turbo_mode;
+    int set_turbo_mode(bool mode);
     unsigned int m_fill_output_msg;
     class allocate_color_convert_buf {
     public:
