@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008 The Khronos Group Inc. 
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -89,6 +90,8 @@ typedef enum OMX_AUDIO_CODINGTYPE {
     OMX_AUDIO_CodingWMA,         /**< Any variant of WMA encoded data */
     OMX_AUDIO_CodingRA,          /**< Any variant of RA encoded data */
     OMX_AUDIO_CodingMIDI,        /**< Any variant of MIDI encoded data */
+    OMX_AUDIO_CodingFLAC,        /**< Any variant of FLAC encoded data */
+    OMX_AUDIO_CodingAC3,        /**< Any variant of AC3 encoded data */
     OMX_AUDIO_CodingKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     OMX_AUDIO_CodingVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
     OMX_AUDIO_CodingMax = 0x7FFFFFFF

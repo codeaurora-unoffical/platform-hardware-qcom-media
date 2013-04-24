@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2009, The Linux Foundation. All rights reserved.
+Copyright (c) 2009,2013 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -69,6 +69,7 @@ typedef enum QOMX_AUDIO_EXTENSIONS_INDEXTYPE
     QOMX_IndexParamAudioVoiceRecord      = 0x7F200003, /**< "OMX.Qualcomm.index.audio.VoiceRecord" */
     QOMX_IndexConfigAudioDualMono        = 0x7F200004, /**< "OMX.Qualcomm.index.audio.dualmono" */
     QOMX_IndexParamAudioAacSelectMixCoef = 0x7F200005, /**< "OMX.Qualcomm.index.audio.aac_sel_mix_coef" */
+    QOMX_IndexParamAudioAc3             = 0x7F200006, /**< "OMX.Qualcomm.index.audio.ac3" */
     QOMX_IndexParamAudioUnused           = 0x7F2FFFFF
 } QOMX_AUDIO_EXTENSIONS_INDEXTYPE;
 
