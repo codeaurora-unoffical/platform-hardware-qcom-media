@@ -1781,6 +1781,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         if (eRet == OMX_ErrorNone && !secure_mode)
             enable_extradata(DEFAULT_EXTRADATA, true, true);
 #endif
+#if 0
 	if (output_capability != V4L2_PIX_FMT_VC1_ANNEX_L &&
 		output_capability != V4L2_PIX_FMT_VC1_ANNEX_G ) {
 		control.id = V4L2_CID_MPEG_VIDC_VIDEO_CONTINUE_DATA_TRANSFER;
@@ -1790,6 +1791,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 			DEBUG_PRINT_ERROR("Failed to enable Smooth Streaming");
 		}
 	}
+#endif
         eRet=get_buffer_req(&drv_ctx.ip_buf);
         DEBUG_PRINT_HIGH("Input Buffer Size =%d \n ",drv_ctx.ip_buf.buffer_size);
         get_buffer_req(&drv_ctx.op_buf);
