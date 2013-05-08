@@ -131,6 +131,7 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
         & BITMASK_FLAG(mIndex)) == 0x0)
 #ifdef _ANDROID_ICS_
 #define MAX_NUM_INPUT_BUFFERS 32
+#define MAX_NUM_OUTPUT_BUFFERS 32
 #endif
 void* message_thread(void *);
 // OMX video class
@@ -509,7 +510,6 @@ public:
   OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE m_sErrorCorrection;
   OMX_VIDEO_PARAM_INTRAREFRESHTYPE m_sIntraRefresh;
   OMX_U32 m_sExtraData;
-  OMX_U32 m_sDebugSliceinfo;
 
   // fill this buffer queue
   omx_cmd_queue         m_ftb_q;
@@ -541,6 +541,8 @@ public:
   bool m_event_port_settings_sent;
   OMX_U8                m_cRole[OMX_MAX_STRINGNAME_SIZE];
   extra_data_handler extra_data_handle;
+  unsigned int extradata_len[MAX_NUM_OUTPUT_BUFFERS];
+  unsigned int extradata_offset[MAX_NUM_OUTPUT_BUFFERS];
 
 private:
 #ifdef USE_ION
