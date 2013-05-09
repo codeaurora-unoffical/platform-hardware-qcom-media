@@ -2718,7 +2718,7 @@ bool omx_vdec::post_event(unsigned int p1,
 
 OMX_ERRORTYPE omx_vdec::get_supported_profile_level_for_1080p(OMX_VIDEO_PARAM_PROFILELEVELTYPE *profileLevelType)
 {
-  OMX_ERRORTYPE eRet = OMX_ErrorNoMore;
+  OMX_ERRORTYPE eRet = OMX_ErrorNone;
   if(!profileLevelType)
     return OMX_ErrorBadParameter;
 
@@ -6773,21 +6773,23 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
   {
     /* This is the error check for non-recoverable errros */
     bool is_duplicate_ts_valid = true;
+    bool is_interlaced = (drv_ctx.interlace != VDEC_InterlaceFrameProgressive);
+
     if (output_capability == V4L2_PIX_FMT_MPEG4 ||
       output_capability == V4L2_PIX_FMT_DIVX ||
       output_capability == V4L2_PIX_FMT_DIVX_311)
       is_duplicate_ts_valid = false;
-    if (buffer->nFilledLen > 0)
+
+    if (buffer->nFilledLen > 0) {
       time_stamp_dts.get_next_timestamp(buffer,
-      ((drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
-        ?true:false) && is_duplicate_ts_valid);
-    else {
+        is_interlaced && is_duplicate_ts_valid);
+    } else {
       m_inp_err_count++;
       time_stamp_dts.remove_time_stamp(
               buffer->nTimeStamp,
-              ((drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
-                ?true:false) && is_duplicate_ts_valid);
+                is_interlaced && is_duplicate_ts_valid);
     }
+
     if (m_debug_timestamp)
     {
       {
@@ -6809,7 +6811,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     {
       handle_extradata(buffer);
       if (client_extradata & OMX_TIMEINFO_EXTRADATA)
-        // Keep min timestamp interval to handle corrupted bit stream scenario
         set_frame_rate(buffer->nTimeStamp);
       else if (arbitrary_bytes)
         adjust_timestamp(buffer->nTimeStamp);
@@ -7056,6 +7057,10 @@ int omx_vdec::async_message_process (void *context, void* message)
   if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_EOSEQ)
   {
     omxhdr->nFlags |= QOMX_VIDEO_BUFFERFLAG_EOSEQ;
+  }
+  if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_DECODEONLY)
+  {
+    omxhdr->nFlags |= OMX_BUFFERFLAG_DECODEONLY;
   }
   vdec_msg->msgdata.output_frame.bufferaddr =
       omx->drv_ctx.ptr_outputbuffer[v4l2_buf_ptr->index].bufferaddr;
@@ -8433,7 +8438,25 @@ void omx_vdec::set_frame_rate(OMX_S64 act_timestamp)
         DEBUG_PRINT_LOW("set_frame_rate: frm_int(%lu) fps(%f)",
                          frm_int, drv_ctx.frame_rate.fps_numerator /
                          (float)drv_ctx.frame_rate.fps_denominator);
+
         enableAdditionalCores(frm_int);
+        /* We need to report the difference between this FBD and the previous FBD
+         * back to the driver for clock scaling purposes. */
+        struct v4l2_outputparm oparm;
+        /*XXX: we're providing timing info as seconds per frame rather than frames
+         * per second.*/
+        oparm.timeperframe.numerator = drv_ctx.frame_rate.fps_denominator;
+        oparm.timeperframe.denominator = drv_ctx.frame_rate.fps_numerator;
+
+        struct v4l2_streamparm sparm;
+        sparm.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+        sparm.parm.output = oparm;
+        if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_PARM, &sparm))
+        {
+            DEBUG_PRINT_ERROR("Unable to convey fps info to driver, \
+                    performance might be affected");
+        }
+
       }
     }
   }
