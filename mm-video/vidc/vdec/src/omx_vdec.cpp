@@ -446,6 +446,7 @@ omx_vdec::omx_vdec(): m_state(OMX_StateInvalid),
                       m_inp_bPopulated(OMX_FALSE),
                       m_out_bPopulated(OMX_FALSE),
                       m_flags(0),
+                      m_out_sync_frm_received(OMX_FALSE),
                       m_inp_bEnabled(OMX_TRUE),
                       m_out_bEnabled(OMX_TRUE),
                       m_platform_list(NULL),
@@ -885,6 +886,7 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
           else
           {
             pThis->execute_output_flush();
+            pThis->m_out_sync_frm_received = OMX_FALSE;
             if (pThis->m_cb.EventHandler)
             {
               if (p2 != VDEC_S_SUCCESS)
@@ -1123,6 +1125,7 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
           }
           pThis->prev_ts = LLONG_MAX;
           pThis->rst_prev_ts = true;
+          pThis->m_out_sync_frm_received = OMX_FALSE;
           break;
 
         case OMX_COMPONENT_GENERATE_HARDWARE_ERROR:
@@ -6552,6 +6555,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
                                OMX_BUFFERHEADERTYPE * buffer)
 {
   OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *pPMEMInfo = NULL;
+  struct vdec_output_frameinfo *ptr_respbuffer = NULL;
 
   if (!buffer || (buffer - m_out_mem_ptr) >= drv_ctx.op_buf.actualcount)
   {
@@ -6595,6 +6599,20 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
   DEBUG_PRINT_LOW("fill_buffer_done: bufhdr = %p, bufhdr->pBuffer = %p",
       buffer, buffer->pBuffer);
   pending_output_buffers --;
+  ptr_respbuffer = (struct vdec_output_frameinfo *)buffer->pOutputPortPrivate;
+  if (!m_out_sync_frm_received)
+  {
+    if(buffer->nFlags & OMX_BUFFERFLAG_SYNCFRAME)
+    {
+      m_out_sync_frm_received = OMX_TRUE;
+    }
+    else if(ptr_respbuffer->pic_type==PICTURE_TYPE_P)
+    {
+      DEBUG_PRINT_HIGH("Sync frame not received, marking buffer "
+        "0x%x flags 0x%x as decode only", buffer->pBuffer, buffer->nFlags);
+      buffer->nFlags |= OMX_BUFFERFLAG_DATACORRUPT;
+    }
+  }
 
   if (buffer->nFlags & OMX_BUFFERFLAG_EOS)
   {
