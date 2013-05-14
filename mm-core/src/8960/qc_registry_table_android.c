@@ -408,6 +408,38 @@ omx_core_cb_type core[] =
       "audio_decoder.aac"
     }
   },
+   {
+    "OMX.qcom.audio.decoder.passthroughac3",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxAC3PassthroughDec.so",
+    {
+      "audio_decoder.ac3"
+    }
+  },
+   {
+    "OMX.qcom.audio.decoder.passthrougheac3",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxAC3PassthroughDec.so",
+    {
+      "audio_decoder.eac3"
+    }
+  },
   {
     "OMX.qcom.audio.encoder.aac",
     NULL, // Create instance function
