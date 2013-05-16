@@ -19,7 +19,7 @@ libOmxVdec-def += -DNO_ARM_CLZ
 libOmxVdec-def += -UENABLE_DEBUG_LOW
 libOmxVdec-def += -DENABLE_DEBUG_HIGH
 libOmxVdec-def += -DENABLE_DEBUG_ERROR
-libOmxVdec-def += -DINPUT_BUFFER_LOG
+libOmxVdec-def += -UINPUT_BUFFER_LOG
 libOmxVdec-def += -UOUTPUT_BUFFER_LOG
 ifeq ($(TARGET_BOARD_PLATFORM),msm8660)
 libOmxVdec-def += -DMAX_RES_1080P
