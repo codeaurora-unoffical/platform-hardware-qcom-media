@@ -3022,11 +3022,9 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             if(nativeBuffersUsage->nPortIndex == OMX_CORE_OUTPUT_PORT_INDEX) {
 #ifdef USE_ION
                 if(secure_mode) {
-                        DEBUG_PRINT_HIGH("get_parameter: UNCACHED/PROTECTED/CP buffers from MM heap");
                         nativeBuffersUsage->nUsage = (GRALLOC_USAGE_PRIVATE_MM_HEAP | GRALLOC_USAGE_PROTECTED |
                                                       GRALLOC_USAGE_PRIVATE_CP_BUFFER | GRALLOC_USAGE_PRIVATE_UNCACHED);
                 } else {
-                        DEBUG_PRINT_HIGH("get_parameter: CACHED buffers from IOMMU heap");
                         nativeBuffersUsage->nUsage = (GRALLOC_USAGE_PRIVATE_IOMMU_HEAP);
                 }
 #else
@@ -4395,21 +4393,18 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
      m_pmem_info[i].pmem_fd = drv_ctx.ptr_outputbuffer[i].pmem_fd;
 
      *bufferHdr = (m_out_mem_ptr + i );
-     if(secure_mode) {
-          DEBUG_PRINT_HIGH("secure_mode - update bufferaddr(0x%x) with 0x%x",
-             drv_ctx.ptr_outputbuffer[i].bufferaddr, *bufferHdr);
+     if(secure_mode)
           drv_ctx.ptr_outputbuffer[i].bufferaddr = *bufferHdr;
-     }
      setbuffers.buffer_type = VDEC_BUFFER_TYPE_OUTPUT;
      memcpy (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[i],
              sizeof (vdec_bufferpayload));
 
      ioctl_msg.in  = &setbuffers;
      ioctl_msg.out = NULL;
-     DEBUG_PRINT_HIGH("Set Output Buffer Idx: %d, addr: 0x%x, pmem_fd = %d, "
-        "buffer_len = %d, offset = %d", i,
-        drv_ctx.ptr_outputbuffer[i].bufferaddr, drv_ctx.ptr_outputbuffer[i].pmem_fd,
-        drv_ctx.ptr_outputbuffer[i].buffer_len, drv_ctx.ptr_outputbuffer[i].offset);
+
+     DEBUG_PRINT_HIGH("\n Set the Output Buffer Idx: %d Addr: %x, pmem_fd=%0x%x", i,
+                       drv_ctx.ptr_outputbuffer[i],drv_ctx.ptr_outputbuffer[i].pmem_fd );
+
      if (ioctl (drv_ctx.video_driver_fd,VDEC_IOCTL_SET_BUFFER,
           &ioctl_msg) < 0)
      {
@@ -4679,9 +4674,6 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
     if(m_enable_android_native_buffers) {
         if(drv_ctx.ptr_outputbuffer[index].pmem_fd > 0) {
             if(!secure_mode) {
-                DEBUG_PRINT_HIGH("free_output: munmap(%p, %d)",
-                   drv_ctx.ptr_outputbuffer[index].bufferaddr,
-                   drv_ctx.ptr_outputbuffer[index].mmaped_size);
                 munmap(drv_ctx.ptr_outputbuffer[index].bufferaddr,
                         drv_ctx.ptr_outputbuffer[index].mmaped_size);
             }
@@ -4912,9 +4904,8 @@ OMX_ERRORTYPE  omx_vdec::allocate_input_buffer(
                     &drv_ctx.ip_buf_ion_info[i].ion_alloc_data,
 		    &drv_ctx.ip_buf_ion_info[i].fd_ion_data,ION_FLAG_CACHED);
     if(drv_ctx.ip_buf_ion_info[i].ion_device_fd < 0) {
-        DEBUG_PRINT_ERROR("alloc_input: alloc_map_ion_memory() failed!!");
         return OMX_ErrorInsufficientResources;
-    }
+     }
     pmem_fd = drv_ctx.ip_buf_ion_info[i].fd_ion_data.fd;
 #else
     pmem_fd = open (MEM_DEVICE,O_RDWR);
@@ -6734,9 +6725,9 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     }
   }
 #endif
-  DEBUG_PRINT_LOW("fill_buffer_done: bufhdr = %p, pBuffer = %p, nFlags = 0x%x, ",
-     "TS = %lld", buffer, buffer->pBuffer, buffer->nFlags, buffer->nTimeStamp);
 
+  DEBUG_PRINT_LOW("\n fill_buffer_done: bufhdr = %p, bufhdr->pBuffer = %p",
+      buffer, buffer->pBuffer);
   pending_output_buffers --;
 
   if (buffer->nFlags & OMX_BUFFERFLAG_EOS)
@@ -6758,6 +6749,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     }
   }
 
+  DEBUG_PRINT_LOW("\n In fill Buffer done call address %p ",buffer);
 #ifdef OUTPUT_BUFFER_LOG
   if (outputBufferFile1)
   {
@@ -6880,6 +6872,8 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
       DEBUG_PRINT_ERROR("Invalid buffer address from get_il_buf_hdr");
       return OMX_ErrorBadParameter;
     }
+
+    DEBUG_PRINT_LOW("\n After Fill Buffer Done callback %d",pPMEMInfo->pmem_fd);
   }
   else
   {
@@ -7017,6 +7011,10 @@ int omx_vdec::async_message_process (void *context, void* message)
   case VDEC_MSG_RESP_OUTPUT_FLUSHED:
     case VDEC_MSG_RESP_OUTPUT_BUFFER_DONE:
     omxhdr = (OMX_BUFFERHEADERTYPE*)vdec_msg->msgdata.output_frame.client_data;
+    DEBUG_PRINT_LOW("[RespBufDone] Buf(%p) Ts(%lld) Pic_type(%u)",
+      omxhdr, vdec_msg->msgdata.output_frame.time_stamp,
+      vdec_msg->msgdata.output_frame.pic_type);
+
     /* update SYNCFRAME flag */
     if (omx->eCompressionFormat == OMX_VIDEO_CodingAVC)
     {
@@ -7034,13 +7032,6 @@ int omx_vdec::async_message_process (void *context, void* message)
       else
         vdec_msg->msgdata.output_frame.flags &= ~OMX_BUFFERFLAG_SYNCFRAME;
     }
-
-    DEBUG_PRINT_LOW("[RespBufDone] Buf(%p), Data_len(%d), Ts(%lld), Pic_type(%u), "\
-      "Flags(0x%x), MetadataInfo: len(%d), offset(%d)", omxhdr,
-      vdec_msg->msgdata.output_frame.len, vdec_msg->msgdata.output_frame.time_stamp,
-      vdec_msg->msgdata.output_frame.pic_type, vdec_msg->msgdata.output_frame.flags,
-      vdec_msg->msgdata.output_frame.metadata_len,
-      vdec_msg->msgdata.output_frame.metadata_offset);
 
     if (omxhdr && omxhdr->pOutputPortPrivate &&
         ((omxhdr - omx->m_out_mem_ptr) < omx->drv_ctx.op_buf.actualcount) &&
@@ -7066,8 +7057,6 @@ int omx_vdec::async_message_process (void *context, void* message)
           vdec_msg->msgdata.output_frame.framesize.top;
         output_respbuf->len = vdec_msg->msgdata.output_frame.len;
         output_respbuf->offset = vdec_msg->msgdata.output_frame.offset;
-        output_respbuf->metadata_len = vdec_msg->msgdata.output_frame.metadata_len;
-        output_respbuf->metadata_offset = vdec_msg->msgdata.output_frame.metadata_offset;
         output_respbuf->time_stamp = vdec_msg->msgdata.output_frame.time_stamp;
         output_respbuf->flags = vdec_msg->msgdata.output_frame.flags;
         output_respbuf->pic_type = vdec_msg->msgdata.output_frame.pic_type;
@@ -7075,20 +7064,14 @@ int omx_vdec::async_message_process (void *context, void* message)
         output_respbuf->aspect_ratio_info =
            vdec_msg->msgdata.output_frame.aspect_ratio_info;
 
-        if (omx->output_use_buffer) {
-          DEBUG_PRINT_LOW("FBD: memcpy(%p, %p, %d)", omxhdr->pBuffer,
-            vdec_msg->msgdata.output_frame.bufferaddr +
-            vdec_msg->msgdata.output_frame.offset,
-            vdec_msg->msgdata.output_frame.len);
+        if (omx->output_use_buffer)
           memcpy ( omxhdr->pBuffer,
                    (vdec_msg->msgdata.output_frame.bufferaddr +
                     vdec_msg->msgdata.output_frame.offset),
                     vdec_msg->msgdata.output_frame.len );
-        }
       }
       else
         omxhdr->nFilledLen = 0;
-
       omx->post_event ((unsigned int)omxhdr, vdec_msg->status_code,
                        OMX_COMPONENT_GENERATE_FBD);
     }
@@ -7722,8 +7705,7 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
   int ion_dev_flag;
   struct vdec_ion ion_buf_info;
   if (!alloc_data || buffer_size <= 0 || !fd_data) {
-     DEBUG_PRINT_ERROR("\n Invalid arguments to alloc_map_ion_memory, %p, %d, %p",
-        alloc_data, buffer_size, fd_data);
+     DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_ion_memory\n");
      return -EINVAL;
   }
   ion_dev_flag = O_RDONLY;
@@ -7778,10 +7760,6 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
     fd = -ENOMEM;
   }
 
-  DEBUG_PRINT_HIGH("ion_alloc: device_fd = %d, len = %d, align = %d, "
-     "flags = 0x%x, heap_mask = 0x%x, handle = %p, fd = %d", fd,
-     alloc_data->len, alloc_data->align, alloc_data->flags,
-     alloc_data->heap_mask, fd_data->handle, fd_data->fd);
   return fd;
 }
 
@@ -8598,28 +8576,16 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
   OMX_S64 ts_in_sei = 0;
   OMX_U32 frame_rate = 0;
   OMX_U32 extn_user_data_cnt = 0;
-  struct vdec_output_frameinfo *output_respbuf =
-     (struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate;
+
   OMX_U32 index = p_buf_hdr - m_out_mem_ptr;
   OMX_U8* pBuffer = (OMX_U8 *)drv_ctx.ptr_outputbuffer[index].bufferaddr;
   p_extra = (OMX_OTHER_EXTRADATATYPE *)
            ((unsigned)(pBuffer + p_buf_hdr->nOffset +
             p_buf_hdr->nFilledLen + 3)&(~3));
   if ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))
-  {
-    DEBUG_PRINT_ERROR("ERROR: p_extra(%p), pBuffer(%p), nAllocLen(%d)",
-       p_extra, pBuffer, p_buf_hdr->nAllocLen);
     p_extra = NULL;
-  }
-
   if (drv_ctx.extradata && (p_buf_hdr->nFlags & OMX_BUFFERFLAG_EXTRADATA))
   {
-    if (output_respbuf->metadata_offset != p_buf_hdr->nFilledLen)
-    {
-      DEBUG_PRINT_HIGH("WARN: metadata_offset(%d) != nAllocLen(%d)",
-         output_respbuf->metadata_offset, p_buf_hdr->nFilledLen);
-      p_extra = NULL;
-    }
     // Process driver extradata
     while(p_extra && p_extra->eType != VDEC_EXTRADATA_NONE)
     {
@@ -8782,19 +8748,15 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
     p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
   }
   if (p_buf_hdr->nFlags & OMX_BUFFERFLAG_EXTRADATA)
-  {
     if (p_extra &&
       ((OMX_U8*)p_extra + OMX_FRAMEINFO_EXTRADATA_SIZE) <
         (pBuffer + p_buf_hdr->nAllocLen))
-    {
       append_terminator_extradata(p_extra);
-    }
     else
     {
       DEBUG_PRINT_ERROR("ERROR: Terminator extradata cannot be added");
       p_buf_hdr->nFlags &= ~OMX_BUFFERFLAG_EXTRADATA;
     }
-  }
 }
 
 OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U32 requested_extradata, bool enable)
@@ -8900,9 +8862,9 @@ OMX_U32 omx_vdec::count_MB_in_extradata(OMX_OTHER_EXTRADATATYPE *extra)
 void omx_vdec::print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra)
 {
 #ifdef _ANDROID_
-  if (!m_debug_extradata) {
+  if (!m_debug_extradata)
      return;
-  }
+
   DEBUG_PRINT_HIGH(
     "============== Extra Data ==============\n"
     "           Size: %u \n"
