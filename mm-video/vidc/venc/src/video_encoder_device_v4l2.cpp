@@ -181,6 +181,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 	pthread_mutex_init(&pause_resume_mlock, NULL);
 	pthread_cond_init(&pause_resume_cond, NULL);
 	memset(&extradata_info, 0, sizeof(extradata_info));
+	memset(&idrperiod, 0, sizeof(idrperiod));
 }
 
 venc_dev::~venc_dev()
@@ -262,6 +263,10 @@ void* venc_dev::async_venc_message_thread (void *input)
 				 * for now it doesn't look like IL client cares about
 				 * other types
 				 */
+				if (v4l2_buf.flags & V4L2_QCOM_BUF_FLAG_IDRFRAME) {
+					venc_msg.buf.flags |= QOMX_VIDEO_PictureTypeIDR;
+					venc_msg.buf.flags |= OMX_BUFFERFLAG_SYNCFRAME;
+				}
 				if (v4l2_buf.flags & V4L2_BUF_FLAG_KEYFRAME)
 					venc_msg.buf.flags |= OMX_BUFFERFLAG_SYNCFRAME;
 				if(v4l2_buf.flags & V4L2_QCOM_BUF_FLAG_CODECCONFIG)
@@ -559,6 +564,10 @@ if (codec == OMX_VIDEO_CodingVPX)
 		/*TODO: Return values not handled properly in this function anywhere.
 		 * Need to handle those.*/
 		ret = ioctl(m_nDriver_fd, VIDIOC_S_FMT, &fmt);
+		if (ret) {
+			DEBUG_PRINT_ERROR("Failed to set format on capture port\n");
+			return false;
+		}
 		m_sOutput_buff_property.datasize=fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 
 		fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -1283,7 +1292,7 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
           return false;
         }
       }
-      break;
+	  break;
     }
   case OMX_IndexConfigVideoIntraVOPRefresh:
     {
@@ -1320,6 +1329,19 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
       }
       break;
     }
+  case OMX_IndexConfigVideoAVCIntraPeriod:
+	{
+		OMX_VIDEO_CONFIG_AVCINTRAPERIOD *avc_iperiod = (OMX_VIDEO_CONFIG_AVCINTRAPERIOD*) configData;
+		DEBUG_PRINT_LOW("venc_set_param: OMX_IndexConfigVideoAVCIntraPeriod");
+		if(venc_set_idr_period(avc_iperiod->nPFrames, avc_iperiod->nIDRPeriod)
+			== false)
+		{
+			DEBUG_PRINT_ERROR("ERROR: Setting "
+				"OMX_IndexConfigVideoAVCIntraPeriod failed");
+			return false;
+		}
+		break;
+	}
   default:
     DEBUG_PRINT_ERROR("\n Unsupported config index = %u", index);
     break;
@@ -1461,8 +1483,9 @@ void venc_dev::venc_config_print()
                    dbkfilter.db_mode, dbkfilter.slicealpha_offset,
                    dbkfilter.slicebeta_offset);
 
-  DEBUG_PRINT_HIGH("\nENC_CONFIG: IntraMB/Frame: %ld, HEC: %ld\n",
-                   intra_refresh.mbcount, hec.header_extension);
+  DEBUG_PRINT_HIGH("\nENC_CONFIG: IntraMB/Frame: %ld, HEC: %ld, IDR Period: %ld\n",
+                   intra_refresh.mbcount, hec.header_extension, idrperiod.idrperiod);
+
 }
 
 unsigned venc_dev::venc_flush( unsigned port)
@@ -1669,7 +1692,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
   etb_count++;
 
-  if(etb_count == 1)
+  if(!streaming[OUTPUT_PORT])
   {
 	  enum v4l2_buf_type buf_type;
 	  buf_type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -1677,9 +1700,10 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 	  ret = ioctl(m_nDriver_fd, VIDIOC_STREAMON, &buf_type);
 	  if (ret) {
 		  DEBUG_PRINT_ERROR("Failed to call streamon\n");
+		  return false;
 	  } else {
-			streaming[OUTPUT_PORT] = true;
-		}
+		  streaming[OUTPUT_PORT] = true;
+	  }
   }
 #ifdef INPUT_BUFFER_LOG
 	  int i;
@@ -2238,8 +2262,50 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
 	DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d\n", control.id, control.value);
 
 
-  intra_period.num_bframes = control.value;
+	intra_period.num_bframes = control.value;
+	if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264){
+		control.id = V4L2_CID_MPEG_VIDC_VIDEO_IDR_PERIOD;
+		control.value = 1;
+
+		rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+		if (rc) {
+			DEBUG_PRINT_ERROR("Failed to set control\n");
+			return false;
+		}
+		idrperiod.idrperiod = 1;
+	}
   return true;
+}
+
+bool venc_dev::venc_set_idr_period(OMX_U32 nPFrames, OMX_U32 nIDRPeriod)
+{
+	int rc = 0;
+	struct v4l2_control control;
+	DEBUG_PRINT_LOW("\n venc_set_idr_period: nPFrames = %u, nIDRPeriod: %u\n",
+		nPFrames, nIDRPeriod);
+
+	if (m_sVenc_cfg.codectype != V4L2_PIX_FMT_H264){
+		DEBUG_PRINT_ERROR("\nERROR: IDR period valid for H264 only!!");
+		return false;
+	}
+
+	if(venc_set_intra_period (nPFrames, intra_period.num_bframes) == false) {
+		DEBUG_PRINT_ERROR("\nERROR: Request for setting intra period failed");
+		return false;
+	}
+
+	intra_period.num_pframes = nPFrames;
+	control.id = V4L2_CID_MPEG_VIDC_VIDEO_IDR_PERIOD;
+	control.value = nIDRPeriod;
+
+	rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+	if (rc) {
+		DEBUG_PRINT_ERROR("Failed to set control\n");
+		return false;
+	}
+
+	idrperiod.idrperiod = nIDRPeriod;
+	return true;
 }
 
 bool venc_dev::venc_set_entropy_config(OMX_BOOL enable, OMX_U32 i_cabac_level)
@@ -2582,18 +2648,32 @@ bool venc_dev::venc_set_encode_framerate(OMX_U32 encode_framerate, OMX_U32 confi
 
 bool venc_dev::venc_set_color_format(OMX_COLOR_FORMATTYPE color_format)
 {
+  struct v4l2_format fmt;
   DEBUG_PRINT_LOW("\n venc_set_color_format: color_format = %u ", color_format);
 
   if(color_format == OMX_COLOR_FormatYUV420SemiPlanar)
   {
-  m_sVenc_cfg.inputformat= VEN_INPUTFMT_NV12_16M2KA;
+    m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
+  }
+  else if(color_format == QOMX_COLOR_FormatYVU420SemiPlanar)
+  {
+    m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV21;
   }
   else
   {
     DEBUG_PRINT_ERROR("\nWARNING: Unsupported Color format [%d]", color_format);
-    m_sVenc_cfg.inputformat= VEN_INPUTFMT_NV12_16M2KA;
+    m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
     DEBUG_PRINT_HIGH("\n Default color format YUV420SemiPlanar is set");
   }
+  fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+  fmt.fmt.pix_mp.pixelformat = m_sVenc_cfg.inputformat;
+  fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
+  fmt.fmt.pix_mp.width = m_sVenc_cfg.input_width;
+  if (ioctl(m_nDriver_fd, VIDIOC_S_FMT, &fmt)) {
+    DEBUG_PRINT_ERROR("Failed setting color format %x", color_format);
+    return false;
+  }
+
   return true;
 }
 
@@ -3090,14 +3170,12 @@ bool venc_dev::venc_set_meta_mode(bool mode)
 bool venc_dev::venc_is_video_session_supported(unsigned long width,
                                              unsigned long height)
 {
-	if (width < capability.min_width || width > capability.max_width ||
-	    height < capability.min_height || height > capability.max_height) {
-	    DEBUG_PRINT_ERROR("\n Unsupported video resolution width = %u height = %u\n",
-                               width, height);
-	    DEBUG_PRINT_ERROR("\n supported range width - min(%u) max(%u\n",
-                               capability.min_width, capability.max_width);
-	    DEBUG_PRINT_ERROR("\n supported range height - min(%u) max(%u)\n",
-                               capability.min_height, capability.max_height);
+	if ((width * height < capability.min_width *  capability.min_height) ||
+	    (width * height > capability.max_width *  capability.max_height)) {
+	    DEBUG_PRINT_ERROR(
+		   "Unsupported video resolution WxH = (%d)x(%d) supported range = min (%d)x(%d) - max (%d)x(%d)\n",
+		   width, height, capability.min_width, capability.min_height,
+		   capability.max_width, capability.max_height);
 	    return false;
 	}
 	DEBUG_PRINT_LOW("\n video session supported\n");
