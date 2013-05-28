@@ -4128,6 +4128,10 @@ OMX_ERRORTYPE  omx_vdec::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
     {
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamIndexExtraDataType;
     }
+    else if (!strncmp(paramName, "OMX.QCOM.index.param.enableSmoothStreaming",sizeof("OMX.QCOM.index.param.enableSmoothStreaming") - 1))
+    {
+        *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamEnableSmoothStreaming;
+    }
 #endif
 #if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
     else if(!strncmp(paramName,"OMX.google.android.index.enableAndroidNativeBuffers", sizeof("OMX.google.android.index.enableAndroidNativeBuffers") - 1)) {
