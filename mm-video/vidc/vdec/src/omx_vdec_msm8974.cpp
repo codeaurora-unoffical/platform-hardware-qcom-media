@@ -1773,15 +1773,6 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         if (eRet == OMX_ErrorNone && !secure_mode)
             enable_extradata(DEFAULT_EXTRADATA, true, true);
 #endif
-	if (output_capability != V4L2_PIX_FMT_VC1_ANNEX_L &&
-		output_capability != V4L2_PIX_FMT_VC1_ANNEX_G ) {
-		control.id = V4L2_CID_MPEG_VIDC_VIDEO_CONTINUE_DATA_TRANSFER;
-		control.value = 1;
-		DEBUG_PRINT_HIGH("Enabling smooth streaming!\n");
-		if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control) < 0) {
-			DEBUG_PRINT_ERROR("Failed to enable Smooth Streaming");
-		}
-	}
         eRet=get_buffer_req(&drv_ctx.ip_buf);
         DEBUG_PRINT_HIGH("Input Buffer Size =%d \n ",drv_ctx.ip_buf.buffer_size);
         get_buffer_req(&drv_ctx.op_buf);
@@ -2610,7 +2601,7 @@ bool omx_vdec::execute_input_flush()
   }
   time_stamp_dts.flush_timestamp();
   /*Check if Heap Buffers are to be flushed*/
-  if (arbitrary_bytes)
+  if (arbitrary_bytes && !(codec_config_flag))
   {
     DEBUG_PRINT_LOW("\n Reset all the variables before flusing");
     h264_scratch.nFilledLen = 0;
@@ -2647,6 +2638,11 @@ bool omx_vdec::execute_input_flush()
       pdest_frame = NULL;
     }
     m_frame_parser.flush();
+  }
+  else if (codec_config_flag)
+  {
+    DEBUG_PRINT_HIGH("frame_parser flushing skipped due to codec config buffer "
+       "is not sent to the driver yet");
   }
   pthread_mutex_unlock(&m_lock);
   input_flush_progress = false;
@@ -3983,11 +3979,38 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
   }
   else if (configIndex == OMX_IndexConfigVideoNalSize)
   {
+    struct v4l2_control temp;
+    temp.id = V4L2_CID_MPEG_VIDC_VIDEO_STREAM_FORMAT;
 
     pNal = reinterpret_cast < OMX_VIDEO_CONFIG_NALSIZE * >(configData);
+    switch (pNal->nNaluBytes) {
+      case 0:
+        temp.value = V4L2_MPEG_VIDC_VIDEO_NAL_FORMAT_STARTCODES;
+        break;
+      case 2:
+        temp.value = V4L2_MPEG_VIDC_VIDEO_NAL_FORMAT_TWO_BYTE_LENGTH;
+        break;
+      case 4:
+        temp.value = V4L2_MPEG_VIDC_VIDEO_NAL_FORMAT_FOUR_BYTE_LENGTH;
+        break;
+      default:
+        return OMX_ErrorUnsupportedSetting;
+    }
+
+    if (!arbitrary_bytes) {
+      /* In arbitrary bytes mode, the assembler strips out nal size and replaces
+       * with start code, so only need to notify driver in frame by frame mode */
+      if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &temp))
+      {
+        DEBUG_PRINT_ERROR("Failed to set V4L2_CID_MPEG_VIDC_VIDEO_STREAM_FORMAT");
+        return OMX_ErrorHardware;
+      }
+    }
+
     nal_length = pNal->nNaluBytes;
     m_frame_parser.init_nal_length(nal_length);
-    DEBUG_PRINT_LOW("\n OMX_IndexConfigVideoNalSize called with Size %d",nal_length);
+
+    DEBUG_PRINT_LOW("\n OMX_IndexConfigVideoNalSize called with Size %d", nal_length);
     return ret;
   }
   else if (configIndex == OMX_IndexVendorVideoFrameRate)
@@ -4300,8 +4323,8 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         drv_ctx.ptr_outputbuffer[i].pmem_fd = handle->fd;
         drv_ctx.ptr_outputbuffer[i].offset = 0;
         drv_ctx.ptr_outputbuffer[i].bufferaddr = buff;
-        drv_ctx.ptr_outputbuffer[i].mmaped_size =
-            drv_ctx.ptr_outputbuffer[i].buffer_len = drv_ctx.op_buf.buffer_size;
+        drv_ctx.ptr_outputbuffer[i].buffer_len = drv_ctx.op_buf.buffer_size;
+        drv_ctx.ptr_outputbuffer[i].mmaped_size = handle->size;
     } else
 #endif
 
@@ -5630,6 +5653,16 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 {
   OMX_ERRORTYPE ret1 = OMX_ErrorNone;
   unsigned int nBufferIndex = drv_ctx.ip_buf.actualcount;
+
+  if (buffer->nFlags & OMX_BUFFERFLAG_CODECCONFIG)
+  {
+    codec_config_flag = true;
+    DEBUG_PRINT_LOW("%s: codec_config buffer", __FUNCTION__);
+  }
+  else
+  {
+    codec_config_flag = false;
+  }
 
   if(m_state == OMX_StateInvalid)
   {
