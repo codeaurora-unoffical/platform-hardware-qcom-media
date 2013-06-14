@@ -2796,6 +2796,11 @@ OMX_ERRORTYPE omx_vdec::get_supported_profile_level_for_1080p(OMX_VIDEO_PARAM_PR
         eRet = OMX_ErrorNoMore;
       }
     }
+    else
+    {
+      DEBUG_PRINT_ERROR("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported ret NoMore for codec: %s\n", drv_ctx.kind);
+      eRet = OMX_ErrorNoMore;
+    }
   }
   else
   {
@@ -6920,6 +6925,9 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
       {
         OMX_TICKS expected_ts = 0;
         m_timestamp_list.pop_min_ts(expected_ts);
+        if (is_interlaced && is_duplicate_ts_valid) {
+          m_timestamp_list.pop_min_ts(expected_ts);
+        }
         DEBUG_PRINT_LOW("\n Current timestamp (%lld),Popped TIMESTAMP (%lld) from list",
                        buffer->nTimeStamp, expected_ts);
 
@@ -7232,6 +7240,9 @@ int omx_vdec::async_message_process (void *context, void* message)
 		  omx->post_event (NULL, vdec_msg->status_code,
 				  OMX_COMPONENT_GENERATE_UNSUPPORTED_SETTING);
 	  } else {
+                  if (!omx->client_buffers.update_buffer_req()) {
+                     DEBUG_PRINT_ERROR("Setting c2D buffer requirements failed");
+                  }
 		  omx->post_event (OMX_CORE_OUTPUT_PORT_INDEX, OMX_IndexConfigCommonOutputCrop,
 				  OMX_COMPONENT_GENERATE_PORT_RECONFIG);
 	  }
@@ -9390,7 +9401,8 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
     if (!omx->in_reconfig && !omx->output_flush_progress && bufadd->nFilledLen) {
        pthread_mutex_lock(&omx->c_lock);
       status = c2d.convert(omx->drv_ctx.ptr_outputbuffer[index].pmem_fd,
-                  bufadd->pBuffer,pmem_fd[index],pmem_baseaddress[index]);
+                           omx->m_out_mem_ptr->pBuffer, bufadd->pBuffer, pmem_fd[index],
+                           pmem_baseaddress[index], pmem_baseaddress[index]);
        pthread_mutex_unlock(&omx->c_lock);
       m_out_mem_ptr_client[index].nFilledLen = buffer_size_req;
       if (!status){
