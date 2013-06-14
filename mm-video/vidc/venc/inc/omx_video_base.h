@@ -61,9 +61,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "omx_video_common.h"
 #include "extra_data_handler.h"
 #include <linux/videodev2.h>
+#ifdef _OPAQUE_
 #include <dlfcn.h>
 #include "C2DColorConverter.h"
-
+#endif
 #ifdef _ANDROID_
 using namespace android;
 // local pmem heap object
@@ -81,6 +82,11 @@ public:
 #define DEBUG_PRINT_HIGH
 #define DEBUG_PRINT_ERROR
 #endif // _ANDROID_
+
+
+#define DEBUG_PRINT_LOW ALOGE
+#define DEBUG_PRINT_HIGH ALOGE
+#define DEBUG_PRINT_ERROR ALOGE
 
 #ifdef USE_ION
     static const char* MEM_DEVICE = "/dev/ion";
@@ -152,11 +158,12 @@ class omx_video: public qc_omx_component
 protected:
 #ifdef _ANDROID_ICS_
   bool meta_mode_enable;
-  bool c2d_opened;
   encoder_media_buffer_type meta_buffers[MAX_NUM_INPUT_BUFFERS];
-  OMX_BUFFERHEADERTYPE *opaque_buffer_hdr[MAX_NUM_INPUT_BUFFERS];
   bool mUseProxyColorFormat;
   bool get_syntaxhdr_enable;
+#ifdef _OPAQUE_
+  bool c2d_opened;
+  OMX_BUFFERHEADERTYPE *opaque_buffer_hdr[MAX_NUM_INPUT_BUFFERS];
   OMX_BUFFERHEADERTYPE  *psource_frame;
   OMX_BUFFERHEADERTYPE  *pdest_frame;
 
@@ -182,6 +189,7 @@ protected:
     destroyC2DColorConverter_t *mConvertClose;
   };
   omx_c2d_conv c2d_conv;
+#endif
 #endif
 public:
   omx_video();  // constructor
@@ -406,8 +414,10 @@ public:
     OMX_COMPONENT_GENERATE_RESUME_DONE = 0xF,
     OMX_COMPONENT_GENERATE_STOP_DONE = 0x10,
     OMX_COMPONENT_GENERATE_HARDWARE_ERROR = 0x11,
-    OMX_COMPONENT_GENERATE_LTRUSE_FAILED = 0x12,
-    OMX_COMPONENT_GENERATE_ETB_OPQ = 0x13
+    OMX_COMPONENT_GENERATE_LTRUSE_FAILED = 0x12
+#ifdef _OPAQUE_
+    ,OMX_COMPONENT_GENERATE_ETB_OPQ = 0x13
+#endif
   };
 
   struct omx_event
@@ -483,6 +493,7 @@ public:
                                  OMX_BUFFERHEADERTYPE * buffer);
   OMX_ERRORTYPE empty_this_buffer_proxy(OMX_HANDLETYPE hComp,
                                         OMX_BUFFERHEADERTYPE *buffer);
+#ifdef _OPAQUE_
   OMX_ERRORTYPE empty_this_buffer_opaque(OMX_HANDLETYPE hComp,
                                   OMX_BUFFERHEADERTYPE *buffer);
   OMX_ERRORTYPE push_input_buffer(OMX_HANDLETYPE hComp);
@@ -490,6 +501,7 @@ public:
      struct pmem &Input_pmem_info,unsigned &index);
   OMX_ERRORTYPE queue_meta_buffer(OMX_HANDLETYPE hComp,
      struct pmem &Input_pmem_info);
+#endif
   OMX_ERRORTYPE fill_this_buffer_proxy(OMX_HANDLETYPE hComp,
      OMX_BUFFERHEADERTYPE *buffer);
   bool release_done();
@@ -580,7 +592,7 @@ public:
   QOMX_VIDEO_CONFIG_LTRUSE_TYPE m_sConfigLTRUse;
   OMX_VIDEO_CONFIG_AVCINTRAPERIOD m_sConfigAVCIDRPeriod;
   OMX_U32 m_sExtraData;
-  OMX_U32 m_input_msg_id;
+
 
   // fill this buffer queue
   omx_cmd_queue m_ftb_q;
@@ -591,10 +603,12 @@ public:
   OMX_BUFFERHEADERTYPE *m_inp_mem_ptr;
   // Output memory pointer
   OMX_BUFFERHEADERTYPE *m_out_mem_ptr;
+#ifdef _OPAQUE_
   omx_cmd_queue m_opq_meta_q;
   omx_cmd_queue m_opq_pmem_q;
+  OMX_U32 m_input_msg_id;
+#endif
   OMX_BUFFERHEADERTYPE meta_buffer_hdr[MAX_NUM_INPUT_BUFFERS];
-
   bool input_flush_progress;
   bool output_flush_progress;
   bool input_use_buffer;
