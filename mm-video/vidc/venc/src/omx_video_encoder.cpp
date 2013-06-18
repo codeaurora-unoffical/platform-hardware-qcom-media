@@ -1757,3 +1757,9 @@ bool omx_venc::is_secure_session()
 {
   return secure_session;
 }
+
+bool omx_venc::dev_get_uncache_flag()
+{
+  return handle->venc_get_uncache_flag();
+}
+
