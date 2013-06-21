@@ -4315,12 +4315,14 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
      }
      // found an empty buffer at i
      (*bufferHdr)->nAllocLen = drv_ctx.op_buf.buffer_size;
+#ifdef _ANDROID_
      if (m_enable_android_native_buffers) {
        DEBUG_PRINT_LOW("setting pBuffer to private_handle_t %p", handle);
        (*bufferHdr)->pBuffer = (OMX_U8 *)handle;
-     } else {
-       (*bufferHdr)->pBuffer = buff;
      }
+#else
+       (*bufferHdr)->pBuffer = buff;
+#endif
      (*bufferHdr)->pAppPrivate = privateAppData;
      BITMASK_SET(&m_out_bm_count,i);
   }

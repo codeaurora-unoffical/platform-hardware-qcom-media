@@ -461,13 +461,16 @@ bool venc_dev::venc_open(OMX_U32 codec)
   int r;
   unsigned int alignment = 0,buffer_size = 0, temp =0;
   struct v4l2_control control;
+#ifdef _ANDROID_
   OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_enc";
-
   char platform_name[64];
   property_get("ro.board.platform", platform_name, "0");
   if (!strncmp(platform_name, "msm8610", 7)) {
     device_name = (OMX_STRING)"/dev/video/q6_enc";
   }
+#else
+	OMX_STRING device_name = (OMX_STRING)"/dev/video33";
+#endif
 
   m_nDriver_fd = open (device_name, O_RDWR);
   if(m_nDriver_fd == 0)
@@ -1662,7 +1665,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
   struct v4l2_plane plane;
   int rc=0;
   struct OMX_BUFFERHEADERTYPE *bufhdr;
+#ifdef _ANDROID_ICS_
   encoder_media_buffer_type * meta_buf = NULL;
+#endif
   temp_buffer = (struct pmem *)buffer;
 
   memset (&buf, 0, sizeof(buf));
@@ -1686,6 +1691,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
   else
   {
     DEBUG_PRINT_LOW("\n Shared PMEM addr for i/p PMEM UseBuf/AllocateBuf: %p", bufhdr->pBuffer);
+#ifdef _ANDROID_ICS_	
 	if (metadatamode && !color_format) { // meta Buffer + Camera buffers
 		meta_buf = (encoder_media_buffer_type *)bufhdr->pBuffer;
 		if (!meta_buf)
@@ -1696,6 +1702,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 		plane.bytesused = meta_buf->meta_handle->data[2];
 	}
 	else
+#endif
 	{ // meta Buffer + Gralloc buffers || pmem buffers
 		plane.m.userptr = (unsigned long) bufhdr->pBuffer;
 		plane.data_offset = bufhdr->nOffset;

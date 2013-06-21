@@ -32,6 +32,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     extern "C"{
         #include<utils/Log.h>
     }
+#else
+#define ALOGV(ftm, args...)  fprintf(stderr, ftm, ##args)
 #endif//_ANDROID_
 
 #undef DEBUG_PRINT_LOW

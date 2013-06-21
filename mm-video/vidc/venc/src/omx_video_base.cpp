@@ -52,6 +52,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef _ANDROID_
 #include <glib.h>
 #define strlcpy g_strlcpy
+#include <sys/ioctl.h>
 #endif
 #define H264_SUPPORTED_WIDTH (480)
 #define H264_SUPPORTED_HEIGHT (368)
@@ -1968,12 +1969,14 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
          eRet = OMX_ErrorBadParameter;
          break;
        }
+#ifdef _ANDROID_ICS_	   
        if (get_syntaxhdr_enable == false)
        {
          DEBUG_PRINT_ERROR("ERROR: get_parameter: Get syntax header disabled");
          eRet = OMX_ErrorUnsupportedIndex;
          break;
        }
+#endif
        BITMASK_SET(&m_flags, OMX_COMPONENT_LOADED_START_PENDING);
        if(dev_loaded_start())
        {
@@ -3566,8 +3569,9 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
   int push_cnt = 0;
   unsigned nBufIndex = 0, nBufIndex_meta = 0;
   OMX_ERRORTYPE ret = OMX_ErrorNone;
+#ifdef _ANDROID_ICS_
   encoder_media_buffer_type *media_buffer;
-
+#endif
 #ifdef _MSM8974_
   int fd = 0;
 #endif
@@ -3599,10 +3603,12 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
     return OMX_ErrorNone;
   }
 #ifdef _MSM8974_
+#ifdef _ANDROID_ICS_
 #ifdef _OPAQUE_
   if(!meta_mode_enable || (media_buffer && media_buffer->buffer_type == kMetadataBufferTypeGrallocSource))
 #else
     if(!meta_mode_enable)
+#endif
 #endif
 #endif
     fd = m_pInput_pmem[nBufIndex].fd;
@@ -4277,7 +4283,9 @@ OMX_ERRORTYPE omx_video::empty_buffer_done(OMX_HANDLETYPE         hComp,
   int buffer_index_meta = -1;
 
   buffer_index = (buffer - m_inp_mem_ptr);
+#ifdef _ANDROID_ICS_
   buffer_index_meta = (buffer - meta_buffer_hdr);
+#endif
   DEBUG_PRINT_LOW("\n empty_buffer_done: buffer[%p]", buffer);
   if(buffer == NULL ||
      ((buffer_index > m_sInPortDef.nBufferCountActual) &&

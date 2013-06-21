@@ -48,6 +48,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <inttypes.h>
 #include <cstddef>
 
+#ifdef USE_ION
+#include <linux/msm_ion.h>
+#endif
 static ptrdiff_t x;
 
 #ifdef _ANDROID_
@@ -59,11 +62,6 @@ static ptrdiff_t x;
 #define LOG_TAG "OMX-VDEC"
 #endif
 
-#ifdef USE_ION
-#include <linux/msm_ion.h>
-//#include <binder/MemoryHeapIon.h>
-//#else
-#endif
 #include <binder/MemoryHeapBase.h>
 #include <ui/ANativeObjectBase.h>
 extern "C"{
@@ -74,7 +72,7 @@ extern "C"{
 #define TIMEOUT 5000
 
 #else //_ANDROID_
-#define DEBUG_PRINT_LOW printf
+#define DEBUG_PRINT_LOW
 #define DEBUG_PRINT_HIGH printf
 #define DEBUG_PRINT_ERROR printf
 #endif // _ANDROID_
@@ -111,7 +109,9 @@ extern "C"{
 #include <linux/android_pmem.h>
 #include "extra_data_handler.h"
 #include "ts_parser.h"
+#ifdef _ANDROID_
 #include "vidc_color_converter.h"
+#endif
 extern "C" {
   OMX_API void * get_omx_component_factory_fn(void);
 }
@@ -906,6 +906,7 @@ private:
 
     unsigned int m_fill_output_msg;
     bool client_set_fps;
+#ifdef _ANDROID_
     class allocate_color_convert_buf {
     public:
         allocate_color_convert_buf();
@@ -946,14 +947,19 @@ private:
 #endif
         unsigned char *pmem_baseaddress[MAX_COUNT];
         int pmem_fd[MAX_COUNT];
+#ifdef _ANDROID_        
         struct vidc_heap
         {
             sp<MemoryHeapBase>    video_heap_ptr;
         };
         struct vidc_heap m_heap_ptr[MAX_COUNT];
+#endif
     };
+#endif
+#ifdef _ANDROID_
 #if  defined (_MSM8960_) || defined (_MSM8974_)
     allocate_color_convert_buf client_buffers;
+#endif
 #endif
     struct video_decoder_capability m_decoder_capability;
 };
