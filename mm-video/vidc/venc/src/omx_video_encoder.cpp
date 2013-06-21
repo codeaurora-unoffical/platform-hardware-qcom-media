@@ -65,7 +65,9 @@ omx_venc::omx_venc()
   meta_mode_enable = false;
   memset(meta_buffer_hdr,0,sizeof(meta_buffer_hdr));
   memset(meta_buffers,0,sizeof(meta_buffers));
+#ifdef _OPAQUE_
   memset(opaque_buffer_hdr,0,sizeof(opaque_buffer_hdr));
+#endif
   mUseProxyColorFormat = false;
   get_syntaxhdr_enable = false;
 #endif
@@ -540,8 +542,8 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
 #ifdef _ANDROID_ICS_
         if (portDefn->format.video.eColorFormat == (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
-            m_sInPortDef.format.video.eColorFormat =
-                OMX_COLOR_FormatYUV420SemiPlanar;
+            m_sInPortDef.format.video.eColorFormat = OMX_COLOR_FormatYUV420SemiPlanar;
+#ifdef _OPAQUE_
             if(!mUseProxyColorFormat){
               if (!c2d_conv.init()) {
                 DEBUG_PRINT_ERROR("\n C2D init failed");
@@ -551,8 +553,16 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             }
             mUseProxyColorFormat = true;
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
-        } else
+            ALOGE("%s, %d\n", __func__, __LINE__);
+#else
+            mUseProxyColorFormat = true;
+            ALOGE("%s, %d\n", __func__, __LINE__);
+#endif
+        }
+#ifdef _OPAQUE_
+         else
           mUseProxyColorFormat = false;
+#endif
 #endif
         /*Query Input Buffer Requirements*/
         dev_get_buf_req   (&m_sInPortDef.nBufferCountMin,
@@ -625,6 +635,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
         if (portFmt->eColorFormat ==
             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
             m_sInPortFormat.eColorFormat = OMX_COLOR_FormatYUV420SemiPlanar;
+#ifdef _OPAQUE_
             if(!mUseProxyColorFormat){
               if (!c2d_conv.init()) {
                 DEBUG_PRINT_ERROR("\n C2D init failed");
@@ -632,15 +643,22 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
               }
               DEBUG_PRINT_ERROR("\nC2D init is successful");
             }
-            mUseProxyColorFormat = true;
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
+            ALOGE("%s, %d\n", __func__, __LINE__);
+#else
+            mUseProxyColorFormat = true;
+            ALOGE("%s, %d\n", __func__, __LINE__);
+#endif
         }
         else
 #endif
         {
             m_sInPortFormat.eColorFormat = portFmt->eColorFormat;
+#ifdef _OPAQUE_
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB;
             mUseProxyColorFormat = false;
+#endif
+            ALOGE("%s, %d\n", __func__, __LINE__);
         }
         m_sInPortFormat.xFramerate = portFmt->xFramerate;
       }

@@ -49,12 +49,14 @@ endif
 ifeq ($(TARGET_BOARD_PLATFORM),msm8226)
 libmm-venc-def += -DMAX_RES_1080P
 libmm-venc-def += -D_MSM8974_
+#libmm-venc-def += -D_OPAQUE_
 endif
 ifeq ($(TARGET_BOARD_PLATFORM),apq8084)
 libmm-venc-def += -DMAX_RES_1080P
 libmm-venc-def += -DMAX_RES_1080P_EBI
 libOmxVdec-def += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
 libmm-venc-def += -D_MSM8974_
+#libmm-venc-def += -D_OPAQUE_
 endif
 
 ifeq ($(TARGET_USES_ION),true)
@@ -79,9 +81,9 @@ libmm-venc-inc      += hardware/qcom/media/libstagefrighthw
 libmm-venc-inc      += hardware/qcom/display/libgralloc
 libmm-venc-inc      += frameworks/native/include/media/hardware
 libmm-venc-inc      += frameworks/native/include/media/openmax
-libmm-venc-inc      += hardware/qcom/media/libc2dcolorconvert
-libmm-venc-inc      += hardware/qcom/display/libcopybit
-libmm-venc-inc      += frameworks/av/include/media/stagefright
+#libmm-venc-inc      += hardware/qcom/media/libc2dcolorconvert
+#libmm-venc-inc      += hardware/qcom/display/libcopybit
+#libmm-venc-inc      += frameworks/av/include/media/stagefright
 libmm-venc-inc      += $(venc-inc)
 
 LOCAL_MODULE                    := libOmxVenc
@@ -91,8 +93,8 @@ LOCAL_C_INCLUDES                := $(libmm-venc-inc)
 
 LOCAL_PRELINK_MODULE      := false
 LOCAL_SHARED_LIBRARIES    := liblog libutils libbinder libcutils \
-                             libc2dcolorconvert libdl
-
+                             libdl
+#LOCAL_SHARED_LIBRARIES    += libc2dcolorconvert
 LOCAL_SRC_FILES   := src/omx_video_base.cpp
 LOCAL_SRC_FILES   += src/omx_video_encoder.cpp
 ifeq ($(call is-board-platform-in-list,msm8974 msm8610 msm8226 apq8084),true)
@@ -117,7 +119,7 @@ mm-venc-test720p-inc            := $(TARGET_OUT_HEADERS)/mm-core
 mm-venc-test720p-inc            += $(LOCAL_PATH)/inc
 mm-venc-test720p-inc            += $(OMX_VIDEO_PATH)/vidc/common/inc
 mm-venc-test720p-inc            += hardware/qcom/media/mm-core/inc
-mm-venc-test720p-inc            += hardware/qcom/display/libgralloc
+#mm-venc-test720p-inc            += hardware/qcom/display/libgralloc
 mm-venc-test720p-inc            += $(venc-inc)
 
 LOCAL_MODULE                    := mm-venc-omx-test720p
