@@ -76,17 +76,7 @@ public:
 };
 
 #include <utils/Log.h>
-
-#else //_ANDROID_
-#define DEBUG_PRINT_LOW
-#define DEBUG_PRINT_HIGH
-#define DEBUG_PRINT_ERROR
 #endif // _ANDROID_
-
-
-#define DEBUG_PRINT_LOW ALOGE
-#define DEBUG_PRINT_HIGH ALOGE
-#define DEBUG_PRINT_ERROR ALOGE
 
 #ifdef USE_ION
     static const char* MEM_DEVICE = "/dev/ion";
@@ -142,9 +132,8 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
         & BITMASK_FLAG(mIndex))
 #define BITMASK_ABSENT(mArray,mIndex) (((mArray)[BITMASK_OFFSET(mIndex)] \
         & BITMASK_FLAG(mIndex)) == 0x0)
-#ifdef _ANDROID_ICS_
 #define MAX_NUM_INPUT_BUFFERS 32
-#endif
+
 void* message_thread(void *);
 #ifdef USE_ION
 int alloc_map_ion_memory(int size,struct ion_allocation_data *alloc_data,

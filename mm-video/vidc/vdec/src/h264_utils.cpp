@@ -57,6 +57,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         #include<utils/Log.h>
     }
 
+#else
+#define ALOGV(ftm, args...)  fprintf(stderr, ftm, ##args)
+#define ALOGE(ftm, args...)  fprintf(stderr, ftm, ##args)
 #endif
 
 /* =======================================================================

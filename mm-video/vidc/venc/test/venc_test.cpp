@@ -415,9 +415,9 @@ void* PmemMalloc(OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO* pMem, int nSize)
   }
   nSize = (nSize + 4095) & (~4095);
   ion_data.alloc_data.len = nSize;
-  ion_data.alloc_data.heap_mask = 0x1 << ION_CP_MM_HEAP_ID;
+  ion_data.alloc_data.heap_mask = 0x1 << ION_IOMMU_HEAP_ID;;
   ion_data.alloc_data.align = 4096;
-  ion_data.alloc_data.flags = ION_SECURE;
+  ion_data.alloc_data.flags = 0;
 
   rc = ioctl(ion_data.ion_device_fd,ION_IOC_ALLOC,&ion_data.alloc_data);
   if(rc || !ion_data.alloc_data.handle) {
@@ -1489,7 +1489,6 @@ void VencTest_ProcessDynamicConfigurationFile()
 OMX_ERRORTYPE VencTest_ReadAndEmpty(OMX_BUFFERHEADERTYPE* pYUVBuffer)
 {
    OMX_ERRORTYPE result = OMX_ErrorNone;
-#ifdef T_ARM
 #if defined(MAX_RES_720P) && !defined(_MSM8974_)
    if (read(m_nInFd,
             pYUVBuffer->pBuffer,
@@ -1556,13 +1555,6 @@ OMX_ERRORTYPE VencTest_ReadAndEmpty(OMX_BUFFERHEADERTYPE* pYUVBuffer)
               pYUVBuffer->pBuffer + offset_to_c,
               bytestoread)!= bytestoread)
             return OMX_ErrorUndefined;
-#endif
-#else
-   {
-	  char * pInputbuf = (char *)(pYUVBuffer->pBuffer) ;
-	      read(m_nInFd,pInputbuf,m_sProfile.nFrameBytes) ;
-
-   }
 #endif
    if (m_pDynConfFile)
      VencTest_ProcessDynamicConfigurationFile();
@@ -2068,11 +2060,7 @@ int main(int argc, char** argv)
 
     if (m_eMode != MODE_PROFILE)
    {
-      #if T_ARM
-	   m_nOutFd = open(m_sProfile.cOutFileName, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU | S_IRWXG | S_IRWXO);
-      #else
-	  m_nOutFd = open(m_sProfile.cOutFileName,0);
-      #endif
+	  m_nOutFd = fopen(m_sProfile.cOutFileName,"ab");
       if (m_nOutFd < 0)
       {
          E("could not open output file %s", m_sProfile.cOutFileName);
@@ -2104,12 +2092,8 @@ int main(int argc, char** argv)
        m_eMode == MODE_PROFILE)
    {
       int i;
-      #if T_ARM
       m_nInFd = open(m_sProfile.cInFileName, O_RDONLY);
-      #else
-      m_nInFd = open(m_sProfile.cInFileName,1);
-      #endif
-	  if (m_nInFd < 0)
+  	  if (m_nInFd < 0)
       {
          E("could not open input file");
          CHK(1);
@@ -2326,16 +2310,14 @@ int main(int argc, char** argv)
          }
        break;
       case MSG_ID_OUTPUT_FRAME_DONE:
+	  int bytes_written;
+	  bytes_written = fwrite(msg.data.sBitstreamData.pBuffer->pBuffer,
+	  				msg.data.sBitstreamData.pBuffer->nFilledLen, 1,
+					m_nOutFd);
          D("================ writing frame %d = %d bytes to output file",
            m_nFrameOut+1,
-           msg.data.sBitstreamData.pBuffer->nFilledLen);
+				 bytes_written);
          D("StopEncodeTime=%lld", GetTimeStamp());
-
-
-		 write(m_nOutFd,
-               msg.data.sBitstreamData.pBuffer->pBuffer,
-               msg.data.sBitstreamData.pBuffer->nFilledLen);
-
 
          result = OMX_FillThisBuffer(m_hHandle,
                                      msg.data.sBitstreamData.pBuffer);
@@ -2383,7 +2365,7 @@ int main(int argc, char** argv)
    if (m_eMode == MODE_LIVE_ENCODE)
    {
       CameraTest_Exit();
-      close(m_nOutFd);
+      fclose(m_nOutFd);
    }
    else if (m_eMode == MODE_FILE_ENCODE ||
             m_eMode == MODE_PROFILE)
@@ -2400,7 +2382,7 @@ int main(int argc, char** argv)
 
       if (m_eMode == MODE_FILE_ENCODE)
       {
-         close(m_nOutFd);
+         fclose(m_nOutFd);
       }
       if (m_pDynConfFile)
       {

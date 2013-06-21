@@ -75,7 +75,9 @@ omx_venc::omx_venc()
 
 omx_venc::~omx_venc()
 {
+#ifdef _ANDROID_ICS_
   get_syntaxhdr_enable = false;
+#endif
   //nothing to do
 }
 
@@ -553,10 +555,8 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             }
             mUseProxyColorFormat = true;
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
-            ALOGE("%s, %d\n", __func__, __LINE__);
 #else
             mUseProxyColorFormat = true;
-            ALOGE("%s, %d\n", __func__, __LINE__);
 #endif
         }
 #ifdef _OPAQUE_
@@ -644,10 +644,8 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
               DEBUG_PRINT_ERROR("\nC2D init is successful");
             }
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
-            ALOGE("%s, %d\n", __func__, __LINE__);
 #else
             mUseProxyColorFormat = true;
-            ALOGE("%s, %d\n", __func__, __LINE__);
 #endif
         }
         else
@@ -658,7 +656,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB;
             mUseProxyColorFormat = false;
 #endif
-            ALOGE("%s, %d\n", __func__, __LINE__);
         }
         m_sInPortFormat.xFramerate = portFmt->xFramerate;
       }

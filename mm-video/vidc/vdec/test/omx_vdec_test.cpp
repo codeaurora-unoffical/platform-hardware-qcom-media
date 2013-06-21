@@ -122,7 +122,9 @@ static int previous_vc1_au = 0;
 #define ALLOCATE_BUFFER 0
 #define USE_OUTPUT_BUFFER 1
 
-#ifdef MAX_RES_720P
+#ifdef _MSM8974_
+#define PMEM_DEVICE "/dev/ion"
+#elif MAX_RES_720P
 #define PMEM_DEVICE "/dev/pmem_adsp"
 #elif MAX_RES_1080P_EBI
 #define PMEM_DEVICE "/dev/pmem_adsp"
@@ -755,7 +757,9 @@ void* fbd_thread(void* pArg)
   int stride,scanlines,stride_c,i;
 #endif
   DEBUG_PRINT("First Inside %s\n", __FUNCTION__);
+#ifdef _ANDROID_
   property_get("vidc.vdec.debug.aspectratio", value, "0");
+#endif
   aspectratio_prop = atoi(value);
   while(currentStatus != ERROR_STATE && !bOutputEosReached)
   {
