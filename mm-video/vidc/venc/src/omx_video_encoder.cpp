@@ -132,6 +132,13 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     strlcpy((char *)m_cRole, "video_encoder.avc",OMX_MAX_STRINGNAME_SIZE);
     codec_type = OMX_VIDEO_CodingAVC;
   }
+  else if(!strncmp((char *)m_nkind, "OMX.qcom.video.encoder.avc.secure",\
+                   OMX_MAX_STRINGNAME_SIZE))
+  {
+    strlcpy((char *)m_cRole, "video_encoder.avc",OMX_MAX_STRINGNAME_SIZE);
+    codec_type = OMX_VIDEO_CodingAVC;
+    secure_session = true;
+  }
 #ifdef _MSM8974_
   else if(!strncmp((char *)m_nkind, "OMX.qcom.video.encoder.vp8",	\
                    OMX_MAX_STRINGNAME_SIZE))
@@ -1933,4 +1940,8 @@ int omx_venc::async_message_process (void *context, void* message)
     break;
   }
   return 0;
+}
+bool omx_venc::is_secure_session()
+{
+  return secure_session;
 }

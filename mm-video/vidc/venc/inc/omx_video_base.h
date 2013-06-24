@@ -135,11 +135,6 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
 #define MAX_NUM_INPUT_BUFFERS 32
 
 void* message_thread(void *);
-#ifdef USE_ION
-int alloc_map_ion_memory(int size,struct ion_allocation_data *alloc_data,
-                                    struct ion_fd_data *fd_data,int flag);
-void free_ion_memory(struct venc_ion *buf_ion_info);
-#endif
 
 // OMX video class
 class omx_video: public qc_omx_component
@@ -155,7 +150,6 @@ protected:
   OMX_BUFFERHEADERTYPE *opaque_buffer_hdr[MAX_NUM_INPUT_BUFFERS];
   OMX_BUFFERHEADERTYPE  *psource_frame;
   OMX_BUFFERHEADERTYPE  *pdest_frame;
-
   class omx_c2d_conv {
   public:
     omx_c2d_conv();
@@ -180,6 +174,7 @@ protected:
   omx_c2d_conv c2d_conv;
 #endif
 #endif
+  bool secure_session;
 public:
   omx_video();  // constructor
   virtual ~omx_video();  // destructor
@@ -217,6 +212,7 @@ public:
   virtual bool dev_loaded_stop(void) = 0;
   virtual bool dev_loaded_start_done(void) = 0;
   virtual bool dev_loaded_stop_done(void) = 0;
+  virtual bool is_secure_session(void) = 0;
 #ifdef _MSM8974_
   virtual int dev_handle_extradata(void*, int) = 0;
   virtual int dev_set_format(int) = 0;
@@ -619,6 +615,11 @@ public:
   OMX_U8                m_cRole[OMX_MAX_STRINGNAME_SIZE];
   extra_data_handler extra_data_handle;
 
+#ifdef USE_ION
+  int alloc_map_ion_memory(int size,struct ion_allocation_data *alloc_data,
+                                    struct ion_fd_data *fd_data,int flag);
+  void free_ion_memory(struct venc_ion *buf_ion_info);
+#endif
 };
 
 #endif // __OMX_VIDEO_BASE_H__
