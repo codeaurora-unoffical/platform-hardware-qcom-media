@@ -34,7 +34,7 @@ Copyright (c) 2012 The Linux Foundation. All rights reserved.
 #include <arm_neon.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include <linux/msm_kgsl.h>
+#include "../../../../kernel/include/linux/msm_kgsl.h"
 #include <sys/ioctl.h>
 #include <utils/Log.h>
 #include <dlfcn.h>

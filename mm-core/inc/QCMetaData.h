@@ -76,6 +76,10 @@ enum {
     kTypeWMALossLess,
 };
 
+enum {
+    CAN_SEEK_TO_ZERO   = 16, // the "previous button"
+};
+
 }  // namespace android
 
 #endif  // QC_META_DATA_H_
