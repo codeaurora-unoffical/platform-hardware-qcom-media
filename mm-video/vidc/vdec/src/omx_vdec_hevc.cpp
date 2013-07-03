@@ -2954,8 +2954,12 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         nativeBuffersUsage->nUsage = (GRALLOC_USAGE_PRIVATE_MM_HEAP | GRALLOC_USAGE_PROTECTED |
                                                       GRALLOC_USAGE_PRIVATE_UNCACHED);
                 } else {
-                        nativeBuffersUsage->nUsage = (GRALLOC_USAGE_PRIVATE_ADSP_HEAP | GRALLOC_USAGE_PRIVATE_UNCACHED);
-                		DEBUG_PRINT_HIGH("nativeBuffersUsage->nUsage %x\n", (unsigned int)nativeBuffersUsage->nUsage);
+#ifdef _HEVC_USE_ADSP_HEAP_
+                    nativeBuffersUsage->nUsage = (GRALLOC_USAGE_PRIVATE_ADSP_HEAP | GRALLOC_USAGE_PRIVATE_UNCACHED);
+#else
+                    nativeBuffersUsage->nUsage = (GRALLOC_USAGE_PRIVATE_IOMMU_HEAP | GRALLOC_USAGE_PRIVATE_UNCACHED);
+#endif
+                    DEBUG_PRINT_HIGH("nativeBuffersUsage->nUsage %x\n", (unsigned int)nativeBuffersUsage->nUsage);
                 }
             } else {
                 DEBUG_PRINT_HIGH("get_parameter: OMX_GoogleAndroidIndexGetAndroidNativeBufferUsage failed!\n");
@@ -7869,11 +7873,14 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
   if ((secure_mode) && (flag & ION_SECURE))
       alloc_data->flags |= ION_SECURE;
 
-  alloc_data->heap_mask = ION_HEAP(MEM_HEAP_ID);
-  if (!secure_mode)
+#ifdef _HEVC_USE_ADSP_HEAP_
 	  alloc_data->heap_mask |= ION_HEAP(ION_ADSP_HEAP_ID);
-
-  DEBUG_PRINT_ERROR("\n ION ALLOC memory ION_ADSP_HEAP_ID size %d align %d", alloc_data->len, alloc_data->align);
+#else
+  alloc_data->heap_mask = ION_HEAP(ION_IOMMU_HEAP_ID);
+#endif
+  if (secure_mode) {
+    alloc_data->heap_mask = ION_HEAP(MEM_HEAP_ID);
+  }
   rc = ioctl(fd,ION_IOC_ALLOC,alloc_data);
   if (rc || !alloc_data->handle) {
     DEBUG_PRINT_ERROR("\n ION ALLOC memory failed ");
@@ -9303,7 +9310,8 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
     if (!omx->in_reconfig && !omx->output_flush_progress && bufadd->nFilledLen) {
        pthread_mutex_lock(&omx->c_lock);
       status = c2d.convert(omx->drv_ctx.ptr_outputbuffer[index].pmem_fd,
-                  bufadd->pBuffer,pmem_fd[index],pmem_baseaddress[index]);
+                  omx->m_out_mem_ptr->pBuffer, bufadd->pBuffer,pmem_fd[index],
+                  pmem_baseaddress[index], pmem_baseaddress[index]);
        pthread_mutex_unlock(&omx->c_lock);
       m_out_mem_ptr_client[index].nFilledLen = buffer_size_req;
       if (!status){
