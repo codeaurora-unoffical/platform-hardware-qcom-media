@@ -35,6 +35,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <math.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -55,7 +56,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C"{
 #include<utils/Log.h>
 }
-#define DEBUG_PRINT
+#define DEBUG_PRINT printf
 #define DEBUG_PRINT_ERROR ALOGE
 
 //#define __DEBUG_DIVX__ // Define this macro to print (through logcat)
@@ -1386,7 +1387,7 @@ int main(int argc, char **argv)
       }
       outputOption = param[idx++];
       test_option = param[idx++];
-      if (test_option != 3) {
+      if ((outputOption == 1 || outputOption ==3) && test_option != 3) {
           displayWindow = param[idx++];
           if (displayWindow > 0)
               printf("Only entire display window supported! Ignoring value\n");
@@ -2390,6 +2391,20 @@ int Play_Decoder()
     if(OMX_DirOutput != portFmt.eDir) {
         DEBUG_PRINT_ERROR("Error - Expect Output Port\n");
         return -1;
+    }
+
+    if (anti_flickering) {
+        ret = OMX_GetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_GetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
+        portFmt.nBufferCountActual += 1;
+        ret = OMX_SetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_SetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
     }
 
 #ifndef USE_EGL_IMAGE_TEST_APP
@@ -4012,6 +4027,8 @@ void overlay_set()
         overlayp->dst_rect.y = 0;
         if (overlayp->dst_rect.h < vinfo.yres)
             overlayp->dst_rect.y = (vinfo.yres - overlayp->dst_rect.h)/2;
+        else
+            overlayp->dst_rect.h = vinfo.yres;
     }
     else
     {
@@ -4019,12 +4036,54 @@ void overlay_set()
         overlayp->dst_rect.h = height;
     }
 
-    overlayp->z_order = 0;
+    //Decimation + MDP Downscale
+    overlayp->horz_deci = 0;
+    overlayp->vert_deci = 0;
+    int minHorDeci = 0;
+    if(overlayp->src_rect.w > 2048) {
+        //If the client sends us something > what a layer mixer supports
+        //then it means it doesn't want to use split-pipe but wants us to
+        //decimate. A minimum decimation of 2 will ensure that the width is
+        //always within layer mixer limits.
+        minHorDeci = 2;
+    }
+
+    float horDscale = ceilf((float)overlayp->src_rect.w /
+            (float)overlayp->dst_rect.w);
+    float verDscale = ceilf((float)overlayp->src_rect.h /
+            (float)overlayp->dst_rect.h);
+
+    //Next power of 2, if not already
+    horDscale = powf(2.0f, ceilf(log2f(horDscale)));
+    verDscale = powf(2.0f, ceilf(log2f(verDscale)));
+
+    //Since MDP can do 1/4 dscale and has better quality, split the task
+    //between decimator and MDP downscale
+    horDscale /= 4.0f;
+    verDscale /= 4.0f;
+
+    if(horDscale < minHorDeci)
+        horDscale = minHorDeci;
+    if((int)horDscale)
+        overlayp->horz_deci = (int)log2f(horDscale);
+
+    if((int)verDscale)
+        overlayp->vert_deci = (int)log2f(verDscale);
+
+    printf("overlayp->src.width = %u \n", overlayp->src.width);
+    printf("overlayp->src.height = %u \n", overlayp->src.height);
+    printf("overlayp->src_rect.x = %u \n", overlayp->src_rect.x);
+    printf("overlayp->src_rect.y = %u \n", overlayp->src_rect.y);
+    printf("overlayp->src_rect.w = %u \n", overlayp->src_rect.w);
+    printf("overlayp->src_rect.h = %u \n", overlayp->src_rect.h);
     printf("overlayp->dst_rect.x = %u \n", overlayp->dst_rect.x);
     printf("overlayp->dst_rect.y = %u \n", overlayp->dst_rect.y);
     printf("overlayp->dst_rect.w = %u \n", overlayp->dst_rect.w);
     printf("overlayp->dst_rect.h = %u \n", overlayp->dst_rect.h);
+    printf("overlayp->vert_deci = %u \n", overlayp->vert_deci);
+    printf("overlayp->horz_deci = %u \n", overlayp->horz_deci);
 
+    overlayp->z_order = 0;
     overlayp->alpha = 0xff;
     overlayp->transp_mask = 0xFFFFFFFF;
     overlayp->flags = 0;
@@ -4033,6 +4092,7 @@ void overlay_set()
     overlayp->id = MSMFB_NEW_REQUEST;
 
     overlay_vsync_ctrl(OMX_TRUE);
+    drawBG();
     vid_buf_front_id = ioctl(fb_fd, MSMFB_OVERLAY_SET, overlayp);
     if (vid_buf_front_id < 0)
     {
@@ -4040,7 +4100,6 @@ void overlay_set()
     }
     vid_buf_front_id = overlayp->id;
     DEBUG_PRINT("\n vid_buf_front_id = %u", vid_buf_front_id);
-    drawBG();
     displayYuv = 2;
 }
 
@@ -4317,6 +4376,21 @@ int enable_output_port()
 #ifndef USE_EGL_IMAGE_TEST_APP
     /* Allocate buffer on decoder's o/p port */
     portFmt.nPortIndex = 1;
+
+    if (anti_flickering) {
+        ret = OMX_GetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_GetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
+        portFmt.nBufferCountActual += 1;
+        ret = OMX_SetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_SetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
+    }
+
     if (use_external_pmem_buf)
     {
         DEBUG_PRINT("Enable op port: calling use_buffer_mult_fd\n");
@@ -4536,6 +4610,7 @@ int open_display()
     close(fb_fd);
     return -1;
   }
+  printf("Display xres = %d, yres = %d \n", vinfo.xres, vinfo.yres);
   return 0;
 }
 
