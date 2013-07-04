@@ -26,7 +26,15 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
+#ifdef _ANDROID_
+extern "C"{
 #include <utils/Log.h>
+}
+#else
+#define ALOGE(ftm, args...)  fprintf(stderr, ftm, ##args)
+#define ALOGV(ftm, args...)  fprintf(stderr, ftm, ##args)
+#endif
+
 #include <gralloc_priv.h>
 #include "vidc_color_converter.h"
 #undef DEBUG_PRINT_LOW

@@ -7348,9 +7348,11 @@ int omx_vdec::async_message_process (void *context, void* message)
 		  omx->post_event (NULL, vdec_msg->status_code,
 				  OMX_COMPONENT_GENERATE_UNSUPPORTED_SETTING);
 	  } else {
+#ifdef _ANDROID_
                   if (!omx->client_buffers.update_buffer_req()) {
                      DEBUG_PRINT_ERROR("Setting c2D buffer requirements failed");
                   }
+#endif
 		  omx->post_event (OMX_CORE_OUTPUT_PORT_INDEX, OMX_IndexConfigCommonOutputCrop,
 				  OMX_COMPONENT_GENERATE_PORT_RECONFIG);
 	  }
