@@ -1274,12 +1274,6 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 	  is_secure = 1;
   }
 
-  if (secure_mode) {
-    if (secureDisplay(qService::IQService::START) < 0) {
-      DEBUG_PRINT_HIGH("Sending message to start securing display failed");
-    }
-  }
-
   DEBUG_PRINT_HIGH("omx_vdec::component_init(): Start of New Playback : role  = %s : DEVICE = %s",
         role, device_name);
 
@@ -1307,6 +1301,12 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
       eRet = OMX_ErrorInsufficientResources;
       goto cleanup;
   }
+
+  if (secure_mode) {
+    if (secureDisplay(qService::IQService::START) < 0) {
+      DEBUG_PRINT_HIGH("Sending message to start securing display failed");
+    }
+  }
 #ifdef _ANDROID_
   if(is_secure)
     sendBroadCastEvent(String16("qualcomm.intent.action.SECURE_START_DONE"));
@@ -1320,9 +1320,19 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 #endif
 #ifdef OUTPUT_BUFFER_LOG
   outputBufferFile1 = fopen (outputfilename, "ab");
+  if (!outputBufferFile1) {
+    DEBUG_PRINT_ERROR("failed to open file %s", outputfilename);
+  } else {
+    DEBUG_PRINT_ERROR("Successfully opened file %s", outputfilename);
+  }
 #endif
 #ifdef OUTPUT_EXTRADATA_LOG
   outputExtradataFile = fopen (ouputextradatafilename, "ab");
+  if (!outputExtradataFile) {
+    DEBUG_PRINT_ERROR("failed to open file %s", ouputextradatafilename);
+  } else {
+    DEBUG_PRINT_ERROR("Successfully opened file %s", ouputextradatafilename);
+  }
 #endif
 
   // Copy the role information which provides the decoder kind
@@ -1490,6 +1500,11 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
   }
 #ifdef INPUT_BUFFER_LOG
   inputBufferFile1 = fopen (inputfilename, "ab");
+  if (!inputBufferFile1) {
+    DEBUG_PRINT_ERROR("failed to open file %s", inputfilename);
+  } else {
+    DEBUG_PRINT_ERROR("Successfully opened file %s", inputfilename);
+  }
 #endif
   if (eRet == OMX_ErrorNone)
   {
@@ -5896,6 +5911,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
   {
     fwrite((const char *)temp_buffer->bufferaddr,
       temp_buffer->buffer_len,1,inputBufferFile1);
+    DEBUG_PRINT_HIGH("Written %d bytes to input file", temp_buffer->buffer_len);
   }
 
 #endif
@@ -6776,9 +6792,8 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
   {
     OMX_U32 index = buffer - m_out_mem_ptr;
     OMX_U8* pBuffer = (OMX_U8 *)drv_ctx.ptr_outputbuffer[index].bufferaddr;
-
-    fwrite (pBuffer,1,buffer->nFilledLen,
-                  outputBufferFile1);
+    fwrite (pBuffer, buffer->nFilledLen, 1, outputBufferFile1);
+    DEBUG_PRINT_HIGH("Written %d bytes to output file", buffer->nFilledLen);
   }
 #endif
 
@@ -6857,8 +6872,9 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     while(p_extra &&
           (OMX_U8*)p_extra < (pBuffer + buffer->nAllocLen) )
     {
-      DEBUG_PRINT_LOW("WRITING extradata, size=%d,type=%d",p_extra->nSize, p_extra->eType);
-      fwrite (p_extra,1,p_extra->nSize,outputExtradataFile);
+      DEBUG_PRINT_HIGH("WRITING extradata, eType=%d, nSize=%d",
+          p_extra->eType, p_extra->nSize);
+      fwrite (p_extra, p_extra->nSize, 1, outputExtradataFile);
       if (p_extra->eType == OMX_ExtraDataNone)
       {
         break;
