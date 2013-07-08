@@ -39,6 +39,7 @@ libOmxVdec-def += -DMAX_RES_1080P
 libOmxVdec-def += -DMAX_RES_1080P_EBI
 libOmxVdec-def += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
 libOmxVdec-def += -D_MSM8974_
+libOmxVdec-def += -D_HEVC_USE_ADSP_HEAP_
 endif
 ifeq ($(TARGET_BOARD_PLATFORM),msm7627a)
 libOmxVdec-def += -DMAX_RES_720P
@@ -69,6 +70,10 @@ libOmxVdec-def += -D_ANDROID_ICS_
 
 ifeq ($(TARGET_USES_ION),true)
 libOmxVdec-def += -DUSE_ION
+endif
+
+ifneq ($(call is-platform-sdk-version-at-least,18),true)
+libOmxVdec-def += -DANDROID_JELLYBEAN_MR1=1
 endif
 
 vdec-inc          = $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
@@ -137,7 +142,7 @@ include $(BUILD_SHARED_LIBRARY)
 include $(CLEAR_VARS)
 LOCAL_PATH:= $(ROOT_DIR)
 
-ifeq ($(call is-board-platform-in-list,msm8974 apq8084),true)
+ifeq ($(call is-board-platform-in-list,msm8974 msm8610 apq8084),true)
 
 LOCAL_MODULE                    := libOmxVdecHevc
 LOCAL_MODULE_TAGS               := optional
