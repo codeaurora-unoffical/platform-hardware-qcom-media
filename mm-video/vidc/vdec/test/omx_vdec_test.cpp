@@ -56,7 +56,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C"{
 #include<utils/Log.h>
 }
-#define DEBUG_PRINT
+#define DEBUG_PRINT printf
 #define DEBUG_PRINT_ERROR ALOGE
 
 //#define __DEBUG_DIVX__ // Define this macro to print (through logcat)
@@ -1394,7 +1394,7 @@ int main(int argc, char **argv)
       }
       outputOption = param[idx++];
       test_option = param[idx++];
-      if (test_option != 3) {
+      if ((outputOption == 1 || outputOption ==3) && test_option != 3) {
           displayWindow = param[idx++];
           if (displayWindow > 0)
               printf("Only entire display window supported! Ignoring value\n");
@@ -2398,6 +2398,20 @@ int Play_Decoder()
     if(OMX_DirOutput != portFmt.eDir) {
         DEBUG_PRINT_ERROR("Error - Expect Output Port\n");
         return -1;
+    }
+
+    if (anti_flickering) {
+        ret = OMX_GetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_GetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
+        portFmt.nBufferCountActual += 1;
+        ret = OMX_SetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_SetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
     }
 
 #ifndef USE_EGL_IMAGE_TEST_APP
@@ -4369,6 +4383,21 @@ int enable_output_port()
 #ifndef USE_EGL_IMAGE_TEST_APP
     /* Allocate buffer on decoder's o/p port */
     portFmt.nPortIndex = 1;
+
+    if (anti_flickering) {
+        ret = OMX_GetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_GetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
+        portFmt.nBufferCountActual += 1;
+        ret = OMX_SetParameter(dec_handle,OMX_IndexParamPortDefinition,&portFmt);
+        if (ret != OMX_ErrorNone) {
+            DEBUG_PRINT_ERROR("%s: OMX_SetParameter failed: %d",__FUNCTION__, ret);
+            return -1;
+        }
+    }
+
     if (use_external_pmem_buf)
     {
         DEBUG_PRINT("Enable op port: calling use_buffer_mult_fd\n");
