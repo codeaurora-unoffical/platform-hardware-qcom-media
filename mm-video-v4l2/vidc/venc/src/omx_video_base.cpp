@@ -4445,6 +4445,10 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
         profileLevelType->eProfile = OMX_VIDEO_AVCProfileHigh;
         profileLevelType->eLevel   = OMX_VIDEO_AVCLevel51;
       }
+      else if (profileLevelType->nProfileIndex == 3) {
+        profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
+        profileLevelType->eLevel   = OMX_VIDEO_AVCLevel51;
+      }
       else
       {
         DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %d\n",
