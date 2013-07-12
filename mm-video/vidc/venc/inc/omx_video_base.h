@@ -48,8 +48,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/mman.h>
 #ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
-#endif // _ANDROID_
-#ifdef _ANDROID_
 #include "QComOMXMetadata.h"
 #else
 #include "omx_meta_mode.h"

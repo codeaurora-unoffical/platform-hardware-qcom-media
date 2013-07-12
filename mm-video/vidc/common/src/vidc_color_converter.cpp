@@ -35,7 +35,12 @@ extern "C"{
 #define ALOGV(ftm, args...)  fprintf(stderr, ftm, ##args)
 #endif
 
+#ifdef _ANDROID_
 #include <gralloc_priv.h>
+#else
+#include <stdio.h>
+#include <omx_meta_mode.h>
+#endif
 #include "vidc_color_converter.h"
 #undef DEBUG_PRINT_LOW
 #undef DEBUG_PRINT_HIGH
