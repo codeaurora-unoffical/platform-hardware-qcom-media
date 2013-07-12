@@ -47,11 +47,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <sys/mman.h>
 #ifdef _ANDROID_
-  #include <binder/MemoryHeapBase.h>
-#ifdef _ANDROID_ICS_
-  #include "QComOMXMetadata.h"
-#endif
+#include <binder/MemoryHeapBase.h>
 #endif // _ANDROID_
+#ifdef _ANDROID_
+#include "QComOMXMetadata.h"
+#else
+#include "omx_meta_mode.h"
+#endif
 #include <pthread.h>
 #include <semaphore.h>
 #include <linux/msm_vidc_enc.h>
@@ -140,7 +142,7 @@ void* message_thread(void *);
 class omx_video: public qc_omx_component
 {
 protected:
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   bool meta_mode_enable;
   encoder_media_buffer_type meta_buffers[MAX_NUM_INPUT_BUFFERS];
   bool mUseProxyColorFormat;
@@ -219,7 +221,7 @@ public:
 #endif
   virtual bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height) = 0;
   virtual bool dev_get_capability_ltrcount(OMX_U32 *, OMX_U32 *, OMX_U32 *) = 0;
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   void omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer);
 #endif
   OMX_ERRORTYPE component_role_enum(
@@ -440,7 +442,7 @@ public:
                                       OMX_U32              port,
                                       OMX_PTR              appData,
                                       OMX_U32              bytes);
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   OMX_ERRORTYPE allocate_input_meta_buffer(OMX_HANDLETYPE       hComp,
                                       OMX_BUFFERHEADERTYPE **bufferHdr,
                                       OMX_PTR              appData,

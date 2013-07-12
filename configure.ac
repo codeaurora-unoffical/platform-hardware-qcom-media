@@ -49,7 +49,7 @@ AM_CONDITIONAL(TARGET_MSM8974, test "x$target_msm8974" = "xyes")
 
 AC_ARG_WITH([sanitized-headers],
 	[AS_HELP_STRING([--with-sanitized-headers=DIR],[location of the sanitized Linux headers])],
-	[CPPFLAGS="$CPPFLAGS -I$withval"])
+	[CPPFLAGS="$CPPFLAGS -I$withval -I${withval}/C2D"])
 
 AC_CONFIG_FILES([     \
 	Makefile \
