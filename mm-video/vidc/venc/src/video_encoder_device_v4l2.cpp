@@ -1801,18 +1801,44 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 	  }
 }
 #ifdef INPUT_BUFFER_LOG
-	  int i;
+	  int i,msize;
 	  int stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, m_sVenc_cfg.input_width);
 	  int scanlines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, m_sVenc_cfg.input_height);
+	  unsigned char *pvirt;
 	  char *temp = (char *)bufhdr->pBuffer;
-	  for (i = 0; i < m_sVenc_cfg.input_height; i++) {
-		  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-		  temp += stride;
+	  msize = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
+
+	  if (metadatamode == 1) {
+		  pvirt= (unsigned char *)mmap(NULL, msize, PROT_READ|PROT_WRITE,
+									   MAP_SHARED, fd, plane.data_offset);
+		  for (i = 0; i < m_sVenc_cfg.input_height; i++) {
+			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  temp += stride;
+          }
+		  temp = (char *)bufhdr->pBuffer + (stride * scanlines);
+		  for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
+			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  temp += stride;
+          }
+          munmap(pvirt, msize);
 	  }
-	  temp = (char *)bufhdr->pBuffer + (stride * scanlines);
-	  for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
-		  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-		  temp += stride;
+	  else if (metadatamode == 2) {
+		  pvirt= (unsigned char *)mmap(NULL, (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height * 4),
+									   PROT_READ|PROT_WRITE, MAP_SHARED, fd, plane.data_offset);
+		  fwrite(temp, (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height * 4), 1,
+				 inputBufferFile1);
+		  munmap(pvirt, (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height * 4));
+	  }
+	  else {
+		  for (i = 0; i < m_sVenc_cfg.input_height; i++) {
+			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  temp += stride;
+		  }
+		  temp = (char *)bufhdr->pBuffer + (stride * scanlines);
+		  for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
+			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  temp += stride;
+		  }
 	  }
 #endif
   return true;
@@ -3287,9 +3313,18 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
 #ifdef _METAMODE_
 bool venc_dev::venc_set_meta_mode(bool mode)
 {
-	metadatamode = 1;
+	if (!metadatamode) {
+		metadatamode = 1;
+	}
 	return true;
 }
+
+int venc_dev::venc_set_rgb_meta_mode(int mode)
+{
+	metadatamode = 2;
+	return true;
+}
+
 #endif
 
 bool venc_dev::venc_is_video_session_supported(unsigned long width,

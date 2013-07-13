@@ -33,8 +33,15 @@
 #include <fcntl.h>
 #include <linux/msm_kgsl.h>
 #include <sys/ioctl.h>
-#include <utils/Log.h>
+//#include <utils/Log.h>
 #include <dlfcn.h>
+
+#ifndef _ANDROID_
+#include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#endif
 
 #undef LOG_TAG
 #define LOG_TAG "C2DColorConvert"
@@ -45,10 +52,12 @@
 #define ALIGN128 128
 #define ALIGN32 32
 #define ALIGN16 16
-
+#define ALOGE printf
+#define ALOGV printf
 //-----------------------------------------------------
+#ifdef _ANDROID_
 namespace android {
-
+#endif
 class C2DColorConverter : public C2DColorConverterBase {
 
 public:
@@ -108,7 +117,11 @@ private:
 C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags, size_t srcStride)
 {
      mError = 0;
+#ifdef _ANDROID_
      mC2DLibHandle = dlopen("libC2D2.so", RTLD_NOW);
+#else
+     mC2DLibHandle = dlopen("libc2d2.so", RTLD_NOW);
+#endif
      if (!mC2DLibHandle) {
          ALOGE("FATAL ERROR: could not dlopen libc2d2.so: %s", dlerror());
          mError = -1;
@@ -507,6 +520,9 @@ void * C2DColorConverter::getMappedGPUAddr(int bufFD, void *bufPtr, size_t bufLe
     param.len = bufLen;
     param.hostptr = (unsigned int)bufPtr;
     param.memtype = KGSL_USER_MEM_TYPE_ION;
+#ifdef _ANDROID_
+    param.reserved = 0;
+#endif
     param.gpuaddr = 0;
 
     if (!ioctl(mKgslFd, IOCTL_KGSL_MAP_USER_MEM, &param, sizeof(param))) {
@@ -698,4 +714,7 @@ extern "C" void destroyC2DColorConverter(C2DColorConverterBase* C2DCC)
     delete C2DCC;
 }
 
+#ifdef _ANDROID_
 }
+#endif
+

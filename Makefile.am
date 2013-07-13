@@ -2,4 +2,4 @@
 #
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = mm-core mm-video
+SUBDIRS = mm-core libc2dcolorconvert mm-video

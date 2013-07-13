@@ -205,6 +205,9 @@ public:
   unsigned venc_flush(unsigned);
 #ifdef _METAMODE_
   bool venc_set_meta_mode(bool);
+#ifdef _OPAQUE_
+  int venc_set_rgb_meta_mode(int);
+#endif
 #endif
   unsigned venc_resume(void);
   unsigned venc_start_done(void);

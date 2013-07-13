@@ -29,11 +29,12 @@ AM_CPPFLAGS += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
 AM_CPPFLAGS += -DUSE_ION
 AM_CPPFLAGS += -D_MSM8974_
 AM_CPPFLAGS += -D_METAMODE_
-#AM_CPPFLAGS += -D_OPAQUE_
+AM_CPPFLAGS += -D_OPAQUE_
 endif
 
 AM_CPPFLAGS += -I./inc
 AM_CPPFLAGS += -I../common/inc
+AM_CPPFLAGS += -I../../../libc2dcolorconvert
 AM_CPPFLAGS += -I../../../mm-core/inc
 AM_CPPFLAGS += -I../../../mm-core/src/common
 #AM_CPPFLAGS += -I../libc2dcolorconvert
@@ -48,11 +49,13 @@ if TARGET_MSM8974
 sources += src/video_encoder_device_v4l2.cpp
 endif
 sources += ../common/src/extra_data_handler.cpp
+sources += ../common/src/vidc_color_converter.cpp
 
 lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
 libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
-#libOmxVenc_la_LDLIBS = -lOmxCore -lstdc++ -lpthread
+libOmxVenc_la_LDLIBS = -lOmxCore -lstdc++ -lpthread -lc2d2
+libOmxVenc_la_LDLIBS += ../libc2d2colorconvert/libc2dcolorconvert.la
 libOmxVenc_la_LDFLAGS = -shared -version-info $(OMXVIDEO_LIBRARY_VERSION)
 
 

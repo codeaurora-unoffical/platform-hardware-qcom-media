@@ -51,13 +51,26 @@ AC_ARG_WITH([sanitized-headers],
 	[AS_HELP_STRING([--with-sanitized-headers=DIR],[location of the sanitized Linux headers])],
 	[CPPFLAGS="$CPPFLAGS -I$withval -I${withval}/C2D"])
 
+AC_ARG_WITH([common-includes],
+	[AS_HELP_STRING([--with-common-include=DIR],[location of common headers])],
+	[CPPFLAGS="$CPPFLAGS -I$withval -I${withval}/C2D"])
+
+AC_ARG_WITH([libhardware-headers],
+	[AS_HELP_STRING([--with-libhardware-headers=DIR],[location of the libhardware headers])],
+	[CPPFLAGS="$CPPFLAGS -I${withval}/modules/gralloc"])
+
+AC_SUBST([CFLAGS])
+AC_SUBST([CPPFLAGS])
+AC_SUBST([CC])
+
 AC_CONFIG_FILES([     \
 	Makefile \
 	mm-core/Makefile \
 	mm-video/Makefile \
-    mm-video/DivxDrmDecrypt/Makefile \
+	mm-video/DivxDrmDecrypt/Makefile \
 	mm-video/vidc/Makefile \
 	mm-video/vidc/vdec/Makefile \
-	mm-video/vidc/venc/Makefile
+	mm-video/vidc/venc/Makefile \
+	libc2dcolorconvert/Makefile
 	])
 AC_OUTPUT

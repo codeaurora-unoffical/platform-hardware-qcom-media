@@ -570,6 +570,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             }
             mUseProxyColorFormat = true;
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
+            handle->venc_set_rgb_meta_mode(mUseProxyColorFormat);
 #else
             mUseProxyColorFormat = true;
 #endif
@@ -664,7 +665,9 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
               }
               DEBUG_PRINT_ERROR("\nC2D init is successful");
             }
+            mUseProxyColorFormat = true;
             m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
+            handle->venc_set_rgb_meta_mode(mUseProxyColorFormat);
 #else
             mUseProxyColorFormat = true;
 #endif
