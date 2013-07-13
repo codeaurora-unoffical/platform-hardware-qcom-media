@@ -3219,7 +3219,7 @@ bool venc_dev::venc_max_allowed_bitrate_check(OMX_U32 nTargetBitrate)
   return true;
 }
 
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
 bool venc_dev::venc_set_meta_mode(bool mode)
 {
   venc_ioctl_msg ioctl_msg = {NULL,NULL};

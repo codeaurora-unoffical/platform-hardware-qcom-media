@@ -1723,7 +1723,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
   struct v4l2_plane plane;
   int rc=0;
   struct OMX_BUFFERHEADERTYPE *bufhdr;
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   encoder_media_buffer_type * meta_buf = NULL;
 #endif
   temp_buffer = (struct pmem *)buffer;
@@ -1749,7 +1749,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
   else
   {
     DEBUG_PRINT_LOW("\n Shared PMEM addr for i/p PMEM UseBuf/AllocateBuf: %p", bufhdr->pBuffer);
-#ifdef _ANDROID_ICS_	
+#ifdef _METAMODE_
 	if (metadatamode && !color_format) { // meta Buffer + Camera buffers
 		meta_buf = (encoder_media_buffer_type *)bufhdr->pBuffer;
 		if (!meta_buf)
@@ -3284,7 +3284,7 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
 
   return true;
 }
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
 bool venc_dev::venc_set_meta_mode(bool mode)
 {
 	metadatamode = 1;

@@ -28,12 +28,15 @@ AM_CPPFLAGS += -DMAX_RES_1080P_EBI
 AM_CPPFLAGS += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
 AM_CPPFLAGS += -DUSE_ION
 AM_CPPFLAGS += -D_MSM8974_
+AM_CPPFLAGS += -D_METAMODE_
+#AM_CPPFLAGS += -D_OPAQUE_
 endif
+
 AM_CPPFLAGS += -I./inc
 AM_CPPFLAGS += -I../common/inc
 AM_CPPFLAGS += -I../../../mm-core/inc
 AM_CPPFLAGS += -I../../../mm-core/src/common
-
+#AM_CPPFLAGS += -I../libc2dcolorconvert
 sources = src/omx_video_base.cpp
 sources += src/omx_video_encoder.cpp
 
@@ -65,6 +68,7 @@ mm_venc_omx_test720p_CPPFLAGS += -DMAX_RES_1080P_EBI
 mm_venc_omx_test720p_CPPFLAGS += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
 mm_venc_omx_test720p_CPPFLAGS += -D_MSM8974_
 mm_venc_omx_test720p_CPPFLAGS += -DUSE_ION
+mm_venc_omx_test720p_CPPFLAGS += -D_METAMODE_
 endif
 
 mm_venc_omx_test720p_SOURCES := test/venc_test.cpp

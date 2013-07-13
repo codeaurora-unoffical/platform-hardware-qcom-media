@@ -29,8 +29,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include "video_encoder_device.h"
 #include <stdio.h>
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
+#else
+#include <omx_meta_mode.h>
 #endif
 #ifdef _ANDROID_
 #include <cutils/properties.h>
@@ -61,7 +63,7 @@ void *get_omx_component_factory_fn(void)
 
 omx_venc::omx_venc()
 {
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   meta_mode_enable = false;
   memset(meta_buffer_hdr,0,sizeof(meta_buffer_hdr));
   memset(meta_buffers,0,sizeof(meta_buffers));
@@ -75,7 +77,7 @@ omx_venc::omx_venc()
 
 omx_venc::~omx_venc()
 {
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   get_syntaxhdr_enable = false;
 #endif
   //nothing to do
@@ -555,7 +557,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
         DEBUG_PRINT_LOW("\n i/p previous min cnt = %d\n", m_sInPortDef.nBufferCountMin);
         memcpy(&m_sInPortDef, portDefn,sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
 
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
         if (portDefn->format.video.eColorFormat == (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
             m_sInPortDef.format.video.eColorFormat = OMX_COLOR_FormatYUV420SemiPlanar;
 #ifdef _OPAQUE_
@@ -650,7 +652,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             portFmt->eColorFormat);
         update_profile_level(); //framerate
 
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
         if (portFmt->eColorFormat ==
             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
             m_sInPortFormat.eColorFormat = OMX_COLOR_FormatYUV420SemiPlanar;
@@ -1071,7 +1073,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
       memcpy(&m_sIntraRefresh, pParam, sizeof(m_sIntraRefresh));
       break;
     }
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   case OMX_QcomIndexParamVideoEncodeMetaBufferMode:
     {
       StoreMetaDataInBuffersParams *pParam =
@@ -1681,7 +1683,7 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
 
   /*Check if the input buffers have to be cleaned up*/
   if(m_inp_mem_ptr
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
      && !meta_mode_enable
 #endif
      )
@@ -1919,7 +1921,7 @@ int omx_venc::async_message_process (void *context, void* message)
       m_sVenc_msg->statuscode = VEN_S_EFAIL;
     }
 
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
       omx->omx_release_meta_buffer(omxhdr);
 #endif
     omx->post_event ((unsigned int)omxhdr,m_sVenc_msg->statuscode,

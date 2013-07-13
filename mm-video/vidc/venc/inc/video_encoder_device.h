@@ -54,7 +54,7 @@ public:
   unsigned venc_pause(void);
   unsigned venc_start(void);
   unsigned venc_flush(unsigned);
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
   bool venc_set_meta_mode(bool);
 #endif
   unsigned venc_resume(void);
