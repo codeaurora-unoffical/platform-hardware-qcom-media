@@ -405,8 +405,14 @@ void DashPlayer::onMessageReceived(const sp<AMessage> &msg) {
                          err);
                 }
 
-                if((mRenderer != NULL) && (track == kAudio || track == kVideo)) {
+                if(mRenderer != NULL)
+                {
+                  if((track == kAudio && !IsFlushingState(mFlushingAudio)) || (track == kVideo && !IsFlushingState(mFlushingVideo))) {
                     mRenderer->queueEOS(track, err);
+                  }
+                  else{
+                    ALOGE("FlushingState for %s. Decoder EOS not queued to renderer", mTrackName);
+                  }
                 }
             } else if (what == DashCodec::kWhatFlushCompleted) {
                 ALOGV("@@@@:: Dashplayer :: MESSAGE FROM DASHCODEC +++++++++++++++++++++++++++++++ kWhatFlushCompleted");
@@ -759,6 +765,7 @@ void DashPlayer::onMessageReceived(const sp<AMessage> &msg) {
                     driver->notifySeekComplete();
                     if( newSeekTime >= 0 ) {
                         driver->notifyPosition( newSeekTime );
+                        mSource->notifyRenderingPosition(newSeekTime);
                      }
                 }
             }
