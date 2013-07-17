@@ -3668,6 +3668,12 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
               DEBUG_PRINT_ERROR("\n Sync frame setting failed");
               eRet = OMX_ErrorUnsupportedSetting;
             }
+            /*Setting sync frame decoding on driver might change buffer
+             * requirements so update them here*/
+            if (get_buffer_req(&drv_ctx.ip_buf)) {
+              DEBUG_PRINT_ERROR("\n Sync frame setting failed: falied to get buffer requirements");
+              eRet = OMX_ErrorUnsupportedSetting;
+            }
         }
       }
       break;
@@ -6030,6 +6036,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
 	buf.timestamp.tv_sec = frameinfo.timestamp / 1000000;
 	buf.timestamp.tv_usec = (frameinfo.timestamp % 1000000);
 	buf.flags |= (buffer->nFlags & OMX_BUFFERFLAG_CODECCONFIG) ? V4L2_QCOM_BUF_FLAG_CODECCONFIG: 0;
+	buf.flags |= (buffer->nFlags & OMX_BUFFERFLAG_DECODEONLY) ? V4L2_QCOM_BUF_FLAG_DECODEONLY: 0;
 
 	rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_QBUF, &buf);
 	if(rc)
@@ -6936,6 +6943,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     bool is_interlaced = (drv_ctx.interlace != VDEC_InterlaceFrameProgressive);
 
     if (output_capability == V4L2_PIX_FMT_MPEG4 ||
+      output_capability == V4L2_PIX_FMT_MPEG2 ||
       output_capability == V4L2_PIX_FMT_DIVX ||
       output_capability == V4L2_PIX_FMT_DIVX_311)
       is_duplicate_ts_valid = false;
@@ -7243,6 +7251,14 @@ int omx_vdec::async_message_process (void *context, void* message)
   if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_DECODEONLY)
   {
     omxhdr->nFlags |= OMX_BUFFERFLAG_DECODEONLY;
+  }
+  if (omxhdr && (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_DROP_FRAME) &&
+       !(v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_DECODEONLY) &&
+       !(v4l2_buf_ptr->flags & V4L2_BUF_FLAG_EOS))
+  {
+      omx->post_event ((unsigned)NULL,(unsigned int)omxhdr,
+        OMX_COMPONENT_GENERATE_FTB);
+      break;
   }
   if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_DATA_CORRUPT)
   {
