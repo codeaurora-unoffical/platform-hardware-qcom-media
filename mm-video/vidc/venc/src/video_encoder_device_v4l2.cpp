@@ -806,9 +806,9 @@ bool venc_dev::venc_get_buf_req(unsigned long *min_buff_count,
 	bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	ret = ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq);
 	if (ret) {
-                        DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS OUTPUT_MPLANE Failed \n ");
-                        return false;
-                }
+		DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS OUTPUT_MPLANE Failed \n ");
+		return false;
+	}
     m_sInput_buff_property.mincount = m_sInput_buff_property.actualcount = bufreq.count;
     *min_buff_count = m_sInput_buff_property.mincount;
     *actual_buff_count = m_sInput_buff_property.actualcount;
@@ -912,6 +912,12 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
 			  DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS OUTPUT_MPLANE Failed \n ");
 			  return false;
 		  }
+		  m_sInput_buff_property.mincount = bufreq.count;
+		  if(m_sInput_buff_property.mincount > portDefn->nBufferCountActual) {
+			  DEBUG_PRINT_ERROR("\nERROR: minimum (inport) buffer requirements not met min cnt = %d,"
+								"actual cnt = %d", m_sInput_buff_property.mincount, portDefn->nBufferCountActual);
+			  return false;
+		  }
 		  if(bufreq.count == portDefn->nBufferCountActual)
 			  m_sInput_buff_property.mincount = m_sInput_buff_property.actualcount = bufreq.count;
 		  if(portDefn->nBufferCountActual >= m_sInput_buff_property.mincount)
@@ -950,10 +956,17 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
 								portDefn->nBufferCountActual, m_sOutput_buff_property.actualcount);
 			  return false;
 		  }
+		  m_sOutput_buff_property.mincount = bufreq.count;
+		  if(m_sOutput_buff_property.mincount > portDefn->nBufferCountActual) {
+			  DEBUG_PRINT_ERROR("\nERROR: minimum (outport) buffer requirements not met min cnt = %d,"
+								"actual cnt = %d", m_sOutput_buff_property.mincount, portDefn->nBufferCountActual);
+			  return false;
+		  }
 		  if(bufreq.count == portDefn->nBufferCountActual)
 			  m_sOutput_buff_property.mincount = m_sOutput_buff_property.actualcount = bufreq.count;
 		  if(portDefn->nBufferCountActual >= m_sOutput_buff_property.mincount)
 			  m_sOutput_buff_property.actualcount = portDefn->nBufferCountActual;
+
 		  if (num_planes > 1)
 			  extradata_info.count = m_sOutput_buff_property.actualcount;
         }
