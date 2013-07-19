@@ -169,6 +169,10 @@ struct msm_venc_idrperiod {
 	unsigned long idrperiod;
 };
 
+struct msm_venc_slice_delivery {
+	unsigned long enable;
+};
+
 enum v4l2_ports {
 	CAPTURE_PORT,
 	OUTPUT_PORT,
@@ -228,6 +232,7 @@ public:
   bool m_profile_set;
   bool m_level_set;
   int num_planes;
+  int etb, ebd, ftb, fbd;
   struct recon_buffer {
 	  unsigned char* virtual_address;
 	  int pmem_fd;
@@ -243,7 +248,6 @@ public:
 
   int stopped;
   bool m_max_allowed_bitrate_check;
-  int etb_count;
   pthread_t m_tid;
   bool async_thread_created;
   class omx_venc *venc_handle;
@@ -271,6 +275,7 @@ private:
   struct msm_venc_voptimingcfg        voptimecfg;
   struct msm_venc_video_capability    capability;
   struct msm_venc_idrperiod           idrperiod;
+  struct msm_venc_slice_delivery      slice_mode;
 
   bool venc_set_profile_level(OMX_U32 eProfile,OMX_U32 eLevel);
   bool venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames);

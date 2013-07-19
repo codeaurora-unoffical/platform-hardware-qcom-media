@@ -49,6 +49,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define H264_HP_START (H264_BP_START + 17)
 #define H264_MP_START (H264_BP_START + 34)
 #define POLL_TIMEOUT 1000
+#define MAX_SUPPORTED_SLICES_PER_FRAME 28 /* Max supported slices with 32 output buffers */
 
 /* MPEG4 profile and level table*/
 static const unsigned int mpeg4_profile_level_table[][5]=
@@ -171,7 +172,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 	//nothing to do
 	int i = 0;
 	venc_handle = venc_class;
-	etb_count=0;
+	etb = ebd = ftb = fbd = 0;
 	for (i = 0; i < MAX_PORT; i++)
 		streaming[i] = false;
 
@@ -182,6 +183,24 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 	pthread_cond_init(&pause_resume_cond, NULL);
 	memset(&extradata_info, 0, sizeof(extradata_info));
 	memset(&idrperiod, 0, sizeof(idrperiod));
+	memset(&multislice, 0, sizeof(multislice));
+	memset (&slice_mode, 0 , sizeof(slice_mode));
+	memset(&m_sVenc_cfg, 0, sizeof(m_sVenc_cfg));
+	memset(&rate_ctrl, 0, sizeof(rate_ctrl));
+	memset(&bitrate, 0, sizeof(bitrate));
+	memset(&intra_period, 0, sizeof(intra_period));
+	memset(&codec_profile, 0, sizeof(codec_profile));
+	memset(&set_param, 0, sizeof(set_param));
+	memset(&time_inc, 0, sizeof(time_inc));
+	memset(&m_sInput_buff_property, 0, sizeof(m_sInput_buff_property));
+	memset(&m_sOutput_buff_property, 0, sizeof(m_sOutput_buff_property));
+	memset(&session_qp, 0, sizeof(session_qp));
+	memset(&entropy, 0, sizeof(entropy));
+	memset(&dbkfilter, 0, sizeof(dbkfilter));
+	memset(&intra_refresh, 0, sizeof(intra_refresh));
+	memset(&hec, 0, sizeof(hec));
+	memset(&voptimecfg, 0, sizeof(voptimecfg));
+	memset(&capability, 0, sizeof(capability));
 }
 
 venc_dev::~venc_dev()
@@ -237,7 +256,8 @@ void* venc_dev::async_venc_message_thread (void *input)
 
 	  rc = poll(&pfd, 1, POLL_TIMEOUT);
 		if (!rc) {
-			DEBUG_PRINT_HIGH("Poll timedout\n");
+			DEBUG_PRINT_HIGH("Poll timedout, pipeline stalled due to client/firmware ETB: %d, EBD: %d, FTB: %d, FBD: %d\n",
+							 omx->handle->etb, omx->handle->ebd, omx->handle->ftb, omx->handle->fbd);
 			continue;
 		} else if (rc < 0) {
 			DEBUG_PRINT_ERROR("Error while polling: %d\n", rc);
@@ -263,10 +283,8 @@ void* venc_dev::async_venc_message_thread (void *input)
 				 * for now it doesn't look like IL client cares about
 				 * other types
 				 */
-				if (v4l2_buf.flags & V4L2_QCOM_BUF_FLAG_IDRFRAME) {
+				if (v4l2_buf.flags & V4L2_QCOM_BUF_FLAG_IDRFRAME)
 					venc_msg.buf.flags |= QOMX_VIDEO_PictureTypeIDR;
-					venc_msg.buf.flags |= OMX_BUFFERFLAG_SYNCFRAME;
-				}
 				if (v4l2_buf.flags & V4L2_BUF_FLAG_KEYFRAME)
 					venc_msg.buf.flags |= OMX_BUFFERFLAG_SYNCFRAME;
 				if(v4l2_buf.flags & V4L2_QCOM_BUF_FLAG_CODECCONFIG)
@@ -275,6 +293,7 @@ void* venc_dev::async_venc_message_thread (void *input)
 					venc_msg.buf.flags |= OMX_BUFFERFLAG_EOS;
 				if(omx->handle->num_planes > 1 && v4l2_buf.m.planes->bytesused)
 					venc_msg.buf.flags |= OMX_BUFFERFLAG_EXTRADATA;
+				omx->handle->fbd++;
 				if(omx->async_message_process(input,&venc_msg) < 0)
 				{
 					DEBUG_PRINT_ERROR("\nERROR: Wrong ioctl message");
@@ -292,6 +311,7 @@ void* venc_dev::async_venc_message_thread (void *input)
 				venc_msg.statuscode=VEN_S_SUCCESS;
 				omxhdr=omx_venc_base->m_inp_mem_ptr+v4l2_buf.index;
 				venc_msg.buf.clientdata=(void*)omxhdr;
+				omx->handle->ebd++;
 				if(omx->async_message_process(input,&venc_msg) < 0)
 				{
 					DEBUG_PRINT_ERROR("\nERROR: Wrong ioctl message");
@@ -797,10 +817,21 @@ bool venc_dev::venc_get_buf_req(unsigned long *min_buff_count,
 
 		ret = ioctl(m_nDriver_fd, VIDIOC_G_FMT, &fmt);
 		m_sOutput_buff_property.datasize=fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
+		bufreq.memory = V4L2_MEMORY_USERPTR;
+		if (*actual_buff_count)
+			bufreq.count = *actual_buff_count;
+		else
+			bufreq.count = 2;
+		bufreq.type=V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+		ret = ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq);
+		if (ret) {
+			DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS CAPTURE_MPLANE Failed \n ");
+			return false;
+		}
+		m_sOutput_buff_property.mincount = m_sOutput_buff_property.actualcount = bufreq.count;
 		*min_buff_count = m_sOutput_buff_property.mincount;
 		*actual_buff_count = m_sOutput_buff_property.actualcount;
 		*buff_size = m_sOutput_buff_property.datasize;
-
 		num_planes = fmt.fmt.pix_mp.num_planes;
 		extra_idx = EXTRADATA_IDX(num_planes);
 		if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
@@ -1456,17 +1487,24 @@ unsigned venc_dev::venc_start(void)
       __func__, codec_profile.profile, profile_level.level);
   }
   venc_config_print();
+  /* Check if slice_delivery mode is enabled & max slices is sufficient for encoding complete frame */
+  if (slice_mode.enable && multislice.mslice_size &&
+	  (m_sVenc_cfg.input_width *  m_sVenc_cfg.input_height)/(256 * multislice.mslice_size) >= MAX_SUPPORTED_SLICES_PER_FRAME) {
+	  DEBUG_PRINT_ERROR("slice_mode: %d, max slices (%d) should be less than (%d)\n", slice_mode.enable,
+			(m_sVenc_cfg.input_width *  m_sVenc_cfg.input_height)/(256 * multislice.mslice_size),
+			MAX_SUPPORTED_SLICES_PER_FRAME);
+	  return 1;
+  }
 
   buf_type=V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
   DEBUG_PRINT_LOW("send_command_proxy(): Idle-->Executing\n");
+  ret=ioctl(m_nDriver_fd, VIDIOC_STREAMON,&buf_type);
 
-	ret=ioctl(m_nDriver_fd, VIDIOC_STREAMON,&buf_type);
+  if (ret)
+	  return 1;
 
-	if (ret)
-		return -1;
-
-	streaming[CAPTURE_PORT] = true;
-	return 0;
+  streaming[CAPTURE_PORT] = true;
+  return 0;
 }
 
 void venc_dev::venc_config_print()
@@ -1699,8 +1737,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 	  DEBUG_PRINT_ERROR("Failed to qbuf (etb) to driver");
 	  return false;
   }
-  etb_count++;
-
+  etb++;
   if(!streaming[OUTPUT_PORT])
   {
 	  enum v4l2_buf_type buf_type;
@@ -1784,6 +1821,7 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
 		DEBUG_PRINT_ERROR("Failed to qbuf (ftb) to driver");
 		return false;
 	}
+	ftb++;
 	return true;
 }
 
@@ -1821,8 +1859,10 @@ bool venc_dev::venc_set_slice_delivery_mode(OMX_U32 enable)
 				DEBUG_PRINT_ERROR("Request for setting slice delivery mode failed");
 				return false;
 			}
-			else
+			else {
 				DEBUG_PRINT_LOW("Successfully set Slice delivery mode id: %d, value=%d\n", control.id, control.value);
+				slice_mode.enable = 1;
+			}
 		}
 		else
 		{
