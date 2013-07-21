@@ -35,7 +35,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/android_pmem.h>
 #include <media/hardware/HardwareAPI.h>
 #ifdef USE_ION
-#include <linux/msm_ion.h>
+#include <linux/ion.h>
 #endif
 
 #define MPEG4_SP_START 0
