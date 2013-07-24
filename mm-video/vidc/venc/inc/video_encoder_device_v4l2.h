@@ -235,6 +235,7 @@ public:
   bool m_profile_set;
   bool m_level_set;
   int num_planes;
+  int etb, ebd, ftb, fbd;
   struct recon_buffer {
 	  unsigned char* virtual_address;
 	  int pmem_fd;
@@ -250,7 +251,6 @@ public:
 
   int stopped;
   bool m_max_allowed_bitrate_check;
-  int etb_count;
   pthread_t m_tid;
   bool async_thread_created;
   class omx_venc *venc_handle;
