@@ -251,6 +251,7 @@ omx_video::omx_video():
 	m_out_bm_count(0),
 	m_inp_bm_count(0),
 	m_flags(0),
+   secure_session(false),
 	m_etb_count(0),
 	m_fbd_count(0)
 #ifdef _OPAQUE_
