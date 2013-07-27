@@ -115,6 +115,7 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
   // Copy the role information which provides the decoder m_nkind
   strlcpy((char *)m_nkind,role,OMX_MAX_STRINGNAME_SIZE);
 
+  secure_session = false;
   if(!strncmp((char *)m_nkind,"OMX.qcom.video.encoder.mpeg4",\
               OMX_MAX_STRINGNAME_SIZE))
   {
