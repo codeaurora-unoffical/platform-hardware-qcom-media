@@ -1820,42 +1820,43 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 	  int stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, m_sVenc_cfg.input_width);
 	  int scanlines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, m_sVenc_cfg.input_height);
 	  unsigned char *pvirt;
-	  char *temp = (char *)bufhdr->pBuffer;
+	  char *ptemp = (char *)bufhdr->pBuffer;
 	  msize = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
-
-	  if (metadatamode == 1) {
+	  if (venc_handle->is_secure_session()) {
+		  DEBUG_PRINT_ERROR("Cannot dump input buffers for secure session\n");
+		  goto dump_complete;
+	  }
+	  if (metadatamode) {
 		  pvirt= (unsigned char *)mmap(NULL, msize, PROT_READ|PROT_WRITE,
 									   MAP_SHARED, fd, plane.data_offset);
+		  if (!pvirt) {
+			  DEBUG_PRINT_ERROR("Cannot map input buffers\n");
+			  goto dump_complete;
+		  }
+		  ptemp = pvirt;
 		  for (i = 0; i < m_sVenc_cfg.input_height; i++) {
-			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-			  temp += stride;
+			  fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  ptemp += stride;
           }
-		  temp = (char *)bufhdr->pBuffer + (stride * scanlines);
+		  ptemp  = pvirt + (stride * scanlines);
 		  for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
-			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-			  temp += stride;
+			  fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  ptemp += stride;
           }
           munmap(pvirt, msize);
-	  }
-	  else if (metadatamode == 2) {
-		  pvirt= (unsigned char *)mmap(NULL, (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height * 4),
-									   PROT_READ|PROT_WRITE, MAP_SHARED, fd, plane.data_offset);
-		  fwrite(temp, (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height * 4), 1,
-				 inputBufferFile1);
-		  munmap(pvirt, (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height * 4));
-	  }
-	  else {
+	  } else {
 		  for (i = 0; i < m_sVenc_cfg.input_height; i++) {
-			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-			  temp += stride;
+			  fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  ptemp += stride;
 		  }
-		  temp = (char *)bufhdr->pBuffer + (stride * scanlines);
+		  ptemp = (char *)bufhdr->pBuffer + (stride * scanlines);
 		  for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
-			  fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-			  temp += stride;
+			  fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  ptemp += stride;
 		  }
 	  }
 #endif
+dump_complete:
   return true;
 }
 bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,unsigned fd)

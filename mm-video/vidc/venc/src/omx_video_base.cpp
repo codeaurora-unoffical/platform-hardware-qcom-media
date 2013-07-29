@@ -4333,10 +4333,10 @@ OMX_ERRORTYPE omx_video::fill_buffer_done(OMX_HANDLETYPE hComp,
       m_fbd_count++;
 
 #ifdef OUTPUT_BUFFER_LOG
-      if(outputBufferFile1)
-      {
+      if (secure_session)
+        DEBUG_PRINT_ERROR("Cannot dump output buffers for secure session\n");
+      else if(outputBufferFile1)
         fwrite((const char *)buffer->pBuffer, buffer->nFilledLen, 1, outputBufferFile1);
-      }
 #endif
     }
 #ifdef _MSM8974_
