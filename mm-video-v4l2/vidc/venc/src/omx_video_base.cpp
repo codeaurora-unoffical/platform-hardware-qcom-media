@@ -1666,22 +1666,25 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
       if(portFmt->nPortIndex == (OMX_U32) PORT_INDEX_IN)
       {
-          int index = portFmt->nIndex;
-          if(index > 1)
-            eRet = OMX_ErrorNoMore;
-          else {
-            memcpy(portFmt, &m_sInPortFormat, sizeof(m_sInPortFormat));
-#ifdef _ANDROID_ICS_
-            if (index == 1) {
-                //we support two formats
-                //index 0 - YUV420SP
-                //index 1 - opaque which internally maps to YUV420SP.
-                //this can be extended in the future
-                portFmt->nIndex = index; //restore index set from client
-                portFmt->eColorFormat = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque;
-            }
-#endif
-          }
+        int index = portFmt->nIndex;
+        //we support two formats
+        //index 0 - Venus flavour of YUV420SP
+        //index 1 - opaque which internally maps to YUV420SP.
+        //index 2 - vannilla YUV420SP
+        //this can be extended in the future
+        int supportedFormats[] = {
+          QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m,
+          QOMX_COLOR_FormatAndroidOpaque,
+          OMX_COLOR_FormatYUV420SemiPlanar,
+        };
+
+        if (index > sizeof(supportedFormats)/sizeof(*supportedFormats))
+          eRet = OMX_ErrorNoMore;
+        else {
+          memcpy(portFmt, &m_sInPortFormat, sizeof(m_sInPortFormat));
+          portFmt->nIndex = index; //restore index set from client
+          portFmt->eColorFormat = (OMX_COLOR_FORMATTYPE)supportedFormats[index];
+        }
       }
       else if(portFmt->nPortIndex == (OMX_U32) PORT_INDEX_OUT)
       {
@@ -3630,7 +3633,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
   } else if (mUseProxyColorFormat) {
     fd = m_pInput_pmem[nBufIndex].fd;
   } else if (m_sInPortDef.format.video.eColorFormat ==
-      OMX_COLOR_FormatYUV420SemiPlanar && !mUseProxyColorFormat) {
+      OMX_COLOR_FormatYUV420SemiPlanar) {
       //For the case where YUV420SP buffers are qeueued to component
       //by sources other than camera (Apps via MediaCodec), conversion
       //to vendor flavoured NV12 color format is required.
