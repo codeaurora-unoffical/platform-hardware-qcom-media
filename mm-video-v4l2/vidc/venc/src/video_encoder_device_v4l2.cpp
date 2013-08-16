@@ -174,6 +174,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     for (i = 0; i < MAX_PORT; i++)
         streaming[i] = false;
 
+    stopped = 1;
     paused = false;
     async_thread_created = false;
     color_format = 0;
@@ -675,7 +676,6 @@ bool venc_dev::venc_open(OMX_U32 codec)
     m_sOutput_buff_property.mincount = m_sOutput_buff_property.actualcount = bufreq.count;
 
 
-    stopped = 0;
     metadatamode = 0;
 
     control.id = V4L2_CID_MPEG_VIDEO_HEADER_MODE;
@@ -1540,6 +1540,7 @@ unsigned venc_dev::venc_start(void)
         return 1;
 
     streaming[CAPTURE_PORT] = true;
+    stopped = 0;
     return 0;
 }
 
@@ -1784,9 +1785,16 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                 return false;
 
             plane.m.userptr = index;
-            plane.data_offset = meta_buf->meta_handle->data[1];
-            plane.length = meta_buf->meta_handle->data[2];
-            plane.bytesused = meta_buf->meta_handle->data[2];
+            // Contents of a meta-buffer queued with 0-length can be potentially junk
+            if (!bufhdr->nFilledLen) {
+                plane.data_offset = 0;
+                plane.length = bufhdr->nAllocLen;
+                plane.bytesused = 0;
+            } else {
+                plane.data_offset = meta_buf->meta_handle->data[1];
+                plane.length = meta_buf->meta_handle->data[2];
+                plane.bytesused = meta_buf->meta_handle->data[2];
+            }
         } else { // meta Buffer + Gralloc buffers || pmem buffers
             plane.m.userptr = (unsigned long) bufhdr->pBuffer;
             plane.data_offset = bufhdr->nOffset;
@@ -1830,25 +1838,43 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
             streaming[OUTPUT_PORT] = true;
         }
     }
-
 #ifdef INPUT_BUFFER_LOG
-    int i;
+    int i,msize;
     int stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, m_sVenc_cfg.input_width);
     int scanlines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, m_sVenc_cfg.input_height);
+    unsigned char *pvirt,*ptemp;
+
     char *temp = (char *)bufhdr->pBuffer;
 
-    for (i = 0; i < m_sVenc_cfg.input_height; i++) {
-        fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-        temp += stride;
+    msize = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
+    if (metadatamode == 1) {
+        pvirt= (unsigned char *)mmap(NULL, msize, PROT_READ|PROT_WRITE,MAP_SHARED, fd, plane.data_offset);
+        if(pvirt) {
+            ptemp = pvirt;
+            for (i = 0; i < m_sVenc_cfg.input_height; i++) {
+                fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+                ptemp += stride;
+            }
+            ptemp = pvirt + (stride * scanlines);
+            for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
+                fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+                ptemp += stride;
+            }
+            munmap(pvirt, msize);
+        }
+    } else {
+        for (i = 0; i < m_sVenc_cfg.input_height; i++) {
+            fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+            temp += stride;
+        }
+
+        temp = (char *)bufhdr->pBuffer + (stride * scanlines);
+
+        for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
+	    fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+	    temp += stride;
+        }
     }
-
-    temp = (char *)bufhdr->pBuffer + (stride * scanlines);
-
-    for (i = 0; i < m_sVenc_cfg.input_height/2; i++) {
-        fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-        temp += stride;
-    }
-
 #endif
     return true;
 }
@@ -2780,7 +2806,8 @@ bool venc_dev::venc_set_color_format(OMX_COLOR_FORMATTYPE color_format)
     struct v4l2_format fmt;
     DEBUG_PRINT_LOW("\n venc_set_color_format: color_format = %u ", color_format);
 
-    if (color_format == OMX_COLOR_FormatYUV420SemiPlanar) {
+    if (color_format == OMX_COLOR_FormatYUV420SemiPlanar ||
+            color_format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m) {
         m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
     } else if (color_format == QOMX_COLOR_FormatYVU420SemiPlanar) {
         m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV21;

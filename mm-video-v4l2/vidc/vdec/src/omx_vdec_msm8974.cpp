@@ -718,6 +718,11 @@ int release_buffers(omx_vdec* obj, enum vdec_buffer buffer_type)
         bufreq.count = 0;
         bufreq.type=V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
         rc = ioctl(obj->drv_ctx.video_driver_fd,VIDIOC_REQBUFS, &bufreq);
+    } else if(buffer_type == VDEC_BUFFER_TYPE_INPUT) {
+        bufreq.memory = V4L2_MEMORY_USERPTR;
+        bufreq.count = 0;
+        bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+        rc = ioctl(obj->drv_ctx.video_driver_fd,VIDIOC_REQBUFS, &bufreq);
     }
     return rc;
 }
@@ -1300,8 +1305,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 
     drv_ctx.video_driver_fd = open(device_name, O_RDWR);
 
-    DEBUG_PRINT_HIGH("\n omx_vdec::component_init(): Open returned fd %d, errno %d",
-            drv_ctx.video_driver_fd, errno);
+    DEBUG_PRINT_HIGH("\n omx_vdec::component_init(): Open returned fd %d",
+			drv_ctx.video_driver_fd);
 
     if (drv_ctx.video_driver_fd == 0) {
         DEBUG_PRINT_ERROR("omx_vdec_msm8974 :: Got fd as 0 for msm_vidc_dec, Opening again\n");
@@ -4268,6 +4273,7 @@ OMX_ERRORTYPE omx_vdec::allocate_input_heap_buffer(OMX_HANDLETYPE       hComp,
     }
 
     if (m_inp_heap_ptr == NULL) {
+        m_frame_parser.reset();
         m_inp_heap_ptr = (OMX_BUFFERHEADERTYPE*) \
                  calloc( (sizeof(OMX_BUFFERHEADERTYPE)),
                          drv_ctx.ip_buf.actualcount);
@@ -4974,6 +4980,8 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
                     free_input_buffer(buffer);
             }
             m_inp_bPopulated = OMX_FALSE;
+            if(release_input_done())
+                release_buffers(this, VDEC_BUFFER_TYPE_INPUT);
             /*Free the Buffer Header*/
             if (release_input_done()) {
                 DEBUG_PRINT_HIGH("\n ALL input buffers are freed/released");
@@ -5002,6 +5010,9 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
             m_out_bPopulated = OMX_FALSE;
             client_buffers.free_output_buffer (buffer);
 
+            if(release_output_done()) {
+                release_buffers(this, VDEC_BUFFER_TYPE_OUTPUT);
+            }
             if (release_output_done()) {
                 free_output_buffer_header();
             }
@@ -6474,6 +6485,10 @@ int omx_vdec::async_message_process (void *context, void* message)
                     if (omxhdr && (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_DROP_FRAME) &&
                             !(v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_DECODEONLY) &&
                             !(v4l2_buf_ptr->flags & V4L2_BUF_FLAG_EOS)) {
+                        omx->time_stamp_dts.remove_time_stamp(
+                                omxhdr->nTimeStamp,
+                                (omx->drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
+                                ?true:false);
                         omx->post_event ((unsigned)NULL,(unsigned int)omxhdr,
                                 OMX_COMPONENT_GENERATE_FTB);
                         break;
@@ -6804,6 +6819,16 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
             return OMX_ErrorBadParameter;
         }
     }
+
+    /* If an empty input is queued with EOS, do not coalesce with the destination-frame yet, as this may result
+       in EOS flag getting associated with the destination
+    */
+    if (!psource_frame->nFilledLen && (psource_frame->nFlags & OMX_BUFFERFLAG_EOS) &&
+            pdest_frame->nFilledLen) {
+        DEBUG_PRINT_HIGH("delay ETB for 'empty buffer with EOS'");
+        generate_ebd = OMX_FALSE;
+    }
+
     if (nal_length == 0) {
         DEBUG_PRINT_LOW("\n Zero NAL, hence parse using start code");
         if (m_frame_parser.parse_sc_frame(psource_frame,
@@ -6880,7 +6905,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                     DEBUG_PRINT_LOW("\n Error:2: Destination buffer overflow for H264");
                     return OMX_ErrorBadParameter;
                 }
-            } else {
+            } else if(h264_scratch.nFilledLen) {
                 look_ahead_nal = true;
                 DEBUG_PRINT_LOW("\n Frame Found start Decoding Size =%lu TimeStamp = %llx",
                         pdest_frame->nFilledLen,pdest_frame->nTimeStamp);
@@ -6940,16 +6965,43 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                 DEBUG_PRINT_LOW("\n EOS Reached Pass Last Buffer");
                 if ( (pdest_frame->nAllocLen - pdest_frame->nFilledLen) >=
                         h264_scratch.nFilledLen) {
-                    memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
-                            h264_scratch.pBuffer,h264_scratch.nFilledLen);
-                    pdest_frame->nFilledLen += h264_scratch.nFilledLen;
-                    h264_scratch.nFilledLen = 0;
+                    if(pdest_frame->nFilledLen == 0) {
+                        /* No residual frame from before, send whatever
+                         * we have left */
+                        memcpy((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                                h264_scratch.pBuffer, h264_scratch.nFilledLen);
+                        pdest_frame->nFilledLen += h264_scratch.nFilledLen;
+                        h264_scratch.nFilledLen = 0;
+                        pdest_frame->nTimeStamp = h264_scratch.nTimeStamp;
+                    } else {
+                        m_frame_parser.mutils->isNewFrame(&h264_scratch, 0, isNewFrame);
+                        if(!isNewFrame) {
+                            /* Have a residual frame, but we know that the
+                             * AU in this frame is belonging to whatever
+                             * frame we had left over.  So append it */
+                             memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                                     h264_scratch.pBuffer,h264_scratch.nFilledLen);
+                             pdest_frame->nFilledLen += h264_scratch.nFilledLen;
+                             h264_scratch.nFilledLen = 0;
+                             pdest_frame->nTimeStamp = h264_last_au_ts;
+                        } else {
+                            /* Completely new frame, let's just push what
+                             * we have now.  The resulting EBD would trigger
+                             * another push */
+                            generate_ebd = OMX_FALSE;
+                            pdest_frame->nTimeStamp = h264_last_au_ts;
+                            h264_last_au_ts = h264_scratch.nTimeStamp;
+                        }
+                    }
                 } else {
                     DEBUG_PRINT_ERROR("\nERROR:4: Destination buffer overflow for H264");
                     return OMX_ErrorBadParameter;
                 }
-                pdest_frame->nTimeStamp = h264_scratch.nTimeStamp;
-                pdest_frame->nFlags = h264_scratch.nFlags | psource_frame->nFlags;
+
+                /* Iff we coalesced two buffers, inherit the flags of both bufs */
+                if(generate_ebd == OMX_TRUE) {
+                     pdest_frame->nFlags = h264_scratch.nFlags | psource_frame->nFlags;
+                }
 
                 DEBUG_PRINT_LOW("\n pdest_frame->nFilledLen =%lu TimeStamp = %llx",
                         pdest_frame->nFilledLen,pdest_frame->nTimeStamp);
