@@ -179,6 +179,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 	for (i = 0; i < MAX_PORT; i++)
 		streaming[i] = false;
 
+        stopped = 1;
 	paused = false;
 	async_thread_created = false;
 	color_format = 0;
@@ -1564,6 +1565,7 @@ unsigned venc_dev::venc_start(void)
 	  return 1;
 
   streaming[CAPTURE_PORT] = true;
+  stopped = 0;
   return 0;
 }
 
@@ -1732,6 +1734,44 @@ bool venc_dev::venc_free_buf(void *buf_addr, unsigned port)
   return true;
 }
 
+bool venc_dev::venc_color_align(OMX_BUFFERHEADERTYPE *buffer,
+        OMX_U32 width, OMX_U32 height)
+{
+    OMX_U32 y_stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, width),
+            y_scanlines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, height),
+            uv_stride = VENUS_UV_STRIDE(COLOR_FMT_NV12, width),
+            uv_scanlines = VENUS_UV_SCANLINES(COLOR_FMT_NV12, height),
+            src_chroma_offset = width * height;
+
+    if (buffer->nAllocLen >= VENUS_BUFFER_SIZE(COLOR_FMT_NV12, width, height)) {
+        OMX_U8* src_buf = buffer->pBuffer, *dst_buf = buffer->pBuffer;
+        //Do chroma first, so that we can convert it in-place
+        src_buf += width * height;
+        dst_buf += y_stride * y_scanlines;
+        for (int line = height / 2 - 1; line >= 0; --line) {
+            memmove(dst_buf + line * uv_stride,
+                    src_buf + line * width,
+                    width);
+        }
+
+        dst_buf = src_buf = buffer->pBuffer;
+        //Copy the Y next
+        for (int line = height - 1; line > 0; --line) {
+            memmove(dst_buf + line * y_stride,
+                    src_buf + line * width,
+                    width);
+        }
+    } else {
+        DEBUG_PRINT_ERROR("Failed to align Chroma. from %u to %u : \
+                Insufficient bufferLen=%u v/s Required=%u",
+                (width*height), src_chroma_offset, buffer->nAllocLen,
+                VENUS_BUFFER_SIZE(COLOR_FMT_NV12, width, height));
+        return false;
+    }
+
+    return true;
+}
+
 bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index, unsigned fd)
 {
   struct pmem *temp_buffer;
@@ -1771,9 +1811,16 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 		if (!meta_buf)
 			return false;
 		plane.m.userptr = index;
-		plane.data_offset = meta_buf->meta_handle->data[1];
-		plane.length = meta_buf->meta_handle->data[2];
-		plane.bytesused = meta_buf->meta_handle->data[2];
+                // Contents of a meta-buffer queued with 0-length can be potentially junk
+                if (!bufhdr->nFilledLen) {
+                    plane.data_offset = 0;
+                    plane.length = bufhdr->nAllocLen;
+                    plane.bytesused = 0;
+                } else {
+		    plane.data_offset = meta_buf->meta_handle->data[1];
+		    plane.length = meta_buf->meta_handle->data[2];
+		    plane.bytesused = meta_buf->meta_handle->data[2];
+                }
 	}
 	else
 #endif
