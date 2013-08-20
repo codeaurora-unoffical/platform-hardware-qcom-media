@@ -66,11 +66,11 @@ AC_SUBST([CC])
 AC_CONFIG_FILES([     \
 	Makefile \
 	mm-core/Makefile \
-	mm-video/Makefile \
-	mm-video/DivxDrmDecrypt/Makefile \
-	mm-video/vidc/Makefile \
-	mm-video/vidc/vdec/Makefile \
-	mm-video/vidc/venc/Makefile \
+	mm-video-v4l2/Makefile \
+	mm-video-v4l2/DivxDrmDecrypt/Makefile \
+	mm-video-v4l2/vidc/Makefile \
+	mm-video-v4l2/vidc/vdec/Makefile \
+	mm-video-v4l2/vidc/venc/Makefile \
 	libc2dcolorconvert/Makefile
 	])
 AC_OUTPUT

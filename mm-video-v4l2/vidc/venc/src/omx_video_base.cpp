@@ -2737,6 +2737,9 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
       c2d_conv.close();
       opaque_buffer_hdr[index] = NULL;
     }
+#else
+    return OMX_ErrorNone;
+#endif
   }
 #endif
   if(index < m_sInPortDef.nBufferCountActual &&
@@ -4974,27 +4977,48 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
   /*Enable following code once private handle color format is
     updated correctly*/
   if (buffer->nFilledLen > 0) {
+#ifdef _ANDROID_
     if(c2d_opened && handle->format != c2d_conv.get_src_format()) {
+#else
+    if(c2d_opened && handle->data[3] != c2d_conv.get_src_format()) {
+#endif
       c2d_conv.close();
       c2d_opened = false;
     }
     if (!c2d_opened) {
+#ifdef _ANDROID_
         if (handle->format == HAL_PIXEL_FORMAT_RGBA_8888) {
+#else
+        if (handle->data[3] == HAL_PIXEL_FORMAT_RGBA_8888) {
+#endif
           DEBUG_PRINT_ERROR("\n open Color conv for RGBA888 W: %d, H: %d\n",
                             m_sInPortDef.format.video.nFrameWidth,
                             m_sInPortDef.format.video.nFrameHeight);
+#ifdef _ANDROID_
           if(!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
                m_sInPortDef.format.video.nFrameWidth,RGBA8888,NV12_128m,handle->width)){
+#else
+          if(!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
+               m_sInPortDef.format.video.nFrameWidth,RGBA8888,NV12_128m,stride)){
+#endif
              m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
              DEBUG_PRINT_ERROR("\n Color conv open failed");
              return OMX_ErrorBadParameter;
           }
           c2d_opened = true;
 #ifdef _MSM8974_
+#ifdef _ANDROID_
           if(!dev_set_format(handle->format))
+#else
+          if(!dev_set_format(handle->data[3]))
+#endif
             DEBUG_PRINT_ERROR("cannot set color format for RGBA8888\n");
 #endif
+#ifdef _ANDROID_
         } else if(handle->format != HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
+#else
+        } else if(handle->data[3] != HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
+#endif
           DEBUG_PRINT_ERROR("\n Incorrect color format");
           m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
           return OMX_ErrorBadParameter;
