@@ -2733,10 +2733,12 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 #ifdef _OPAQUE_
     if(!mUseProxyColorFormat)
       return OMX_ErrorNone;
-    else
+    else {
       c2d_conv.close();
+      opaque_buffer_hdr[index] = NULL;
+    }
 #else
-	    return OMX_ErrorNone;
+    return OMX_ErrorNone;
 #endif
   }
 #endif
@@ -3755,6 +3757,18 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
     memcpy (pmem_data_buf, (buffer->pBuffer + buffer->nOffset),
             buffer->nFilledLen);
     DEBUG_PRINT_LOW("memcpy() done in ETBProxy for i/p Heap UseBuf");
+  } else if (mUseProxyColorFormat) {
+    fd = m_pInput_pmem[nBufIndex].fd;
+  } else if (m_sInPortDef.format.video.eColorFormat ==
+      OMX_COLOR_FormatYUV420SemiPlanar && !mUseProxyColorFormat) {
+      //For the case where YUV420SP buffers are qeueued to component
+      //by sources other than camera (Apps via MediaCodec), conversion
+      //to vendor flavoured NV12 color format is required.
+      if (!dev_color_align(buffer, m_sInPortDef.format.video.nFrameWidth,
+                  m_sInPortDef.format.video.nFrameHeight)) {
+        DEBUG_PRINT_ERROR("Failed to adjust buffer color");
+        return OMX_ErrorUndefined;
+      }
   }
 #ifdef _MSM8974_
   if(dev_empty_buf(buffer, pmem_data_buf,nBufIndex,fd) != true)
@@ -4962,52 +4976,54 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
 #endif
   /*Enable following code once private handle color format is
     updated correctly*/
+  if (buffer->nFilledLen > 0) {
 #ifdef _ANDROID_
-  if(c2d_opened && handle->format != c2d_conv.get_src_format()) {
+    if(c2d_opened && handle->format != c2d_conv.get_src_format()) {
 #else
-  if(c2d_opened && handle->data[3] != c2d_conv.get_src_format()) {
+    if(c2d_opened && handle->data[3] != c2d_conv.get_src_format()) {
 #endif
-    c2d_conv.close();
-    c2d_opened = false;
-  }
-  if (!c2d_opened) {
+      c2d_conv.close();
+      c2d_opened = false;
+    }
+    if (!c2d_opened) {
 #ifdef _ANDROID_
-   if (handle->format == HAL_PIXEL_FORMAT_RGBA_8888) {
+        if (handle->format == HAL_PIXEL_FORMAT_RGBA_8888) {
 #else
-   if(handle->data[3] == HAL_PIXEL_FORMAT_RGBA_8888) {
+        if (handle->data[3] == HAL_PIXEL_FORMAT_RGBA_8888) {
 #endif
-        DEBUG_PRINT_ERROR("\n open Color conv for RGBA888 W: %d, H: %d\n",
-                          m_sInPortDef.format.video.nFrameWidth,
-                          m_sInPortDef.format.video.nFrameHeight);
+          DEBUG_PRINT_ERROR("\n open Color conv for RGBA888 W: %d, H: %d\n",
+                            m_sInPortDef.format.video.nFrameWidth,
+                            m_sInPortDef.format.video.nFrameHeight);
 #ifdef _ANDROID_
-        if(!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
-             m_sInPortDef.format.video.nFrameWidth,RGBA8888,NV12_128m,handle->width)){
+          if(!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
+               m_sInPortDef.format.video.nFrameWidth,RGBA8888,NV12_128m,handle->width)){
 #else
-        if(!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
-             m_sInPortDef.format.video.nFrameWidth,RGBA8888,NV12_128m,stride)){
+          if(!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
+               m_sInPortDef.format.video.nFrameWidth,RGBA8888,NV12_128m,stride)){
 #endif
-           m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
-           DEBUG_PRINT_ERROR("\n Color conv open failed");
-           return OMX_ErrorBadParameter;
-        }
-        c2d_opened = true;
+             m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
+             DEBUG_PRINT_ERROR("\n Color conv open failed");
+             return OMX_ErrorBadParameter;
+          }
+          c2d_opened = true;
 #ifdef _MSM8974_
 #ifdef _ANDROID_
-        if(!dev_set_format(handle->format))
+          if(!dev_set_format(handle->format))
 #else
-        if(!dev_set_format(handle->data[3]))
+          if(!dev_set_format(handle->data[3]))
 #endif
-          DEBUG_PRINT_ERROR("cannot set color format for RGBA8888\n");
+            DEBUG_PRINT_ERROR("cannot set color format for RGBA8888\n");
 #endif
 #ifdef _ANDROID_
-      } else if(handle->format != HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
+        } else if(handle->format != HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
 #else
-      } else if(handle->data[3] != HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
+        } else if(handle->data[3] != HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
 #endif
-        DEBUG_PRINT_ERROR("\n Incorrect color format");
-        m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
-        return OMX_ErrorBadParameter;
-      }
+          DEBUG_PRINT_ERROR("\n Incorrect color format");
+          m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
+          return OMX_ErrorBadParameter;
+        }
+    }
   }
   if(input_flush_progress == true)
   {
@@ -5044,10 +5060,12 @@ OMX_ERRORTYPE omx_video::queue_meta_buffer(OMX_HANDLETYPE hComp,
     return OMX_ErrorBadParameter;
   }
 
-  if(dev_use_buf(&Input_pmem_info,PORT_INDEX_IN,0) != true) {
-    DEBUG_PRINT_ERROR("\nERROR: in dev_use_buf");
-    post_event ((unsigned int)psource_frame,0,OMX_COMPONENT_GENERATE_EBD);
-    ret = OMX_ErrorBadParameter;
+  if (psource_frame->nFilledLen > 0) {
+    if(dev_use_buf(&Input_pmem_info,PORT_INDEX_IN,0) != true) {
+      DEBUG_PRINT_ERROR("\nERROR: in dev_use_buf");
+      post_event ((unsigned int)psource_frame,0,OMX_COMPONENT_GENERATE_EBD);
+      ret = OMX_ErrorBadParameter;
+    }
   }
 
   if(ret == OMX_ErrorNone)
@@ -5076,13 +5094,21 @@ OMX_ERRORTYPE omx_video::convert_queue_buffer(OMX_HANDLETYPE hComp,
     return OMX_ErrorBadParameter;
   }
 
-  if(!psource_frame->nFilledLen){
-    pdest_frame->nOffset = 0;
-    pdest_frame->nFilledLen = 0;
-    pdest_frame->nTimeStamp = psource_frame->nTimeStamp;
-    pdest_frame->nFlags = psource_frame->nFlags;
-    DEBUG_PRINT_LOW("\n Buffer header %p Filled len size %d",
-         pdest_frame,pdest_frame->nFilledLen);
+  if (!psource_frame->nFilledLen) {
+    if(psource_frame->nFlags & OMX_BUFFERFLAG_EOS) {
+      pdest_frame->nFilledLen = psource_frame->nFilledLen;
+      pdest_frame->nTimeStamp = psource_frame->nTimeStamp;
+      pdest_frame->nFlags = psource_frame->nFlags;
+      DEBUG_PRINT_HIGH("\n Skipping color conversion for empty EOS Buffer "
+              "header=%p filled-len=%d", pdest_frame,pdest_frame->nFilledLen);
+    } else {
+      pdest_frame->nOffset = 0;
+      pdest_frame->nFilledLen = 0;
+      pdest_frame->nTimeStamp = psource_frame->nTimeStamp;
+      pdest_frame->nFlags = psource_frame->nFlags;
+      DEBUG_PRINT_LOW("\n Buffer header %p Filled len size %d",
+           pdest_frame,pdest_frame->nFilledLen);
+    }
   } else {
      uva = (unsigned char *)mmap(NULL, Input_pmem_info.size,
                            PROT_READ|PROT_WRITE,
@@ -5168,6 +5194,8 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
                         Input_pmem_info.offset,
                         Input_pmem_info.size);
       ret = queue_meta_buffer(hComp,Input_pmem_info);
+    } else if ((psource_frame->nFlags & OMX_BUFFERFLAG_EOS) && mUseProxyColorFormat) {
+        ret = convert_queue_buffer(hComp,Input_pmem_info,index);
     } else {
 #ifdef _ANDROID_
       private_handle_t *handle = (private_handle_t *)media_buffer->meta_handle;

@@ -3233,6 +3233,7 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
       }
       else if(OMX_DirInput == portDefn->eDir)
       {
+        bool port_format_changed = false;
         if((portDefn->format.video.xFramerate >> 16) > 0 &&
            (portDefn->format.video.xFramerate >> 16) <= MAX_SUPPORTED_FPS)
         {
@@ -3267,6 +3268,7 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
              DEBUG_PRINT_LOW("\n SetParam IP: WxH(%lu x %lu)\n",
                            portDefn->format.video.nFrameWidth,
                            portDefn->format.video.nFrameHeight);
+             port_format_changed = true;
              if (portDefn->format.video.nFrameHeight != 0x0 &&
                  portDefn->format.video.nFrameWidth != 0x0)
              {
@@ -3292,16 +3294,17 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                    eRet = get_buffer_req(&drv_ctx.op_buf);
              }
          }
-         else if (portDefn->nBufferCountActual >= drv_ctx.ip_buf.mincount
+         if (portDefn->nBufferCountActual >= drv_ctx.ip_buf.mincount
                   || portDefn->nBufferSize != drv_ctx.ip_buf.buffer_size)
          {
+             port_format_changed = true;
              vdec_allocatorproperty *buffer_prop = &drv_ctx.ip_buf;
              drv_ctx.ip_buf.actualcount = portDefn->nBufferCountActual;
              drv_ctx.ip_buf.buffer_size = (portDefn->nBufferSize + buffer_prop->alignment - 1) &
                       (~(buffer_prop->alignment - 1));
              eRet = set_buffer_req(buffer_prop);
          }
-         else
+         if (false == port_format_changed)
          {
              DEBUG_PRINT_ERROR("ERROR: IP Requirements(#%d: %u) Requested(#%lu: %lu)\n",
                drv_ctx.ip_buf.mincount, drv_ctx.ip_buf.buffer_size,
@@ -7335,8 +7338,12 @@ int omx_vdec::async_message_process (void *context, void* message)
        !(v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_DECODEONLY) &&
        !(v4l2_buf_ptr->flags & V4L2_BUF_FLAG_EOS))
   {
-      omx->post_event ((unsigned)NULL,(unsigned int)omxhdr,
-        OMX_COMPONENT_GENERATE_FTB);
+    omx->time_stamp_dts.remove_time_stamp(
+      omxhdr->nTimeStamp,
+      (omx->drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
+      ?true:false);
+    omx->post_event ((unsigned)NULL,(unsigned int)omxhdr,
+      OMX_COMPONENT_GENERATE_FTB);
       break;
   }
   if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_DATA_CORRUPT)
@@ -7713,6 +7720,14 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
       return OMX_ErrorBadParameter;
     }
   }
+     /* If an empty input is queued with EOS, do not coalesce with the destination-frame yet, as this may result
+       in EOS flag getting associated with the destination
+    */
+    if (!psource_frame->nFilledLen && (psource_frame->nFlags & OMX_BUFFERFLAG_EOS) &&
+            pdest_frame->nFilledLen) {
+        DEBUG_PRINT_HIGH("delay ETB for 'empty buffer with EOS'");
+        generate_ebd = OMX_FALSE;
+    }
   if (nal_length == 0)
   {
     DEBUG_PRINT_LOW("\n Zero NAL, hence parse using start code");
@@ -7805,7 +7820,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
           return OMX_ErrorBadParameter;
         }
       }
-      else
+      else if(h264_scratch.nFilledLen)
       {
         look_ahead_nal = true;
         DEBUG_PRINT_LOW("\n Frame Found start Decoding Size =%lu TimeStamp = %llx",
@@ -7882,19 +7897,52 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
         if ( (pdest_frame->nAllocLen - pdest_frame->nFilledLen) >=
              h264_scratch.nFilledLen)
         {
-          memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
-                  h264_scratch.pBuffer,h264_scratch.nFilledLen);
-          pdest_frame->nFilledLen += h264_scratch.nFilledLen;
-          h264_scratch.nFilledLen = 0;
+            if(pdest_frame->nFilledLen == 0)
+            {
+                /* No residual frame from before, send whatever
+                 * we have left */
+                memcpy((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                h264_scratch.pBuffer, h264_scratch.nFilledLen);
+                pdest_frame->nFilledLen += h264_scratch.nFilledLen;
+                h264_scratch.nFilledLen = 0;
+                pdest_frame->nTimeStamp = h264_scratch.nTimeStamp;
+            }
+            else
+            {
+                m_frame_parser.mutils->isNewFrame(&h264_scratch, 0, isNewFrame);
+                if (!isNewFrame)
+                {
+                    /* Have a residual frame, but we know that the
+                     * AU in this frame is belonging to whatever
+                     * frame we had left over.  So append it */
+                    memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                    h264_scratch.pBuffer,h264_scratch.nFilledLen);
+                    pdest_frame->nFilledLen += h264_scratch.nFilledLen;
+                    h264_scratch.nFilledLen = 0;
+                    pdest_frame->nTimeStamp = h264_last_au_ts;
+                }
+                else
+                {
+                    /* Completely new frame, let's just push what
+                     * we have now.  The resulting EBD would trigger
+                     * another push */
+                    generate_ebd = OMX_FALSE;
+                    pdest_frame->nTimeStamp = h264_last_au_ts;
+                    h264_last_au_ts = h264_scratch.nTimeStamp;
+                }
+            }
         }
         else
         {
           DEBUG_PRINT_ERROR("\nERROR:4: Destination buffer overflow for H264");
           return OMX_ErrorBadParameter;
         }
-        pdest_frame->nTimeStamp = h264_scratch.nTimeStamp;
-        pdest_frame->nFlags = h264_scratch.nFlags | psource_frame->nFlags;
 
+        /* Iff we coalesced two buffers, inherit the flags of both bufs */
+        if (generate_ebd == OMX_TRUE)
+        {
+            pdest_frame->nFlags = h264_scratch.nFlags | psource_frame->nFlags;
+        }
         DEBUG_PRINT_LOW("\n pdest_frame->nFilledLen =%lu TimeStamp = %llx",
                      pdest_frame->nFilledLen,pdest_frame->nTimeStamp);
         DEBUG_PRINT_LOW("\n Push AU frame number %d to driver", frame_count++);
