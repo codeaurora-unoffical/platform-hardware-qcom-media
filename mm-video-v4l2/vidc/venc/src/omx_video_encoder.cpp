@@ -1988,3 +1988,8 @@ bool omx_venc::dev_color_align(OMX_BUFFERHEADERTYPE *buffer,
 {
     return handle->venc_color_align(buffer, width,height);
 }
+
+bool omx_venc::is_secure_session()
+{
+  return secure_session;
+}
