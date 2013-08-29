@@ -138,7 +138,7 @@ static uint32_t SND_DEVICE_FM_ANALOG_STEREO_HEADSET_CODEC=-1;
 
 AudioHardware::AudioHardware() :
     mInit(false), mMicMute(true), mBluetoothNrec(true), mBluetoothId(0),
-    mOutput(0), mBluetoothVGS(false), mSndEndpoints(NULL), mCurSndDevice(-1),
+    mOutput(0), mOutputLPA(0), mBluetoothVGS(false), mSndEndpoints(NULL), mCurSndDevice(-1),
     mDualMicEnabled(false), mFmFd(-1), FmA2dpStatus(-1)
 {
    if (get_audpp_filter() == 0) {
@@ -344,7 +344,6 @@ void AudioHardware::closeInputStream(AudioStreamIn* in) {
     }
 }
 
-
 AudioStreamOut* AudioHardware::openOutputSession(
         uint32_t devices, int *format, status_t *status, int sessionId, uint32_t samplingRate,uint32_t channels)
 {
@@ -352,20 +351,38 @@ AudioStreamOut* AudioHardware::openOutputSession(
     { // scope for the lock
         Mutex::Autolock lock(mLock);
 
+        // only one output stream allowed
+        if (mOutputLPA) {
+            if (status) {
+                *status = INVALID_OPERATION;
+            }
+            return 0;
+        }
         // create new output stream
         out = new AudioSessionOutMSM7xxx();
         status_t lStatus = out->set(this, devices, format, sessionId);
         if (status) {
             *status = lStatus;
         }
-        if (lStatus != NO_ERROR) {
+        if (lStatus == NO_ERROR) {
+            mOutputLPA = out;
+        } else {
             delete out;
-            out = NULL;
         }
     }
-    return out;
+    return mOutputLPA;
 }
 
+void AudioHardware::closeOutputSession(AudioStreamOut* out) {
+    Mutex::Autolock lock(mLock);
+    if (mOutputLPA == 0 || mOutputLPA != out) {
+        LOGW("Attempt to close invalid lpa output session");
+    }
+    else {
+        delete mOutputLPA;
+        mOutputLPA = 0;
+    }
+}
 
 status_t AudioHardware::setMode(int mode)
 {
@@ -1985,7 +2002,6 @@ status_t AudioHardware::AudioSessionOutMSM7xxx::set(
         AudioHardware* hw, uint32_t devices, int *pFormat, int32_t LPADriverFd)
 {
     int lFormat = pFormat ? *pFormat : 0;
-
     mHardware = hw;
     mDevices = devices;
 
@@ -2005,6 +2021,9 @@ status_t AudioHardware::AudioSessionOutMSM7xxx::set(
 
 AudioHardware::AudioSessionOutMSM7xxx::~AudioSessionOutMSM7xxx()
 {
+  if (mLPADriverFd >= 0) {
+    close(mLPADriverFd);
+  }
 }
 
 

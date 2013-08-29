@@ -210,6 +210,7 @@ public:
                                 AudioSystem::audio_in_acoustics acoustics);
 
     virtual    void        closeOutputStream(AudioStreamOut* out);
+    virtual    void        closeOutputSession(AudioStreamOut* out);
     virtual    void        closeInputStream(AudioStreamIn* in);
 
     virtual    size_t      getInputBufferSize(uint32_t sampleRate, int format, int channelCount);
@@ -356,6 +357,7 @@ private:
             bool        mBluetoothVGS;
             uint32_t    mBluetoothId;
             AudioStreamOutMSM72xx*  mOutput;
+            AudioSessionOutMSM7xxx*  mOutputLPA;
             SortedVector <AudioStreamInMSM72xx*>   mInputs;
 
             msm_snd_endpoint *mSndEndpoints;
