@@ -112,6 +112,9 @@ extern "C"{
 #ifdef _ANDROID_
 #include "vidc_color_converter.h"
 #endif
+#ifndef _ANDROID_
+#include "vidc_debug.h"
+#endif
 extern "C" {
   OMX_API void * get_omx_component_factory_fn(void);
 }
