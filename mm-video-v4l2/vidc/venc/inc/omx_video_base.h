@@ -65,6 +65,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <dlfcn.h>
 #include "C2DColorConverter.h"
 #endif
+#ifndef _ANDROID_
+#include "vidc_debug.h"
+#endif
+
 #ifdef _ANDROID_
 using namespace android;
 // local pmem heap object
