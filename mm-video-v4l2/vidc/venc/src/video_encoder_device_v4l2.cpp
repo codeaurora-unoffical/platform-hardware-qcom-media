@@ -910,6 +910,12 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
 		  }
 		  m_sInput_buff_property.datasize=fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 		  bufreq.memory = V4L2_MEMORY_USERPTR;
+		  bufreq.count = 0;
+		  bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+		  if(ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
+			  DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS OUTPUT_MPLANE Failed \n ");
+			  return false;
+		  }
 		  bufreq.count = portDefn->nBufferCountActual;
 		  bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 		  if(ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
