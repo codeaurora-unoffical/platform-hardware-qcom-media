@@ -1676,16 +1676,14 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 #endif
 	if (eRet == OMX_ErrorNone)
 	{
-#ifdef _ANDROID_
 		drv_ctx.output_format = VDEC_YUV_FORMAT_NV12;
         OMX_COLOR_FORMATTYPE dest_color_format = (OMX_COLOR_FORMATTYPE)
             QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m;
+#ifdef _ANDROID_
         if (!client_buffers.set_color_format(dest_color_format)) {
             DEBUG_PRINT_ERROR("\n Setting color format failed");
             eRet = OMX_ErrorInsufficientResources;
         }
-#else
-        drv_ctx.output_format = VDEC_YUV_FORMAT_TILE_4x2;
 #endif
 		capture_capability= V4L2_PIX_FMT_NV12;
 
