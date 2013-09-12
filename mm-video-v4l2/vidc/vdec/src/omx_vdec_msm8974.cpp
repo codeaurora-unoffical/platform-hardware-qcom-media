@@ -6912,6 +6912,12 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
   }
 #endif
 
+  if (!output_flush_progress && (buffer->nFilledLen > 0))
+  {
+    DEBUG_PRINT_LOW("Processing extradata");
+    handle_extradata(buffer);
+  }
+
   /* For use buffer we need to copy the data */
   if (!output_flush_progress)
   {
@@ -6964,7 +6970,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
   {
     if (buffer->nFilledLen > 0)
     {
-      handle_extradata(buffer);
       if (client_extradata & OMX_TIMEINFO_EXTRADATA)
         set_frame_rate(buffer->nTimeStamp);
       else if (arbitrary_bytes)
@@ -8741,17 +8746,17 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
   OMX_U8 *pBuffer = (OMX_U8 *)(drv_ctx.ptr_outputbuffer[buf_index].bufferaddr) +
       p_buf_hdr->nOffset;
   if (!drv_ctx.extradata_info.uaddr) {
-    return;
+      return;
   }
   p_extra = (OMX_OTHER_EXTRADATATYPE *)
-    ((unsigned)(pBuffer + p_buf_hdr->nOffset + p_buf_hdr->nFilledLen + 3)&(~3));
+      ((unsigned)(pBuffer + p_buf_hdr->nOffset + p_buf_hdr->nFilledLen + 3)&(~3));
   char *p_extradata = drv_ctx.extradata_info.uaddr + buf_index * drv_ctx.extradata_info.buffer_size;
   if ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))
-    p_extra = NULL;
+      p_extra = NULL;
   OMX_OTHER_EXTRADATATYPE *data = (struct OMX_OTHER_EXTRADATATYPE *)p_extradata;
   if (data) {
-    while((consumed_len < drv_ctx.extradata_info.buffer_size)
-        && (data->eType != (OMX_EXTRADATATYPE)EXTRADATA_NONE)) {
+      while ((consumed_len < drv_ctx.extradata_info.buffer_size)
+              && (data->eType != (OMX_EXTRADATATYPE)EXTRADATA_NONE)) {
       if ((consumed_len + data->nSize) > drv_ctx.extradata_info.buffer_size) {
         DEBUG_PRINT_LOW("Invalid extra data size");
         break;
@@ -8763,9 +8768,13 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
         mbaff = (h264_parser)? (h264_parser->is_mbaff()): false;
         if (payload && (payload->format == INTERLACE_FRAME_PROGRESSIVE)  && !mbaff)
           drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
-        else {
-          drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
+        else if (payload && (payload->format == INTERLACE_FRAME_TOPFIELDFIRST ||
+          payload->format == INTERLACE_FRAME_BOTTOMFIELDFIRST)  && !mbaff) {
+          drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
           enable = 1;
+        } else {
+           drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
+           enable = 1;
         }
         if(m_enable_android_native_buffers)
           setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
@@ -8841,7 +8850,9 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
       append_frame_info_extradata(p_extra,
         num_conceal_MB, ((struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate)->pic_type, frame_rate,
         panscan_payload,&((struct vdec_output_frameinfo *)
-        p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info);}
+        p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info);
+      p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
+    }
   }
 unrecognized_extradata:
   if(!secure_mode && client_extradata)
@@ -9038,14 +9049,19 @@ void omx_vdec::append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
   interlace_format->nVersion.nVersion = OMX_SPEC_VERSION;
   interlace_format->nPortIndex = OMX_CORE_OUTPUT_PORT_INDEX;
   mbaff = (h264_parser)? (h264_parser->is_mbaff()): false;
-  if ((interlaced_format_type == INTERLACE_FRAME_PROGRESSIVE)  && !mbaff)
-  {
+  if ((interlaced_format_type == INTERLACE_FRAME_PROGRESSIVE)  && !mbaff) {
     interlace_format->bInterlaceFormat = OMX_FALSE;
     interlace_format->nInterlaceFormats = OMX_InterlaceFrameProgressive;
     drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
-  }
-  else
-  {
+  } else if ((interlaced_format_type == INTERLACE_FRAME_TOPFIELDFIRST)  && !mbaff) {
+    interlace_format->bInterlaceFormat = OMX_TRUE;
+    interlace_format->nInterlaceFormats = OMX_InterlaceFrameTopFieldFirst;
+    drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
+  } else if ((interlaced_format_type == INTERLACE_FRAME_BOTTOMFIELDFIRST)  && !mbaff) {
+    interlace_format->bInterlaceFormat = OMX_TRUE;
+    interlace_format->nInterlaceFormats = OMX_InterlaceFrameBottomFieldFirst;
+    drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
+  }  else {
     interlace_format->bInterlaceFormat = OMX_TRUE;
     interlace_format->nInterlaceFormats = OMX_InterlaceInterleaveFrameTopFieldFirst;
     drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
