@@ -6320,7 +6320,8 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
   if (rc) {
     /*TODO: How to handle this case */
     DEBUG_PRINT_ERROR("Failed to qbuf to driver");
-  }
+    return OMX_ErrorUndefined;
+   }
 //#ifdef _ANDROID_ICS_
   //  if (m_enable_android_native_buffers)
   //  {
