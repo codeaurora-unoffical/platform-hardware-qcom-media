@@ -1273,23 +1273,6 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
             DEBUG_PRINT_ERROR("ERROR: %s()::EventHandler is NULL", __func__);
           }
 
-          if (pThis->drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
-          {
-            OMX_INTERLACETYPE format = (OMX_INTERLACETYPE)-1;
-            OMX_EVENTTYPE event = (OMX_EVENTTYPE)OMX_EventIndexsettingChanged;
-            if (pThis->drv_ctx.interlace == VDEC_InterlaceInterleaveFrameTopFieldFirst)
-                format = OMX_InterlaceInterleaveFrameTopFieldFirst;
-            else if (pThis->drv_ctx.interlace == VDEC_InterlaceInterleaveFrameBottomFieldFirst)
-                format = OMX_InterlaceInterleaveFrameBottomFieldFirst;
-            else //unsupported interlace format; raise a error
-                event = OMX_EventError;
-            if (pThis->m_cb.EventHandler) {
-              pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
-                  event, format, 0, NULL );
-            } else {
-              DEBUG_PRINT_ERROR("ERROR: %s()::EventHandler is NULL", __func__);
-            }
-          }
         break;
 
         case OMX_COMPONENT_GENERATE_EOS_DONE:
@@ -1314,16 +1297,6 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
           pThis->omx_report_unsupported_setting();
           break;
 
-        case OMX_COMPONENT_GENERATE_INFO_PORT_RECONFIG:
-        {
-          DEBUG_PRINT_HIGH("\n Rxd OMX_COMPONENT_GENERATE_INFO_PORT_RECONFIG");
-          if (pThis->m_cb.EventHandler) {
-            pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
-                (OMX_EVENTTYPE)OMX_EventIndexsettingChanged, OMX_CORE_OUTPUT_PORT_INDEX, 0, NULL );
-          } else {
-            DEBUG_PRINT_ERROR("ERROR: %s()::EventHandler is NULL", __func__);
-          }
-        }
         default:
           break;
         }
@@ -6454,6 +6427,13 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
 	h264_parser = NULL;
     }
 
+    if (m_frame_parser.mutils)
+    {
+        DEBUG_PRINT_LOW("\n Free utils parser");
+        delete (m_frame_parser.mutils);
+        m_frame_parser.mutils = NULL;
+    }
+
     if(m_platform_list)
     {
         free(m_platform_list);
@@ -8216,13 +8196,6 @@ void omx_vdec::free_input_buffer_header()
     input_use_buffer = false;
     if (arbitrary_bytes)
     {
-      if (m_frame_parser.mutils)
-      {
-        DEBUG_PRINT_LOW("\n Free utils parser");
-        delete (m_frame_parser.mutils);
-        m_frame_parser.mutils = NULL;
-      }
-
       if (m_inp_heap_ptr)
       {
         DEBUG_PRINT_LOW("\n Free input Heap Pointer");
@@ -8242,6 +8215,13 @@ void omx_vdec::free_input_buffer_header()
       DEBUG_PRINT_LOW("\n Free input pmem Pointer area");
       free (m_inp_mem_ptr);
       m_inp_mem_ptr = NULL;
+    }
+    /* We just freed all the buffer headers, every thing in m_input_free_q
+     * is now invalid */
+    while (m_input_free_q.m_size)
+    {
+        unsigned address, p2, id;
+        m_input_free_q.pop_entry(&address, &p2, &id);
     }
     if (drv_ctx.ptr_inputbuffer)
     {
