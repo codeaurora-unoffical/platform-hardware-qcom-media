@@ -160,6 +160,8 @@ pthread_mutex_t omx_vdec::m_secure_display_lock = PTHREAD_MUTEX_INITIALIZER;
 const uint32_t START_BROADCAST_TRANSACTION = IBinder::FIRST_CALL_TRANSACTION + 13;
 #endif
 
+int debug_level = PRIO_ERROR;
+
 void* async_message_thread (void *input)
 {
   struct vdec_ioctl_msg ioctl_msg;
@@ -238,7 +240,7 @@ bool sendBroadCastEvent(String16 intentName) {
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> am = sm->getService(String16("activity"));
     if (am == NULL) {
-        ALOGE("startServiceThroughActivityManager() couldn't find activity service!\n");
+        DEBUG_PRINT_ERROR("startServiceThroughActivityManager() couldn't find activity service!\n");
         return false;
     }
 
@@ -246,7 +248,7 @@ bool sendBroadCastEvent(String16 intentName) {
     data.writeInterfaceToken(String16("android.app.IActivityManager"));
 
     data.writeStrongBinder(NULL); // The application thread
-    ALOGV("Sending NULL Binder ");
+    DEBUG_PRINT_LOW("Sending NULL Binder ");
 
     // Intent Start
     data.writeString16(intentName); // mAction (null)
@@ -583,6 +585,12 @@ omx_vdec::omx_vdec(): m_state(OMX_StateInvalid),
   property_get("vidc.dec.debug.concealedmb", property_value, "0");
   m_debug_concealedmb = atoi(property_value);
   DEBUG_PRINT_HIGH("vidc.dec.debug.concealedmb value is %d",m_debug_concealedmb);
+
+  property_value[0] = NULL;
+  property_get("vidc.debug.level", property_value, "0");
+  debug_level = atoi(property_value);
+  DEBUG_PRINT_HIGH("vidc.debug.level value is %d",debug_level);
+  property_value[0] = NULL;
 
 #endif
   memset(&m_cmp,0,sizeof(m_cmp));
@@ -1408,7 +1416,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
          OMX_MAX_STRINGNAME_SIZE))
   {
      strlcpy((char *)m_cRole, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
-     DEBUG_PRINT_ERROR ("DIVX 4 Decoder selected");
+     DEBUG_PRINT_HIGH ("DIVX 4 Decoder selected");
      drv_ctx.decoder_format = VDEC_CODECTYPE_DIVX_4;
      eCompressionFormat = (OMX_VIDEO_CODINGTYPE)QOMX_VIDEO_CodingDivx;
      codec_type_parse = CODEC_TYPE_DIVX;
@@ -1426,7 +1434,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
          OMX_MAX_STRINGNAME_SIZE))
   {
      strlcpy((char *)m_cRole, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
-     DEBUG_PRINT_ERROR ("DIVX 5/6 Decoder selected");
+     DEBUG_PRINT_HIGH ("DIVX 5/6 Decoder selected");
      drv_ctx.decoder_format = VDEC_CODECTYPE_DIVX_6;
      eCompressionFormat = (OMX_VIDEO_CODINGTYPE)QOMX_VIDEO_CodingDivx;
      codec_type_parse = CODEC_TYPE_DIVX;
@@ -1446,7 +1454,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
          "OMX.qcom.video.decoder.divx", OMX_MAX_STRINGNAME_SIZE)))
   {
      strlcpy((char *)m_cRole, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
-     DEBUG_PRINT_ERROR ("DIVX Decoder selected");
+     DEBUG_PRINT_HIGH("DIVX Decoder selected");
      drv_ctx.decoder_format = VDEC_CODECTYPE_DIVX_5;
      eCompressionFormat = (OMX_VIDEO_CODINGTYPE)QOMX_VIDEO_CodingDivx;
      codec_type_parse = CODEC_TYPE_DIVX;
@@ -9618,7 +9626,7 @@ OMX_ERRORTYPE omx_vdec::vdec_alloc_h264_mv()
     return OMX_ErrorInsufficientResources;
   }
 
-  DEBUG_PRINT_ERROR("GET_MV_BUFFER_SIZE returned: Size: %d and alignment: %d",
+  DEBUG_PRINT_HIGH("GET_MV_BUFFER_SIZE returned: Size: %d and alignment: %d",
                     mv_buff_size.size, mv_buff_size.alignment);
 
   size = mv_buff_size.size * drv_ctx.op_buf.actualcount;
@@ -9783,7 +9791,7 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
     return false;
   }
   if (!enabled){
-    DEBUG_PRINT_ERROR("\n No color conversion required");
+    DEBUG_PRINT_HIGH("\n No color conversion required");
     return status;
   }
   if (omx->drv_ctx.output_format != VDEC_YUV_FORMAT_TILE_4x2 &&
