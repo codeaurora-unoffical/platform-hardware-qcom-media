@@ -680,6 +680,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
     m_sOutput_buff_property.mincount = m_sOutput_buff_property.actualcount = bufreq.count;
 
 
+    resume_in_stopped = 0;
     metadatamode = 0;
 
     control.id = V4L2_CID_MPEG_VIDEO_HEADER_MODE;
@@ -1441,7 +1442,8 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
 unsigned venc_dev::venc_stop( void)
 {
     struct venc_msg venc_msg;
-    int rc = 0;
+    struct v4l2_requestbuffers bufreq;
+    int rc = 0, ret = 0;
 
     if (!stopped) {
         enum v4l2_buf_type cap_type;
@@ -1455,6 +1457,17 @@ unsigned venc_dev::venc_stop( void)
                         cap_type, rc);
             } else
                 streaming[OUTPUT_PORT] = false;
+
+            DEBUG_PRINT_LOW("Releasing registered buffers from driver on o/p port");
+            bufreq.memory = V4L2_MEMORY_USERPTR;
+            bufreq.count = 0;
+            bufreq.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+            ret = ioctl(m_nDriver_fd, VIDIOC_REQBUFS, &bufreq);
+
+            if (ret) {
+                DEBUG_PRINT_ERROR("\nERROR: VIDIOC_REQBUFS OUTPUT MPLANE Failed \n ");
+                return false;
+            }
         }
 
         if (!rc && streaming[CAPTURE_PORT]) {
@@ -1466,11 +1479,25 @@ unsigned venc_dev::venc_stop( void)
                         cap_type, rc);
             } else
                 streaming[CAPTURE_PORT] = false;
+
+            DEBUG_PRINT_LOW("Releasing registered buffers from driver on capture port");
+            bufreq.memory = V4L2_MEMORY_USERPTR;
+            bufreq.count = 0;
+            bufreq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+            ret = ioctl(m_nDriver_fd, VIDIOC_REQBUFS, &bufreq);
+
+            if (ret) {
+                DEBUG_PRINT_ERROR("\nERROR: VIDIOC_REQBUFS CAPTURE MPLANE Failed \n ");
+                return false;
+            }
         }
 
-        if (!rc) {
+        if (!rc && !ret) {
             venc_stop_done();
             stopped = 1;
+            /*set flag to re-configure when started again*/
+            resume_in_stopped = 1;
+
         }
     }
 
@@ -1538,6 +1565,12 @@ unsigned venc_dev::venc_start(void)
 
     venc_config_print();
 
+    if(resume_in_stopped){
+        /*set buffercount when restarted*/
+        venc_reconfig_reqbufs();
+        resume_in_stopped = 0;
+    }
+
     /* Check if slice_delivery mode is enabled & max slices is sufficient for encoding complete frame */
     if (slice_mode.enable && multislice.mslice_size &&
             (m_sVenc_cfg.input_width *  m_sVenc_cfg.input_height)/(256 * multislice.mslice_size) >= MAX_SUPPORTED_SLICES_PER_FRAME) {
@@ -1589,6 +1622,29 @@ void venc_dev::venc_config_print()
     DEBUG_PRINT_HIGH("\nENC_CONFIG: IntraMB/Frame: %ld, HEC: %ld, IDR Period: %ld\n",
             intra_refresh.mbcount, hec.header_extension, idrperiod.idrperiod);
 
+}
+
+bool venc_dev::venc_reconfig_reqbufs()
+{
+    struct v4l2_requestbuffers bufreq;
+
+    bufreq.memory = V4L2_MEMORY_USERPTR;
+    bufreq.count = m_sInput_buff_property.actualcount;
+    bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+    if(ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
+            DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS OUTPUT_MPLANE Failed when resume\n");
+            return false;
+    }
+
+    bufreq.memory = V4L2_MEMORY_USERPTR;
+    bufreq.count = m_sOutput_buff_property.actualcount;
+    bufreq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    if(ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq))
+    {
+            DEBUG_PRINT_ERROR("\nERROR: Request for setting o/p buffer count failed when resume\n");
+            return false;
+    }
+    return true;
 }
 
 unsigned venc_dev::venc_flush( unsigned port)
@@ -2540,7 +2596,7 @@ bool venc_dev::venc_set_entropy_config(OMX_BOOL enable, OMX_U32 i_cabac_level)
         }
 
         DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d\n", control.id, control.value);
-        entropy.longentropysel=control.value;
+        entropy.cabacmodel=control.value;
     } else if (!enable) {
         control.value =  V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CAVLC;
         control.id = V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE;
