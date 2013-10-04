@@ -1451,7 +1451,8 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
         else
         {
           m_sParamAVC.nPFrames = pParam->nPFrames;
-          if(m_sParamAVC.eProfile != OMX_VIDEO_AVCProfileBaseline)
+          if((m_sParamAVC.eProfile != OMX_VIDEO_AVCProfileBaseline) &&
+            (m_sParamAVC.eProfile != QOMX_VIDEO_AVCProfileConstrainedBaseline))
             m_sParamAVC.nBFrames = pParam->nBFrames;
           else
             m_sParamAVC.nBFrames = 0;
@@ -1465,7 +1466,6 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
 
       break;
     }
-
   case OMX_IndexConfigVideoIntraVOPRefresh:
     {
       OMX_CONFIG_INTRAREFRESHVOPTYPE* pParam =

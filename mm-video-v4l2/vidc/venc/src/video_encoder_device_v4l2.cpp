@@ -1117,7 +1117,8 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
           return false;
         }
         else {
-          if(pParam->eProfile != OMX_VIDEO_AVCProfileBaseline)
+          if((pParam->eProfile != OMX_VIDEO_AVCProfileBaseline) &&
+            (pParam->eProfile != QOMX_VIDEO_AVCProfileConstrainedBaseline))
           {
             if(pParam->nBFrames)
             {
@@ -2202,6 +2203,10 @@ bool venc_dev::venc_set_profile_level(OMX_U32 eProfile,OMX_U32 eLevel)
     {
       requested_profile.profile = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
     }
+    else if(eProfile == QOMX_VIDEO_AVCProfileConstrainedBaseline)
+    {
+      requested_profile.profile = V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE;
+    }
     else if(eProfile == OMX_VIDEO_AVCProfileMain)
     {
       requested_profile.profile = V4L2_MPEG_VIDEO_H264_PROFILE_MAIN;
@@ -2998,6 +3003,9 @@ bool venc_dev::venc_get_profile_level(OMX_U32 *eProfile,OMX_U32 *eLevel)
     case V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE:
       *eProfile = OMX_VIDEO_AVCProfileBaseline;
       break;
+    case V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE:
+      *eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
+      break;
     case V4L2_MPEG_VIDEO_H264_PROFILE_MAIN:
       *eProfile = OMX_VIDEO_AVCProfileMain;
       break;
@@ -3155,6 +3163,9 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
           case V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE:
             *eProfile = OMX_VIDEO_AVCProfileBaseline;
             break;
+          case V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE:
+            *eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
+            break;
           case V4L2_MPEG_VIDEO_H264_PROFILE_MAIN:
             *eProfile = OMX_VIDEO_AVCProfileMain;
             break;
@@ -3185,7 +3196,8 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
         *eLevel = OMX_VIDEO_AVCLevelMax;
       }
 
-      if(*eProfile == OMX_VIDEO_AVCProfileBaseline)
+      if((*eProfile == OMX_VIDEO_AVCProfileBaseline) ||
+        (*eProfile == QOMX_VIDEO_AVCProfileConstrainedBaseline))
       {
         profile_tbl = (unsigned int const *)h264_profile_level_table;
       }
