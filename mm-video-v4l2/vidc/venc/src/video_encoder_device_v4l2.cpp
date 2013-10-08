@@ -473,12 +473,12 @@ OMX_ERRORTYPE venc_dev::allocate_extradata()
         if (extradata_info.ion.ion_alloc_data.handle) {
             munmap((void *)extradata_info.uaddr, extradata_info.size);
             close(extradata_info.ion.fd_ion_data.fd);
-            free_ion_memory(&extradata_info.ion);
+            venc_handle->free_ion_memory(&extradata_info.ion);
         }
 
         extradata_info.size = (extradata_info.size + 4095) & (~4095);
 
-        extradata_info.ion.ion_device_fd = alloc_map_ion_memory(
+        extradata_info.ion.ion_device_fd = venc_handle->alloc_map_ion_memory(
                 extradata_info.size,
                 &extradata_info.ion.ion_alloc_data,
                 &extradata_info.ion.fd_ion_data, 0);
@@ -496,7 +496,7 @@ OMX_ERRORTYPE venc_dev::allocate_extradata()
         if (extradata_info.uaddr == MAP_FAILED) {
             DEBUG_PRINT_ERROR("Failed to map extradata memory\n");
             close(extradata_info.ion.fd_ion_data.fd);
-            free_ion_memory(&extradata_info.ion);
+            venc_handle->free_ion_memory(&extradata_info.ion);
             return OMX_ErrorInsufficientResources;
         }
     }
@@ -513,7 +513,7 @@ void venc_dev::free_extradata()
     if (extradata_info.uaddr) {
         munmap((void *)extradata_info.uaddr, extradata_info.size);
         close(extradata_info.ion.fd_ion_data.fd);
-        free_ion_memory(&extradata_info.ion);
+        venc_handle->free_ion_memory(&extradata_info.ion);
     }
 
     memset(&extradata_info, 0, sizeof(extradata_info));
@@ -525,15 +525,18 @@ bool venc_dev::venc_open(OMX_U32 codec)
     int r;
     unsigned int alignment = 0,buffer_size = 0, temp =0;
     struct v4l2_control control;
+#ifdef _ANDROID_
     OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_enc";
 
     char platform_name[64];
     property_get("ro.board.platform", platform_name, "0");
 
     if (!strncmp(platform_name, "msm8610", 7)) {
-        device_name = (OMX_STRING)"/dev/video/q6_enc";
+      device_name = (OMX_STRING)"/dev/video/q6_enc";
     }
-
+#else
+     OMX_STRING device_name = (OMX_STRING)"/dev/video35";
+#endif
     m_nDriver_fd = open (device_name, O_RDWR);
 
     if (m_nDriver_fd == 0) {
@@ -1814,6 +1817,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     DEBUG_PRINT_LOW("venc_empty_buf: camera buf: fd = %d filled %d of %d",
                             fd, plane.bytesused, plane.length);
                 } else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
+#ifdef _ANDROID_
                     private_handle_t *handle = (private_handle_t *)meta_buf->meta_handle;
                     fd = handle->fd;
                     plane.data_offset = 0;
@@ -1821,6 +1825,13 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     plane.bytesused = handle->size;
                     DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d filled %d of %d",
                             fd, plane.bytesused, plane.length);
+#else
+		    buffer_handle handle = (buffer_handle)meta_buf->meta_handle;
+                    fd = handle->data[0];
+                    plane.data_offset = handle->data[1];
+                    plane.length = handle->data[2];
+                    plane.bytesused = handle->data[2];
+#endif
                 }
             } else {
                 plane.m.userptr = (unsigned long) bufhdr->pBuffer;
@@ -3373,7 +3384,7 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
 
     return true;
 }
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
 bool venc_dev::venc_set_meta_mode(bool mode)
 {
     metadatamode = 1;

@@ -28,8 +28,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
 #include <dlfcn.h>
 #include "C2DColorConverter.h"
-
+#ifdef _ANDROID_
 using namespace android;
+#endif
 class omx_c2d_conv
 {
     public:

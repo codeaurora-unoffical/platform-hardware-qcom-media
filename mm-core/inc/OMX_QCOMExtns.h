@@ -402,6 +402,11 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /*"OMX.QCOM.index.config.video.LTRMark"*/
     QOMX_IndexConfigVideoLTRMark = 0x7F000029,
+
+    /*"OMX.google.android.index.prependSPSPPSToIDRFrames"*/
+    OMX_QcomIndexParamSequenceHeaderWithIDR = 0x7F00002A,
+
+    OMX_QcomIndexParamH264AUDelimiter = 0x7F00002B,
 };
 
 /**
@@ -701,6 +706,19 @@ typedef struct OMX_QCOM_VIDEO_CONFIG_QPRANGE
    OMX_U32 nMaxQP;          /** The number for maximum quantization parameter */
 } OMX_QCOM_VIDEO_CONFIG_QPRANGE;
 
+/**
+ * This structure describes the parameters for extensions
+ * that simply toggle a true/false value.
+ * Currently used by:
+ * OMX_QcomIndexParamSequenceHeaderWithIDR
+ * OMX_QcomIndexParamH264AUDelimiter
+ */
+typedef struct OMX_QCOM_VIDEO_CONFIG_BOOL
+{
+   OMX_U32 nSize;           /** Size of the structure in bytes */
+   OMX_VERSIONTYPE nVersion;/** OMX specification version information */
+   OMX_BOOL bEnable;        /** Enable/disable the setting */
+} OMX_QCOM_VIDEO_CONFIG_BOOL;
 
 typedef struct OMX_VENDOR_EXTRADATATYPE  {
     OMX_U32 nPortIndex;
@@ -822,6 +840,7 @@ typedef struct OMX_QCOM_EXTRADATA_FRAMEINFO
    OMX_QCOM_DISPLAY_ASPECT_RATIO displayAspectRatio;
    OMX_U32                nConcealedMacroblocks;
    OMX_U32                nFrameRate;
+   OMX_TICKS              nTimeStamp;
 } OMX_QCOM_EXTRADATA_FRAMEINFO;
 
 typedef struct OMX_QCOM_EXTRADATA_FRAMEDIMENSION

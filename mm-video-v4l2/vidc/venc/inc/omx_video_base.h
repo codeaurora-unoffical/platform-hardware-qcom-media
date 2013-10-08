@@ -48,10 +48,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/mman.h>
 #ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
-#ifdef _ANDROID_ICS_
 #include "QComOMXMetadata.h"
+#else
+#include "omx_meta_mode.h"
 #endif
-#endif // _ANDROID_
 #include <pthread.h>
 #include <semaphore.h>
 #include <linux/msm_vidc_enc.h>
@@ -63,9 +63,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "omx_video_common.h"
 #include "extra_data_handler.h"
 #include <linux/videodev2.h>
+#ifdef _OPAQUE_
 #include <dlfcn.h>
 #include "C2DColorConverter.h"
+#endif
+#ifdef _ANDROID_
 #include "vidc_debug.h"
+#endif
 
 #ifdef _ANDROID_
 using namespace android;
@@ -134,22 +138,16 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
 #define BITMASK_PRESENT(mArray,mIndex) ((mArray)[BITMASK_OFFSET(mIndex)] \
         & BITMASK_FLAG(mIndex))
 #define BITMASK_ABSENT(mArray,mIndex) (((mArray)[BITMASK_OFFSET(mIndex)] \
-            & BITMASK_FLAG(mIndex)) == 0x0)
-#ifdef _ANDROID_ICS_
+        & BITMASK_FLAG(mIndex)) == 0x0)
 #define MAX_NUM_INPUT_BUFFERS 32
-#endif
+
 void* message_thread(void *);
-#ifdef USE_ION
-int alloc_map_ion_memory(int size,struct ion_allocation_data *alloc_data,
-        struct ion_fd_data *fd_data,int flag);
-void free_ion_memory(struct venc_ion *buf_ion_info);
-#endif
 
 // OMX video class
 class omx_video: public qc_omx_component
 {
     protected:
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
         bool meta_mode_enable;
         bool c2d_opened;
         encoder_media_buffer_type meta_buffers[MAX_NUM_INPUT_BUFFERS];
@@ -185,6 +183,7 @@ class omx_video: public qc_omx_component
         };
         omx_c2d_conv c2d_conv;
 #endif
+    bool secure_session;
     public:
         omx_video();  // constructor
         virtual ~omx_video();  // destructor
@@ -228,16 +227,16 @@ class omx_video: public qc_omx_component
 #endif
         virtual bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height) = 0;
         virtual bool dev_get_capability_ltrcount(OMX_U32 *, OMX_U32 *, OMX_U32 *) = 0;
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
         void omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer);
 #endif
-        virtual bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
-                        OMX_U32 height) = 0;
-        OMX_ERRORTYPE component_role_enum(
-                OMX_HANDLETYPE hComp,
-                OMX_U8 *role,
-                OMX_U32 index
-                );
+	virtual bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
+				OMX_U32 height) = 0;
+	OMX_ERRORTYPE component_role_enum(
+                                   OMX_HANDLETYPE hComp,
+                                   OMX_U8 *role,
+                                   OMX_U32 index
+                                   );
 
         OMX_ERRORTYPE component_tunnel_request(
                 OMX_HANDLETYPE hComp,
@@ -445,7 +444,7 @@ class omx_video: public qc_omx_component
                 OMX_U32              port,
                 OMX_PTR              appData,
                 OMX_U32              bytes);
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
         OMX_ERRORTYPE allocate_input_meta_buffer(OMX_HANDLETYPE       hComp,
                 OMX_BUFFERHEADERTYPE **bufferHdr,
                 OMX_PTR              appData,
@@ -613,6 +612,11 @@ class omx_video: public qc_omx_component
         OMX_U8                m_cRole[OMX_MAX_STRINGNAME_SIZE];
         extra_data_handler extra_data_handle;
 
+#ifdef USE_ION
+	int alloc_map_ion_memory(int size,struct ion_allocation_data *alloc_data,
+                                    struct ion_fd_data *fd_data,int flag);
+	void free_ion_memory(struct venc_ion *buf_ion_info);
+#endif
 };
 
 #endif // __OMX_VIDEO_BASE_H__

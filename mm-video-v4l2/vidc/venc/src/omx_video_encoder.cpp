@@ -49,9 +49,14 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (_s_)->nSize = sizeof(_name_);               \
 (_s_)->nVersion.nVersion = OMX_SPEC_VERSION
 
-extern int m_pipe;
-int debug_level = PRIO_ERROR;
+#ifndef _ANDROID
+#define ALOGE printf
+#endif
 
+extern int m_pipe;
+#ifdef _ANDROID_
+int debug_level = PRIO_ERROR;
+#endif
 // factory function executed by the core to create instances
 void *get_omx_component_factory_fn(void)
 {
@@ -62,7 +67,7 @@ void *get_omx_component_factory_fn(void)
 
 omx_venc::omx_venc()
 {
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
     meta_mode_enable = false;
     memset(meta_buffer_hdr,0,sizeof(meta_buffer_hdr));
     memset(meta_buffers,0,sizeof(meta_buffers));
@@ -70,15 +75,19 @@ omx_venc::omx_venc()
     mUseProxyColorFormat = false;
     get_syntaxhdr_enable = false;
 #endif
+#ifdef _ANDROID
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.debug.level", property_value, "0");
     debug_level = atoi(property_value);
     property_value[0] = '\0';
+#endif
 }
 
 omx_venc::~omx_venc()
 {
+#ifdef _METAMODE__
     get_syntaxhdr_enable = false;
+#endif
     //nothing to do
 }
 
