@@ -47,13 +47,16 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <inttypes.h>
 #include <cstddef>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 #ifdef USE_ION
 #include <linux/msm_ion.h>
 #endif
+
 static ptrdiff_t x;
 
-#ifdef _ANDROID_
 #ifdef MAX_RES_720P
 #define LOG_TAG "OMX-VDEC-720P"
 #elif MAX_RES_1080P
@@ -62,35 +65,22 @@ static ptrdiff_t x;
 #define LOG_TAG "OMX-VDEC"
 #endif
 
+#ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
 #include <ui/ANativeObjectBase.h>
 extern "C" {
 #include <utils/Log.h>
 }
-#include <linux/videodev2.h>
 #include <poll.h>
-#define TIMEOUT 5000
 
-#else
-#define DEBUG_PRINT_LOW
-#define DEBUG_PRINT_HIGH printf
-#define DEBUG_PRINT_ERROR printf
+#include <media/hardware/HardwareAPI.h>
+#include <gralloc_priv.h>
+#include <cutils/properties.h>
 #endif // _ANDROID_
 
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
-#include <media/hardware/HardwareAPI.h>
-#endif
+#include <linux/videodev2.h>
+#define TIMEOUT 5000
 
-#include <unistd.h>
-
-#if defined (_ANDROID_ICS_)
-#include <gralloc_priv.h>
-#endif
-
-#include <pthread.h>
-#ifndef PC_DEBUG
-#include <semaphore.h>
-#endif
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "qc_omx_component.h"
@@ -103,13 +93,9 @@ extern "C" {
 #include <linux/android_pmem.h>
 #include "extra_data_handler.h"
 #include "ts_parser.h"
-#ifdef _ANDROID_
 #include "vidc_color_converter.h"
-#include <cutils/properties.h>
-#else
 #include "vidc_debug.h"
 #define PROPERTY_VALUE_MAX 92
-#endif
 
 extern "C" {
     OMX_API void * get_omx_component_factory_fn(void);
@@ -180,9 +166,7 @@ class VideoHeap : public MemoryHeapBase
 
 #define DESC_BUFFER_SIZE (8192 * 16)
 
-#ifdef _ANDROID_
 #define MAX_NUM_INPUT_OUTPUT_BUFFERS 32
-#endif
 
 #define OMX_FRAMEINFO_EXTRADATA 0x00010000
 #define OMX_INTERLACE_EXTRADATA 0x00020000
@@ -518,7 +502,6 @@ class omx_vdec: public qc_omx_component
 
         };
 
-#ifdef _ANDROID_
         struct ts_entry {
             OMX_TICKS timestamp;
             bool valid;
@@ -534,7 +517,6 @@ class omx_vdec: public qc_omx_component
             bool pop_min_ts(OMX_TICKS &ts);
             bool reset_ts_list();
         };
-#endif
 
         struct desc_buffer_hdr {
             OMX_U8 *buf_addr;
@@ -751,10 +733,8 @@ class omx_vdec: public qc_omx_component
         OMX_BUFFERHEADERTYPE  *m_out_mem_ptr;
         // number of input bitstream error frame count
         unsigned int m_inp_err_count;
-#ifdef _ANDROID_
         // Timestamp list
         ts_arr_list           m_timestamp_list;
-#endif
 
         bool input_flush_progress;
         bool output_flush_progress;
@@ -838,17 +818,17 @@ class omx_vdec: public qc_omx_component
         OMX_NATIVE_WINDOWTYPE m_display_id;
         h264_stream_parser *h264_parser;
         OMX_U32 client_extradata;
-#ifdef _ANDROID_
         bool m_debug_timestamp;
         bool perf_flag;
         OMX_U32 proc_frms, latency;
         perf_metrics fps_metrics;
         perf_metrics dec_time;
+#ifdef _ANDROID_
         bool m_enable_android_native_buffers;
         bool m_use_android_native_buffers;
+#endif
         bool m_debug_extradata;
         bool m_debug_concealedmb;
-#endif
         bool m_reject_avc_1080p_mp;
 #ifdef MAX_RES_1080P
         MP4_Utils mp4_headerparser;
@@ -902,7 +882,6 @@ class omx_vdec: public qc_omx_component
 
         unsigned int m_fill_output_msg;
         bool client_set_fps;
-#ifdef _ANDROID_
         class allocate_color_convert_buf
         {
             public:
@@ -944,17 +923,14 @@ class omx_vdec: public qc_omx_component
 #endif
                 unsigned char *pmem_baseaddress[MAX_COUNT];
                 int pmem_fd[MAX_COUNT];
+#ifdef _ANDROID_
                 struct vidc_heap {
                     sp<MemoryHeapBase>    video_heap_ptr;
                 };
                 struct vidc_heap m_heap_ptr[MAX_COUNT];
+#endif
         };
-#endif
-#ifdef _ANDROID_
-#if  defined (_MSM8960_) || defined (_MSM8974_)
         allocate_color_convert_buf client_buffers;
-#endif
-#endif
         struct video_decoder_capability m_decoder_capability;
         struct debug_cap m_debug;
         int log_input_buffers(const char *, int);

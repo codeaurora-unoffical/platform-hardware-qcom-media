@@ -37,6 +37,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "omx_video_common.h"
 #include "omx_video_base.h"
 #include "omx_video_encoder.h"
+#include "vidc_debug.h"
 #include <linux/videodev2.h>
 #include <poll.h>
 
@@ -204,12 +205,8 @@ class venc_dev
         unsigned venc_pause(void);
         unsigned venc_start(void);
         unsigned venc_flush(unsigned);
-#ifdef _METAMODE_
         bool venc_set_meta_mode(bool);
-#ifdef _OPAQUE_
-	int venc_set_rgb_meta_mode(int);
-#endif
-#endif
+        int venc_set_rgb_meta_mode(int);
         unsigned venc_resume(void);
         unsigned venc_start_done(void);
         unsigned venc_stop_done(void);
@@ -303,6 +300,7 @@ class venc_dev
         bool venc_set_slice_delivery_mode(OMX_U32 enable);
         bool venc_set_extradata(OMX_U32 extra_data);
         bool venc_set_idr_period(OMX_U32 nPFrames, OMX_U32 nIDRPeriod);
+
 #ifdef MAX_RES_1080P
         OMX_U32 pmem_free();
         OMX_U32 pmem_allocate(OMX_U32 size, OMX_U32 alignment, OMX_U32 count);

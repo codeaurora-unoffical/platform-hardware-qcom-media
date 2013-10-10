@@ -31,6 +31,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "qc_omx_component.h"
+#include "vidc_debug.h"
 
 #include<stdlib.h>
 
@@ -41,8 +42,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #include<utils/Log.h>
 }
-#else
-#define ALOGE(fmt, args...) fprintf(stderr, fmt, ##args)
 #endif /* _ANDROID_ */
 
 class omx_time_stamp_reorder

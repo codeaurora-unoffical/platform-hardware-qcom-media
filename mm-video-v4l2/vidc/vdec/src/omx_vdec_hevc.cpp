@@ -360,7 +360,6 @@ unsigned omx_vdec::omx_cmd_queue::get_q_msg_type()
     return m_q[m_read].id;
 }
 
-#ifdef _ANDROID_
 omx_vdec::ts_arr_list::ts_arr_list()
 {
     //initialize timestamps array
@@ -447,7 +446,6 @@ bool omx_vdec::ts_arr_list::reset_ts_list()
     }
     return ret;
 }
-#endif
 
 // factory function executed by the core to create instances
 void *get_omx_component_factory_fn(void)

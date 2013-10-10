@@ -29,7 +29,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __VIDC_DEBUG_H__
 #define __VIDC_DEBUG_H__
 
-#ifdef _ANDROID_
+
 #include <cstdio>
 
 enum {
@@ -39,6 +39,12 @@ enum {
 };
 
 extern int debug_level;
+
+#ifndef _ANDROID_
+#define ALOGD printf
+#define ALOGV printf
+#define ALOGE printf
+#endif
 
 #undef DEBUG_PRINT_ERROR
 #define DEBUG_PRINT_ERROR(fmt, args...) \
@@ -52,10 +58,5 @@ extern int debug_level;
 #define DEBUG_PRINT_HIGH(fmt, args...) \
       if (debug_level & PRIO_HIGH) \
           ALOGD(fmt,##args)
-#else
-#define DEBUG_PRINT_ERROR printf
-#define DEBUG_PRINT_LOW printf
-#define DEBUG_PRINT_HIGH printf
-#endif
 
 #endif

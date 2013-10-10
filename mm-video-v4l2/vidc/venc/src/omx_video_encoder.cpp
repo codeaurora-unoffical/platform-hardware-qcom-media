@@ -29,8 +29,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include "video_encoder_device.h"
 #include <stdio.h>
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
+#else
+#include <omx_meta_mode.h>
 #endif
 #ifdef _ANDROID_
 #include <cutils/properties.h>
@@ -49,14 +51,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (_s_)->nSize = sizeof(_name_);               \
 (_s_)->nVersion.nVersion = OMX_SPEC_VERSION
 
-#ifndef _ANDROID
-#define ALOGE printf
-#endif
-
 extern int m_pipe;
-#ifdef _ANDROID_
 int debug_level = PRIO_ERROR;
-#endif
+
 // factory function executed by the core to create instances
 void *get_omx_component_factory_fn(void)
 {
@@ -67,27 +64,25 @@ void *get_omx_component_factory_fn(void)
 
 omx_venc::omx_venc()
 {
-#ifdef _METAMODE_
     meta_mode_enable = false;
     memset(meta_buffer_hdr,0,sizeof(meta_buffer_hdr));
     memset(meta_buffers,0,sizeof(meta_buffers));
     memset(opaque_buffer_hdr,0,sizeof(opaque_buffer_hdr));
     mUseProxyColorFormat = false;
     get_syntaxhdr_enable = false;
-#endif
-#ifdef _ANDROID
+#ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.debug.level", property_value, "0");
     debug_level = atoi(property_value);
     property_value[0] = '\0';
+#else
+    debug_level = 7;
 #endif
 }
 
 omx_venc::~omx_venc()
 {
-#ifdef _METAMODE__
     get_syntaxhdr_enable = false;
-#endif
     //nothing to do
 }
 
@@ -530,7 +525,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     DEBUG_PRINT_LOW("\n i/p previous min cnt = %d\n", m_sInPortDef.nBufferCountMin);
                     memcpy(&m_sInPortDef, portDefn,sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
 
-#ifdef _ANDROID_ICS_
                     if (portDefn->format.video.eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
                         m_sInPortDef.format.video.eColorFormat = (OMX_COLOR_FORMATTYPE)
@@ -544,9 +538,9 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         }
                         mUseProxyColorFormat = true;
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
+                        handle->venc_set_rgb_meta_mode(mUseProxyColorFormat);
                     } else
-                        mUseProxyColorFormat = false;
-#endif
+		                mUseProxyColorFormat = false;
                     /*Query Input Buffer Requirements*/
                     dev_get_buf_req   (&m_sInPortDef.nBufferCountMin,
                             &m_sInPortDef.nBufferCountActual,
@@ -612,7 +606,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                             portFmt->eColorFormat);
                     update_profile_level(); //framerate
 
-#ifdef _ANDROID_ICS_
                     if (portFmt->eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
                         m_sInPortFormat.eColorFormat = (OMX_COLOR_FORMATTYPE)
@@ -626,9 +619,8 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         }
                         mUseProxyColorFormat = true;
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
-                    } else
-#endif
-                    {
+                        handle->venc_set_rgb_meta_mode(mUseProxyColorFormat);
+                    } else {
                         m_sInPortFormat.eColorFormat = portFmt->eColorFormat;
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB;
                         mUseProxyColorFormat = false;
@@ -982,7 +974,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 memcpy(&m_sIntraRefresh, pParam, sizeof(m_sIntraRefresh));
                 break;
             }
-#ifdef _ANDROID_ICS_
         case OMX_QcomIndexParamVideoEncodeMetaBufferMode:
             {
                 StoreMetaDataInBuffersParams *pParam =
@@ -1018,7 +1009,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 }
             }
             break;
-#endif
 #if !defined(MAX_RES_720P) || defined(_MSM8974_)
         case OMX_QcomIndexParamIndexExtraDataType:
             {
@@ -1501,10 +1491,7 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     }
 
     /*Check if the input buffers have to be cleaned up*/
-    if (m_inp_mem_ptr
-#ifdef _ANDROID_ICS_
-            && !meta_mode_enable
-#endif
+    if (m_inp_mem_ptr && !meta_mode_enable
        ) {
         DEBUG_PRINT_LOW("Freeing the Input Memory\n");
         for (i=0; i<m_sInPortDef.nBufferCountActual; i++ ) {
@@ -1734,9 +1721,7 @@ int omx_venc::async_message_process (void *context, void* message)
                 m_sVenc_msg->statuscode = VEN_S_EFAIL;
             }
 
-#ifdef _ANDROID_ICS_
             omx->omx_release_meta_buffer(omxhdr);
-#endif
             omx->post_event ((unsigned int)omxhdr,m_sVenc_msg->statuscode,
                     OMX_COMPONENT_GENERATE_EBD);
             break;

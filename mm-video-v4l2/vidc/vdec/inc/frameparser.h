@@ -31,7 +31,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "h264_utils.h"
-//#include <stdlib.h>
 
 enum codec_type {
     CODEC_TYPE_MPEG4 = 0,

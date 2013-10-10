@@ -43,13 +43,13 @@ extern "C" {
 }
 #endif // _ANDROID_
 
-#include "vidc_debug.h"
 #define SEI_PAYLOAD_FRAME_PACKING_ARRANGEMENT 0x2D
 #define H264_START_CODE 0x01
 #define NAL_TYPE_SEI 0x06
 #define VDEC_OMX_SEI 0x7F000007
 #define FRAME_PACK_SIZE 18
 #define H264_EMULATION_BYTE 0x03
+
 class extra_data_handler
 {
     public:

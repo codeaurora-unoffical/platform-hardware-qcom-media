@@ -45,11 +45,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/prctl.h>
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
 #include <gralloc_priv.h>
-#endif
-#ifndef _ANDROID_
+#else
 #include <glib.h>
 #define strlcpy g_strlcpy
 #include <sys/ioctl.h>
@@ -1431,7 +1430,6 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                             m_sInPortDef.nBufferSize, m_sInPortDef.nBufferCountMin,
                             m_sInPortDef.nBufferCountActual);
                     memcpy(portDefn, &m_sInPortDef, sizeof(m_sInPortDef));
-#ifdef _ANDROID_ICS_
                     if (meta_mode_enable) {
                         portDefn->nBufferSize = sizeof(encoder_media_buffer_type);
                     }
@@ -1439,7 +1437,6 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         portDefn->format.video.eColorFormat =
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque;
                     }
-#endif
                 } else if (portDefn->nPortIndex == (OMX_U32) PORT_INDEX_OUT) {
                     dev_get_buf_req (&m_sOutPortDef.nBufferCountMin,
                             &m_sOutPortDef.nBufferCountActual,
@@ -1898,12 +1895,11 @@ OMX_ERRORTYPE  omx_video::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
         return OMX_ErrorNone;
     }
 #endif
-#ifdef _ANDROID_ICS_
-    if (!strncmp(paramName, "OMX.google.android.index.storeMetaDataInBuffers",sizeof("OMX.google.android.index.storeMetaDataInBuffers") - 1)) {
+  if (!strncmp(paramName, "OMX.QCOM.index.storeMetaDataInBuffers",
+      sizeof("OMX.google.android.index.storeMetaDataInBuffers") - 1)) {
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamVideoEncodeMetaBufferMode;
         return OMX_ErrorNone;
     }
-#endif
     return OMX_ErrorNotImplemented;
 }
 
@@ -2378,7 +2374,6 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
     }
 
     index = bufferHdr - ((!mUseProxyColorFormat)?m_inp_mem_ptr:meta_buffer_hdr);
-#ifdef _ANDROID_ICS_
     if (meta_mode_enable) {
         if (index < m_sInPortDef.nBufferCountActual) {
             memset(&meta_buffer_hdr[index], 0, sizeof(meta_buffer_hdr[index]));
@@ -2391,7 +2386,6 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
             opaque_buffer_hdr[index] = NULL;
         }
     }
-#endif
     if (index < m_sInPortDef.nBufferCountActual && !mUseProxyColorFormat &&
             dev_free_buf(&m_pInput_pmem[index],PORT_INDEX_IN) != true) {
         DEBUG_PRINT_LOW("\nERROR: dev_free_buf() Failed for i/p buf");
@@ -2469,7 +2463,7 @@ OMX_ERRORTYPE omx_video::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
     }
     return OMX_ErrorNone;
 }
-#ifdef _ANDROID_ICS_
+
 OMX_ERRORTYPE omx_video::allocate_input_meta_buffer(
         OMX_HANDLETYPE       hComp,
         OMX_BUFFERHEADERTYPE **bufferHdr,
@@ -2517,7 +2511,7 @@ OMX_ERRORTYPE omx_video::allocate_input_meta_buffer(
     }
     return OMX_ErrorNone;
 }
-#endif
+
 /* ======================================================================
    FUNCTION
    omx_venc::AllocateInputBuffer
@@ -2543,7 +2537,7 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
     unsigned   i = 0;
 
-    DEBUG_PRINT_HIGH("\n allocate_input_buffer()::");
+     DEBUG_PRINT_HIGH("\n omx_video::allocate_input_buffer");
     if (bytes != m_sInPortDef.nBufferSize) {
         DEBUG_PRINT_ERROR("\nERROR: Buffer size mismatch error: bytes[%lu] != nBufferSize[%lu]\n",
                 bytes, m_sInPortDef.nBufferSize);
@@ -2845,11 +2839,9 @@ OMX_ERRORTYPE  omx_video::allocate_buffer(OMX_IN OMX_HANDLETYPE                h
 
     // What if the client calls again.
     if (port == PORT_INDEX_IN) {
-#ifdef _ANDROID_ICS_
         if (meta_mode_enable)
             eRet = allocate_input_meta_buffer(hComp,bufferHdr,appData,bytes);
         else
-#endif
             eRet = allocate_input_buffer(hComp,bufferHdr,port,appData,bytes);
     } else if (port == PORT_INDEX_OUT) {
         eRet = allocate_output_buffer(hComp,bufferHdr,port,appData,bytes);
@@ -2946,7 +2938,7 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 
             /*Free the Buffer Header*/
             if (release_input_done()
-#ifdef _ANDROID_ICS_
+#ifdef _METAMODE_
                     && !meta_mode_enable
 #endif
                ) {
@@ -3194,7 +3186,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
         fd = m_pInput_pmem[nBufIndex].fd;
     }
 #endif
-#ifdef _ANDROID_ICS_
+
     if (meta_mode_enable && !mUseProxyColorFormat) {
         // Camera or Gralloc-source meta-buffers queued with pre-announced color-format
         struct pmem Input_pmem_info;
@@ -3210,14 +3202,22 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
                     Input_pmem_info.fd, Input_pmem_info.offset,
                     Input_pmem_info.size);
         } else {
+#ifdef _ANDROID_
             private_handle_t *handle = (private_handle_t *)media_buffer->meta_handle;
-            Input_pmem_info.buffer = media_buffer;
             Input_pmem_info.fd = handle->fd;
+            Input_pmem_info.offset = 0;
+            Input_pmem_info.size = handle->size;
+#else
+            buffer_handle handle = (buffer_handle)media_buffer->meta_handle;
+            Input_pmem_info.fd = handle->data[0];
+            Input_pmem_info.offset = handle->data[1];
+            Input_pmem_info.size = handle->data[2];
+#endif
+            Input_pmem_info.buffer = media_buffer;
 #ifdef _MSM8974_
             fd = Input_pmem_info.fd;
 #endif
             Input_pmem_info.offset = 0;
-            Input_pmem_info.size = handle->size;
             DEBUG_PRINT_LOW("ETB (meta-gralloc) fd = %d, offset = %d, size = %d",
                     Input_pmem_info.fd, Input_pmem_info.offset,
                     Input_pmem_info.size);
@@ -3230,10 +3230,17 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
     } else if (meta_mode_enable && !mUsesColorConversion) {
         // Graphic-source meta-buffers queued with opaque color-format
         if (media_buffer->buffer_type == kMetadataBufferTypeGrallocSource) {
+#ifdef _ANDROID_
             private_handle_t *handle = (private_handle_t *)media_buffer->meta_handle;
             fd = handle->fd;
             DEBUG_PRINT_LOW("ETB (opaque-gralloc) fd = %d, size = %d",
                     fd, handle->size);
+#else
+            buffer_handle handle = (buffer_handle)media_buffer->meta_handle;
+			fd = handle->data[0];
+			DEBUG_PRINT_LOW("ETB (opaque-gralloc) fd = %d, size = %d",
+			               fd, handle->data[2]);
+#endif
         } else {
             DEBUG_PRINT_ERROR("ERROR: Invalid bufferType for buffer with Opaque"
                     " color format");
@@ -3241,9 +3248,6 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
             return OMX_ErrorBadParameter;
         }
     } else if (input_use_buffer && !m_use_input_pmem)
-#else
-    if (input_use_buffer && !m_use_input_pmem)
-#endif
     {
         DEBUG_PRINT_LOW("\n Heap UseBuffer case, so memcpy the data");
         pmem_data_buf = (OMX_U8 *)m_pInput_pmem[nBufIndex].buffer;
@@ -3255,8 +3259,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
         fd = m_pInput_pmem[nBufIndex].fd;
         DEBUG_PRINT_LOW("ETB (color-converted) fd = %d, size = %d",
                 fd, buffer->nFilledLen);
-    }
-	 else if (m_sInPortDef.format.video.eColorFormat ==
+    } else if (m_sInPortDef.format.video.eColorFormat ==
                     OMX_COLOR_FormatYUV420SemiPlanar) {
             //For the case where YUV420SP buffers are qeueued to component
             //by sources other than camera (Apps via MediaCodec), conversion
@@ -3275,9 +3278,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
 #endif
     {
         DEBUG_PRINT_ERROR("\nERROR: ETBProxy: dev_empty_buf failed");
-#ifdef _ANDROID_ICS_
         omx_release_meta_buffer(buffer);
-#endif
         post_event ((unsigned int)buffer,0,OMX_COMPONENT_GENERATE_EBD);
         /*Generate an async error and move to invalid state*/
         pending_input_buffers--;
@@ -3789,9 +3790,7 @@ OMX_ERRORTYPE omx_video::empty_buffer_done(OMX_HANDLETYPE         hComp,
     int buffer_index_meta = -1;
 
     buffer_index = (buffer - m_inp_mem_ptr);
-#ifdef _ANDROID_
     buffer_index_meta = (buffer - meta_buffer_hdr);
-#endif
     DEBUG_PRINT_LOW("\n empty_buffer_done: buffer[%p]", buffer);
     if (buffer == NULL ||
             ((buffer_index > m_sInPortDef.nBufferCountActual) &&
@@ -3801,7 +3800,6 @@ OMX_ERRORTYPE omx_video::empty_buffer_done(OMX_HANDLETYPE         hComp,
     }
 
     pending_input_buffers--;
-
     if (mUseProxyColorFormat && (buffer_index < m_sInPortDef.nBufferCountActual)) {
         if (!pdest_frame  && !input_flush_progress) {
             pdest_frame = buffer;
@@ -4094,7 +4092,6 @@ void omx_video::free_ion_memory(struct venc_ion *buf_ion_info)
 }
 #endif
 
-#ifdef _ANDROID_ICS_
 void omx_video::omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer)
 {
     if (buffer && meta_mode_enable) {
@@ -4123,11 +4120,19 @@ void omx_video::omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer)
                             Input_pmem.offset,
                             Input_pmem.size);
                 } else if (media_ptr->buffer_type == kMetadataBufferTypeGrallocSource) {
+#ifdef _ANDROID_
                     private_handle_t *handle = (private_handle_t *)media_ptr->meta_handle;
                     Input_pmem.buffer = media_ptr;
                     Input_pmem.fd = handle->fd;
                     Input_pmem.offset = 0;
                     Input_pmem.size = handle->size;
+#else
+                    buffer_handle handle = (buffer_handle)media_ptr->meta_handle;
+                    Input_pmem.buffer = media_ptr;
+                    Input_pmem.fd = handle->data[0];
+                    Input_pmem.offset = handle->data[1];
+                    Input_pmem.size = handle->data[2];
+#endif
                 } else {
                     meta_error = true;
                     DEBUG_PRINT_ERROR(" Meta Error set in EBD");
@@ -4142,7 +4147,7 @@ void omx_video::omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer)
         }
     }
 }
-#endif
+
 omx_video::omx_c2d_conv::omx_c2d_conv()
 {
     c2dcc = NULL;
@@ -4530,22 +4535,22 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
             Input_pmem_info.offset = 0;
             Input_pmem_info.size = handle->size;
 #else
-	    buffer_handle handle = (buffer_handle)media_buffer->meta_handle;
-	    Input_pmem_info.buffer = media_buffer;
-	    Input_pmem_info.fd = handle->data[0];
-	    Input_pmem_info.offset = handle->data[1];
-	    Input_pmem_info.size = handle->data[2];
+            buffer_handle handle = (buffer_handle)media_buffer->meta_handle;
+            Input_pmem_info.buffer = media_buffer;
+            Input_pmem_info.fd = handle->data[0];
+            Input_pmem_info.offset = handle->data[1];
+            Input_pmem_info.size = handle->data[2];
 #endif
 #ifdef _ANDROID_
             if (handle->format == HAL_PIXEL_FORMAT_RGBA_8888)
 #else
-		if(handle->data[3] == HAL_PIXEL_FORMAT_RGBA_8888)
+            if(handle->data[3] == HAL_PIXEL_FORMAT_RGBA_8888)
 #endif
                 ret = convert_queue_buffer(hComp,Input_pmem_info,index);
 #ifdef _ANDROID_
             else if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE)
 #else
-	    else if(handle->data[3] == HAL_PIXEL_FORMAT_NV12_ENCODEABLE)
+            else if(handle->data[3] == HAL_PIXEL_FORMAT_NV12_ENCODEABLE)
 #endif
                 ret = queue_meta_buffer(hComp,Input_pmem_info);
             else
