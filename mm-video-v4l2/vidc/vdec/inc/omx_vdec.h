@@ -843,7 +843,7 @@ private:
     OMX_S64 prev_ts;
     bool rst_prev_ts;
     OMX_U32 frm_int;
-
+    unsigned int ts_count;
     struct vdec_allocatorproperty op_buf_rcnfg;
     bool in_reconfig;
     OMX_NATIVE_WINDOWTYPE m_display_id;
