@@ -48,6 +48,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <inttypes.h>
 #include <cstddef>
 
+#ifdef USE_ION
+#include <linux/msm_ion.h>
+#endif
 static ptrdiff_t x;
 
 #ifdef _ANDROID_
@@ -59,11 +62,6 @@ static ptrdiff_t x;
 #define LOG_TAG "OMX-VDEC"
 #endif
 
-#ifdef USE_ION
-#include <linux/msm_ion.h>
-//#include <binder/MemoryHeapIon.h>
-//#else
-#endif
 #include <binder/MemoryHeapBase.h>
 #include <ui/ANativeObjectBase.h>
 extern "C" {
@@ -73,13 +71,11 @@ extern "C" {
 #include <poll.h>
 #define TIMEOUT 5000
 
-#endif // _ANDROID_
-
-#ifdef _MSM8974_
+#else
 #define DEBUG_PRINT_LOW
 #define DEBUG_PRINT_HIGH printf
 #define DEBUG_PRINT_ERROR printf
-#endif
+#endif // _ANDROID_
 
 #if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
 #include <media/hardware/HardwareAPI.h>
@@ -107,13 +103,14 @@ extern "C" {
 #include <linux/android_pmem.h>
 #include "extra_data_handler.h"
 #include "ts_parser.h"
-#include "vidc_color_converter.h"
-#include "vidc_debug.h"
 #ifdef _ANDROID_
+#include "vidc_color_converter.h"
 #include <cutils/properties.h>
 #else
+#include "vidc_debug.h"
 #define PROPERTY_VALUE_MAX 92
 #endif
+
 extern "C" {
     OMX_API void * get_omx_component_factory_fn(void);
 }
@@ -851,8 +848,8 @@ class omx_vdec: public qc_omx_component
         bool m_use_android_native_buffers;
         bool m_debug_extradata;
         bool m_debug_concealedmb;
-        bool m_reject_avc_1080p_mp;
 #endif
+        bool m_reject_avc_1080p_mp;
 #ifdef MAX_RES_1080P
         MP4_Utils mp4_headerparser;
 #endif
@@ -905,6 +902,7 @@ class omx_vdec: public qc_omx_component
 
         unsigned int m_fill_output_msg;
         bool client_set_fps;
+#ifdef _ANDROID_
         class allocate_color_convert_buf
         {
             public:
@@ -951,8 +949,11 @@ class omx_vdec: public qc_omx_component
                 };
                 struct vidc_heap m_heap_ptr[MAX_COUNT];
         };
+#endif
+#ifdef _ANDROID_
 #if  defined (_MSM8960_) || defined (_MSM8974_)
         allocate_color_convert_buf client_buffers;
+#endif
 #endif
         struct video_decoder_capability m_decoder_capability;
         struct debug_cap m_debug;

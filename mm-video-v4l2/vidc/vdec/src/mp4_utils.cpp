@@ -33,6 +33,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #include<utils/Log.h>
 }
+#else
+#define ALOGV(ftm, args...)  fprintf(stderr, ftm, ##args)
 #endif//_ANDROID_
 
 MP4_Utils::MP4_Utils()

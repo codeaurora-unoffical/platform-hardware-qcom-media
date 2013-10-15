@@ -49,7 +49,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <limits.h>
 #include <media/msm_media_info.h>
+#ifdef _ANDROID_
 #include <qdMetaData.h>
+#endif
 
 #ifndef _ANDROID_
 #include <sys/ioctl.h>
