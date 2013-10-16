@@ -362,7 +362,7 @@ void* venc_dev::async_venc_message_thread (void *input)
                     break;
                 }
             } else if (dqevent.type == V4L2_EVENT_MSM_VIDC_SYS_ERROR) {
-                DEBUG_PRINT_ERROR("\n HW Error recieved \n");
+                DEBUG_PRINT_ERROR("\n HW Error received \n");
                 venc_msg.statuscode=VEN_S_EFAIL;
 
                 if (omx->async_message_process(input,&venc_msg) < 0) {
@@ -468,7 +468,6 @@ OMX_ERRORTYPE venc_dev::allocate_extradata()
     }
 
 #ifdef USE_ION
-
     if (extradata_info.buffer_size) {
         if (extradata_info.ion.ion_alloc_data.handle) {
             munmap((void *)extradata_info.uaddr, extradata_info.size);
@@ -957,6 +956,12 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
 
                         m_sInput_buff_property.datasize=fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
                         bufreq.memory = V4L2_MEMORY_USERPTR;
+		                bufreq.count = 0;
+             		    bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+               		    if(ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
+						    DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS OUTPUT_MPLANE Failed \n ");
+							return false;
+						}
                         bufreq.count = portDefn->nBufferCountActual;
                         bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 
@@ -964,7 +969,12 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
                             DEBUG_PRINT_ERROR("\n VIDIOC_REQBUFS OUTPUT_MPLANE Failed \n ");
                             return false;
                         }
-
+		                m_sInput_buff_property.mincount = bufreq.count;
+						if(m_sInput_buff_property.mincount > portDefn->nBufferCountActual) {
+						    DEBUG_PRINT_ERROR("\nERROR: minimum (inport) buffer requirements not met min cnt = %d,"
+											"actual cnt = %d", m_sInput_buff_property.mincount, portDefn->nBufferCountActual);
+						    return false;
+						}
                         if (bufreq.count == portDefn->nBufferCountActual)
                             m_sInput_buff_property.mincount = m_sInput_buff_property.actualcount = bufreq.count;
 
@@ -1003,7 +1013,12 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
                                     portDefn->nBufferCountActual, m_sOutput_buff_property.actualcount);
                             return false;
                         }
-
+                        m_sOutput_buff_property.mincount = bufreq.count;
+						if(m_sOutput_buff_property.mincount > portDefn->nBufferCountActual) {
+                             DEBUG_PRINT_ERROR("\nERROR: minimum (outport) buffer requirements not met min cnt = %d,"
+							 				"actual cnt = %d", m_sOutput_buff_property.mincount, portDefn->nBufferCountActual);
+                             return false;
+                        }
                         if (bufreq.count == portDefn->nBufferCountActual)
                             m_sOutput_buff_property.mincount = m_sOutput_buff_property.actualcount = bufreq.count;
 
@@ -1826,7 +1841,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d filled %d of %d",
                             fd, plane.bytesused, plane.length);
 #else
-		    buffer_handle handle = (buffer_handle)meta_buf->meta_handle;
+                    buffer_handle handle = (buffer_handle)meta_buf->meta_handle;
                     fd = handle->data[0];
                     plane.data_offset = handle->data[1];
                     plane.length = handle->data[2];
@@ -1890,14 +1905,18 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     int i,msize;
     int stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, m_sVenc_cfg.input_width);
     int scanlines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, m_sVenc_cfg.input_height);
-    unsigned char *pvirt,*ptemp;
+	  unsigned char *pvirt;
 
-    char *temp = (char *)bufhdr->pBuffer;
+	  char *ptemp = (char *)bufhdr->pBuffer;
 
     msize = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
-    if (metadatamode == 1) {
-        pvirt= (unsigned char *)mmap(NULL, msize, PROT_READ|PROT_WRITE,MAP_SHARED, fd, plane.data_offset);
-        if(pvirt) {
+	  if (metadatamode) {
+		  pvirt= (unsigned char *)mmap(NULL, msize, PROT_READ|PROT_WRITE,
+									   MAP_SHARED, fd, plane.data_offset);
+		  if (!pvirt) {
+			  DEBUG_PRINT_ERROR("Cannot map input buffers\n");
+			  goto dump_complete;
+		  }
             ptemp = pvirt;
             for (i = 0; i < m_sVenc_cfg.input_height; i++) {
                 fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
@@ -1909,21 +1928,21 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                 ptemp += stride;
             }
             munmap(pvirt, msize);
-        }
     } else {
         for (i = 0; i < m_sVenc_cfg.input_height; i++) {
-            fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-            temp += stride;
+			  fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  ptemp += stride;
         }
 
-        temp = (char *)bufhdr->pBuffer + (stride * scanlines);
+		  ptemp = (char *)bufhdr->pBuffer + (stride * scanlines);
 
         for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
-	    fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
-	    temp += stride;
+			  fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+			  ptemp += stride;
         }
     }
 #endif
+dump_complete:
     return true;
 }
 bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,unsigned fd)
@@ -2551,7 +2570,7 @@ bool venc_dev::venc_set_entropy_config(OMX_BOOL enable, OMX_U32 i_cabac_level)
         }
 
         DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d\n", control.id, control.value);
-        entropy.longentropysel=control.value;
+        entropy.cabacmodel=control.value;
     } else if (!enable) {
         control.value =  V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CAVLC;
         control.id = V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE;
@@ -2679,6 +2698,7 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
     struct venc_headerextension hec_cfg;
     struct venc_multiclicecfg multislice_cfg;
     int rc;
+	OMX_U32 resynchMarkerSpacingBytes = 0;
     struct v4l2_control control;
 
     memset(&control, 0, sizeof(control));
@@ -2704,16 +2724,20 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
         return false;
     }
 
+    if (error_resilience->nResynchMarkerSpacing) {
+        resynchMarkerSpacingBytes = error_resilience->nResynchMarkerSpacing;
+        resynchMarkerSpacingBytes = ((resynchMarkerSpacingBytes + 7) & ~7) >> 3;
+    }
     if (( m_sVenc_cfg.codectype != V4L2_PIX_FMT_H263) &&
             (error_resilience->nResynchMarkerSpacing)) {
         multislice_cfg.mslice_mode = VEN_MSLICE_CNT_BYTE;
-        multislice_cfg.mslice_size = error_resilience->nResynchMarkerSpacing;
+        multislice_cfg.mslice_size = resynchMarkerSpacingBytes;
         control.id = V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MODE;
         control.value = V4L2_MPEG_VIDEO_MULTI_SICE_MODE_MAX_BYTES;
     } else if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_H263 &&
             error_resilience->bEnableDataPartitioning) {
         multislice_cfg.mslice_mode = VEN_MSLICE_GOB;
-        multislice_cfg.mslice_size = error_resilience->nResynchMarkerSpacing;
+        multislice_cfg.mslice_size = resynchMarkerSpacingBytes;
         control.id = V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MODE;
         control.value = V4L2_MPEG_VIDEO_MULTI_SLICE_GOB;
     } else {
@@ -2737,7 +2761,7 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
     multislice.mslice_mode=control.value;
 
     control.id = V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MAX_BYTES;
-    control.value = error_resilience->nResynchMarkerSpacing;
+    control.value = resynchMarkerSpacingBytes;
     printf("Calling IOCTL set control for id=%x, val=%d\n", control.id, control.value);
     rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
 
@@ -3384,13 +3408,20 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
 
     return true;
 }
-#ifdef _METAMODE_
+
 bool venc_dev::venc_set_meta_mode(bool mode)
 {
+	if (!metadatamode) {
     metadatamode = 1;
+	}
     return true;
 }
-#endif
+
+int venc_dev::venc_set_rgb_meta_mode(int mode)
+{
+	metadatamode = 2;
+	return true;
+}
 
 bool venc_dev::venc_is_video_session_supported(unsigned long width,
         unsigned long height)

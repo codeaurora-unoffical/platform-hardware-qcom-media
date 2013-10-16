@@ -27,6 +27,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
 
 #include "extra_data_handler.h"
+#include "vidc_debug.h"
 
 extra_data_handler::extra_data_handler()
 {
