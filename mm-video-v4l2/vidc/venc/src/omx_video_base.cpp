@@ -2937,11 +2937,7 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
             m_sInPortDef.bPopulated = OMX_FALSE;
 
             /*Free the Buffer Header*/
-            if (release_input_done()
-#ifdef _METAMODE_
-                    && !meta_mode_enable
-#endif
-               ) {
+            if (release_input_done() && !meta_mode_enable) {
                 input_use_buffer = false;
                 if (m_inp_mem_ptr) {
                     DEBUG_PRINT_LOW("Freeing m_inp_mem_ptr\n");
