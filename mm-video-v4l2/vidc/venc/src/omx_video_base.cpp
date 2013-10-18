@@ -2153,13 +2153,13 @@ OMX_ERRORTYPE  omx_video::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
 #endif
 
 #ifdef _METAMODE_
-  if (!strncmp(paramName, "OMX.google.android.index.storeMetaDataInBuffers",
-      sizeof("OMX.google.android.index.storeMetaDataInBuffers") - 1)) {
+  if (!strncmp(paramName, "OMX.QCOM.index.storeMetaDataInBuffers",
+      sizeof("OMX.QCOM.index.storeMetaDataInBuffers") - 1)) {
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamVideoEncodeMetaBufferMode;
         return OMX_ErrorNone;
   }
-  if (!strncmp(paramName, "OMX.google.android.index.prependSPSPPSToIDRFrames",
-      sizeof("OMX.google.android.index.storeMetaDataInBuffers") - 1))
+  if (!strncmp(paramName, "OMX.QCOM.index.prependSPSPPSToIDRFrames",
+      sizeof("OMX.QCOM.index.storeMetaDataInBuffers") - 1))
   {
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamSequenceHeaderWithIDR;
         return OMX_ErrorNone;
