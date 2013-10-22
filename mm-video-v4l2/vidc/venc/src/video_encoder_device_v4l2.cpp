@@ -39,6 +39,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #include <media/msm_media_info.h>
 #include <cutils/properties.h>
+#include <media/hardware/HardwareAPI.h>
 
 #ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
@@ -55,6 +56,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define H264_MP_START (H264_BP_START + 34)
 #define POLL_TIMEOUT 1000
 #define MAX_SUPPORTED_SLICES_PER_FRAME 28 /* Max supported slices with 32 output buffers */
+
+#define SZ_4K 0x1000
+#define SZ_1M 0x100000
 
 /* MPEG4 profile and level table*/
 static const unsigned int mpeg4_profile_level_table[][5]= {
@@ -473,12 +477,12 @@ OMX_ERRORTYPE venc_dev::allocate_extradata()
         if (extradata_info.ion.ion_alloc_data.handle) {
             munmap((void *)extradata_info.uaddr, extradata_info.size);
             close(extradata_info.ion.fd_ion_data.fd);
-            free_ion_memory(&extradata_info.ion);
+            venc_handle->free_ion_memory(&extradata_info.ion);
         }
 
         extradata_info.size = (extradata_info.size + 4095) & (~4095);
 
-        extradata_info.ion.ion_device_fd = alloc_map_ion_memory(
+        extradata_info.ion.ion_device_fd = venc_handle->alloc_map_ion_memory(
                 extradata_info.size,
                 &extradata_info.ion.ion_alloc_data,
                 &extradata_info.ion.fd_ion_data, 0);
@@ -496,7 +500,7 @@ OMX_ERRORTYPE venc_dev::allocate_extradata()
         if (extradata_info.uaddr == MAP_FAILED) {
             DEBUG_PRINT_ERROR("Failed to map extradata memory\n");
             close(extradata_info.ion.fd_ion_data.fd);
-            free_ion_memory(&extradata_info.ion);
+            venc_handle->free_ion_memory(&extradata_info.ion);
             return OMX_ErrorInsufficientResources;
         }
     }
@@ -513,7 +517,7 @@ void venc_dev::free_extradata()
     if (extradata_info.uaddr) {
         munmap((void *)extradata_info.uaddr, extradata_info.size);
         close(extradata_info.ion.fd_ion_data.fd);
-        free_ion_memory(&extradata_info.ion);
+        venc_handle->free_ion_memory(&extradata_info.ion);
     }
 
     memset(&extradata_info, 0, sizeof(extradata_info));
@@ -642,7 +646,13 @@ bool venc_dev::venc_open(OMX_U32 codec)
         fdesc.index++;
     }
 
-    m_sOutput_buff_property.alignment=m_sInput_buff_property.alignment=4096;
+    if (venc_handle->is_secure_session()) {
+        m_sOutput_buff_property.alignment = SZ_1M;
+        m_sInput_buff_property.alignment  = SZ_1M;
+    } else {
+        m_sOutput_buff_property.alignment = SZ_4K;
+        m_sInput_buff_property.alignment  = SZ_4K;
+    }
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
     fmt.fmt.pix_mp.width = m_sVenc_cfg.input_width;
@@ -679,6 +689,16 @@ bool venc_dev::venc_open(OMX_U32 codec)
     ret = ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq);
     m_sOutput_buff_property.mincount = m_sOutput_buff_property.actualcount = bufreq.count;
 
+    if(venc_handle->is_secure_session()) {
+        control.id = V4L2_CID_MPEG_VIDC_VIDEO_SECURE;
+        control.value = 1;
+        DEBUG_PRINT_HIGH("ioctl: open secure device\n");
+        ret=ioctl(m_nDriver_fd, VIDIOC_S_CTRL,&control);
+        if (ret) {
+            DEBUG_PRINT_ERROR("ioctl: open secure dev fail, rc %d\n", ret);
+            return false;
+        }
+    }
 
     resume_in_stopped = 0;
     metadatamode = 0;
@@ -1314,6 +1334,32 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
                 }
 
                 extradata = true;
+                break;
+            }
+        case OMX_QcomIndexParamSequenceHeaderWithIDR:
+            {
+                PrependSPSPPSToIDRFramesParams * pParam =
+                    (PrependSPSPPSToIDRFramesParams *)paramData;
+
+                DEBUG_PRINT_LOW("set inband sps/pps: %d\n", pParam->bEnable);
+                if(venc_set_inband_video_header(pParam->bEnable) == false) {
+                    DEBUG_PRINT_ERROR("ERROR: set inband sps/pps failed");
+                    return OMX_ErrorUnsupportedSetting;
+                }
+
+                break;
+            }
+        case OMX_QcomIndexParamH264AUDelimiter:
+            {
+                OMX_QCOM_VIDEO_CONFIG_H264_AUD * pParam =
+                    (OMX_QCOM_VIDEO_CONFIG_H264_AUD *)paramData;
+
+                DEBUG_PRINT_LOW("set AU delimiters: %d\n", pParam->bEnable);
+                if(venc_set_au_delimiter(pParam->bEnable) == false) {
+                    DEBUG_PRINT_ERROR("ERROR: set H264 AU delimiter failed");
+                    return OMX_ErrorUnsupportedSetting;
+                }
+
                 break;
             }
         case OMX_IndexParamVideoSliceFMO:
@@ -2028,6 +2074,44 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
     }
 
     ftb++;
+    return true;
+}
+
+bool venc_dev::venc_set_inband_video_header(OMX_BOOL enable)
+{
+    struct v4l2_control control;
+
+    control.id = V4L2_CID_MPEG_VIDEO_HEADER_MODE;
+    if(enable) {
+        control.value = V4L2_MPEG_VIDEO_HEADER_MODE_JOINED_WITH_I_FRAME;
+    } else {
+        control.value = V4L2_MPEG_VIDEO_HEADER_MODE_SEPARATE;
+    }
+
+    DEBUG_PRINT_HIGH("Set inband sps/pps: %d", enable);
+    if(ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control) < 0) {
+        DEBUG_PRINT_ERROR("Request for inband sps/pps failed");
+        return false;
+    }
+    return true;
+}
+
+bool venc_dev::venc_set_au_delimiter(OMX_BOOL enable)
+{
+    struct v4l2_control control;
+
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_H264_AU_DELIMITER;
+    if(enable) {
+        control.value = V4L2_MPEG_VIDC_VIDEO_H264_AU_DELIMITER_ENABLED;
+    } else {
+        control.value = V4L2_MPEG_VIDC_VIDEO_H264_AU_DELIMITER_DISABLED;
+    }
+
+    DEBUG_PRINT_HIGH("Set au delimiter: %d", enable);
+    if(ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control) < 0) {
+        DEBUG_PRINT_ERROR("Request to set AU delimiter failed");
+        return false;
+    }
     return true;
 }
 
