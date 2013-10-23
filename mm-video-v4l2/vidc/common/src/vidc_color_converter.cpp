@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -26,8 +26,15 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
-#include <utils/Log.h>
+#define LOG_TAG "OMX_C2D"
+
+#ifdef _ANDROID_
 #include <gralloc_priv.h>
+#else
+#include <stdio.h>
+#include <omx_meta_mode.h>
+#endif
+
 #include "vidc_color_converter.h"
 #include "vidc_debug.h"
 

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -26,14 +26,8 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
 #include "mp4_utils.h"
-//#include "omx_vdec.h"
 #include "vidc_debug.h"
 # include <stdio.h>
-#ifdef _ANDROID_
-extern "C" {
-#include<utils/Log.h>
-}
-#endif//_ANDROID_
 
 MP4_Utils::MP4_Utils()
 {

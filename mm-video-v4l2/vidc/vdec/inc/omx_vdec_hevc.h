@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
@@ -50,7 +50,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static ptrdiff_t x;
 
-#ifdef _ANDROID_
 #ifdef MAX_RES_720P
 #define LOG_TAG "OMX-VDEC-720P"
 #elif MAX_RES_1080P
@@ -62,33 +61,20 @@ static ptrdiff_t x;
 #ifdef USE_ION
 #include <linux/msm_ion.h>
 #endif
+#ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
 #include <ui/ANativeObjectBase.h>
-extern "C" {
-#include <utils/Log.h>
-}
-#include <linux/videodev2.h>
+#include <media/hardware/HardwareAPI.h>
+#include <gralloc_priv.h>
+using namespace android;
+#endif
 #include <poll.h>
+#include <linux/videodev2.h>
 #include "hevc_utils.h"
 #define TIMEOUT 5000
-
-#endif // _ANDROID_
-
-
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
-#include <media/hardware/HardwareAPI.h>
-#endif
-
-#include <unistd.h>
-
-#if defined (_ANDROID_ICS_)
-#include <gralloc_priv.h>
-#endif
-
-#include <pthread.h>
-#ifndef PC_DEBUG
 #include <semaphore.h>
-#endif
+#include <pthread.h>
+#include <unistd.h>
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "qc_omx_component.h"
@@ -172,9 +158,7 @@ class VideoHeap : public MemoryHeapBase
 
 #define DESC_BUFFER_SIZE (8192 * 16)
 
-#ifdef _ANDROID_
 #define MAX_NUM_INPUT_OUTPUT_BUFFERS 32
-#endif
 
 #define OMX_FRAMEINFO_EXTRADATA 0x00010000
 #define OMX_INTERLACE_EXTRADATA 0x00020000
@@ -491,7 +475,6 @@ class omx_vdec: public qc_omx_component
 
         };
 
-#ifdef _ANDROID_
         struct ts_entry {
             OMX_TICKS timestamp;
             bool valid;
@@ -507,7 +490,6 @@ class omx_vdec: public qc_omx_component
             bool pop_min_ts(OMX_TICKS &ts);
             bool reset_ts_list();
         };
-#endif
 
         struct desc_buffer_hdr {
             OMX_U8 *buf_addr;
@@ -672,11 +654,7 @@ class omx_vdec: public qc_omx_component
         }
 #ifdef _ANDROID_
         OMX_ERRORTYPE createDivxDrmContext();
-#endif //_ANDROID_
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
         OMX_ERRORTYPE use_android_native_buffer(OMX_IN OMX_HANDLETYPE hComp, OMX_PTR data);
-#endif
-#if defined (_ANDROID_ICS_)
         struct nativebuffer {
             native_handle_t *nativehandle;
             private_handle_t *privatehandle;
@@ -715,10 +693,8 @@ class omx_vdec: public qc_omx_component
         OMX_BUFFERHEADERTYPE  *m_out_mem_ptr;
         // number of input bitstream error frame count
         unsigned int m_inp_err_count;
-#ifdef _ANDROID_
         // Timestamp list
         ts_arr_list           m_timestamp_list;
-#endif
 
         bool input_flush_progress;
         bool output_flush_progress;
@@ -802,17 +778,17 @@ class omx_vdec: public qc_omx_component
         OMX_NATIVE_WINDOWTYPE m_display_id;
         h264_stream_parser *h264_parser;
         OMX_U32 client_extradata;
-#ifdef _ANDROID_
         bool m_debug_timestamp;
         bool perf_flag;
         OMX_U32 proc_frms, latency;
         perf_metrics fps_metrics;
         perf_metrics dec_time;
+#ifdef _ANDROID_
         bool m_enable_android_native_buffers;
         bool m_use_android_native_buffers;
+#endif
         bool m_debug_extradata;
         bool m_debug_concealedmb;
-#endif
 #ifdef MAX_RES_1080P
         MP4_Utils mp4_headerparser;
 #endif

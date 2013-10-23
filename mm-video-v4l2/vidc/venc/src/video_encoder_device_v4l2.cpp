@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -38,12 +38,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/msm_ion.h>
 #endif
 #include <media/msm_media_info.h>
-#include <cutils/properties.h>
-#include <media/hardware/HardwareAPI.h>
 
 #ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
 #include <gralloc_priv.h>
+#include <cutils/properties.h>
 #endif
 
 #define EXTRADATA_IDX(__num_planes) (__num_planes  - 1)
@@ -212,6 +211,23 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&hec, 0, sizeof(hec));
     memset(&voptimecfg, 0, sizeof(voptimecfg));
     memset(&capability, 0, sizeof(capability));
+    memset(&m_debug,0,sizeof(m_debug));
+#ifdef _ANDROID_
+    char property_value[PROPERTY_VALUE_MAX] = {0};
+    property_value[0] = '\0';
+    property_get("vidc.enc.log.in", property_value, "0");
+    m_debug.in_buffer_log = atoi(property_value);
+
+    property_value[0] = '\0';
+    property_get("vidc.enc.log.out", property_value, "0");
+    m_debug.out_buffer_log = atoi(property_value);
+    snprintf(m_debug.log_loc, PROPERTY_VALUE_MAX,
+             "%s", BUFFER_LOG_LOC);
+#else
+    // enable below if input/output buffer logging is needed
+    // m_debug.in_buffer_log
+   // m_debug.out_buffer_log
+#endif
 }
 
 venc_dev::~venc_dev()
@@ -529,15 +545,18 @@ bool venc_dev::venc_open(OMX_U32 codec)
     int r;
     unsigned int alignment = 0,buffer_size = 0, temp =0;
     struct v4l2_control control;
-    OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_enc";
+    OMX_STRING device_name;
+#ifdef _ANDROID_
+     device_name = (OMX_STRING)"/dev/video/venus_enc";
 
     char platform_name[PROPERTY_VALUE_MAX];
     property_get("ro.board.platform", platform_name, "0");
 
-    if (!strncmp(platform_name, "msm8610", 7)) {
-        device_name = (OMX_STRING)"/dev/video/q6_enc";
-    }
-
+    if (!strncmp(platform_name, "msm8610", 7))
+      device_name = (OMX_STRING)"/dev/video/q6_enc";
+#else
+    device_name = (OMX_STRING)"/dev/video33";
+#endif
     m_nDriver_fd = open (device_name, O_RDWR);
 
     if (m_nDriver_fd == 0) {
@@ -1333,6 +1352,7 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
                 extradata = true;
                 break;
             }
+#ifdef _ANDROID_
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
                 PrependSPSPPSToIDRFramesParams * pParam =
@@ -1346,6 +1366,7 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
 
                 break;
             }
+#endif
         case OMX_QcomIndexParamH264AUDelimiter:
             {
                 OMX_QCOM_VIDEO_CONFIG_H264_AUD * pParam =
@@ -1939,6 +1960,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     DEBUG_PRINT_LOW("venc_empty_buf: camera buf: fd = %d filled %d of %d",
                             fd, plane.bytesused, plane.length);
                 } else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
+#ifdef _ANDROID_
                     private_handle_t *handle = (private_handle_t *)meta_buf->meta_handle;
                     fd = handle->fd;
                     plane.data_offset = 0;
@@ -1946,6 +1968,13 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     plane.bytesused = handle->size;
                     DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d filled %d of %d",
                             fd, plane.bytesused, plane.length);
+#else
+                    buffer_handle handle = (buffer_handle)meta_buf->meta_handle;
+                    fd = handle->data[0];
+                    plane.data_offset = handle->data[1];
+                    plane.length = handle->data[2];
+                    plane.bytesused = handle->data[2];
+#endif
                 }
             } else {
                 plane.m.userptr = (unsigned long) bufhdr->pBuffer;
@@ -2888,7 +2917,7 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
 
     DEBUG_PRINT_LOW("%s(): mode = %lu, size = %lu", __func__,
             multislice_cfg.mslice_mode, multislice_cfg.mslice_size);
-    DEBUG_PRINT_ERROR("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
+    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
     rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
 
     if (rc) {
@@ -2896,12 +2925,13 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
         return false;
     }
 
-    DEBUG_PRINT_ERROR("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
+    DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
     multislice.mslice_mode=control.value;
 
     control.id = V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MAX_BYTES;
     control.value = resynchMarkerSpacingBytes;
-    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%x, val=%d\n", control.id, control.value);
+    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
+
     rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
 
     if (rc) {
@@ -2909,7 +2939,7 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
         return false;
     }
 
-    DEBUG_PRINT_ERROR("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
+    DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
     multislice.mslice_mode = multislice_cfg.mslice_mode;
     multislice.mslice_size = multislice_cfg.mslice_size;
     return status;
@@ -3071,7 +3101,7 @@ bool venc_dev::venc_set_intra_vop_refresh(OMX_BOOL intra_vop_refresh)
         int rc;
         control.id = V4L2_CID_MPEG_VIDC_VIDEO_REQUEST_IFRAME;
         control.value = 1;
-       DEBUG_PRINT_ERROR("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
+       DEBUG_PRINT_LOW("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
         rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
 
         if (rc) {
@@ -3079,7 +3109,7 @@ bool venc_dev::venc_set_intra_vop_refresh(OMX_BOOL intra_vop_refresh)
             return false;
         }
 
-       DEBUG_PRINT_ERROR("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
+       DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
     } else {
         DEBUG_PRINT_ERROR("ERROR: VOP Refresh is False, no effect");
     }
@@ -3629,13 +3659,13 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
 
     return true;
 }
-#ifdef _ANDROID_ICS_
+
 bool venc_dev::venc_set_meta_mode(bool mode)
 {
     metadatamode = 1;
     return true;
 }
-#endif
+
 
 bool venc_dev::venc_is_video_session_supported(unsigned long width,
         unsigned long height)

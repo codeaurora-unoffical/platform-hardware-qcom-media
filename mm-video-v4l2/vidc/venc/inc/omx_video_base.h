@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -46,12 +46,14 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/mman.h>
+
 #ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
-#ifdef _ANDROID_ICS_
 #include "QComOMXMetadata.h"
+#else
+#include "omx_meta_mode.h"
 #endif
-#endif // _ANDROID_
+
 #include <pthread.h>
 #include <semaphore.h>
 #include <linux/msm_vidc_enc.h>
@@ -135,16 +137,14 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
         & BITMASK_FLAG(mIndex))
 #define BITMASK_ABSENT(mArray,mIndex) (((mArray)[BITMASK_OFFSET(mIndex)] \
             & BITMASK_FLAG(mIndex)) == 0x0)
-#ifdef _ANDROID_ICS_
 #define MAX_NUM_INPUT_BUFFERS 32
-#endif
+
 void* message_thread(void *);
 
 // OMX video class
 class omx_video: public qc_omx_component
 {
     protected:
-#ifdef _ANDROID_ICS_
         bool meta_mode_enable;
         bool c2d_opened;
         encoder_media_buffer_type meta_buffers[MAX_NUM_INPUT_BUFFERS];
@@ -180,7 +180,7 @@ class omx_video: public qc_omx_component
                 destroyC2DColorConverter_t *mConvertClose;
         };
         omx_c2d_conv c2d_conv;
-#endif
+
     public:
         omx_video();  // constructor
         virtual ~omx_video();  // destructor
@@ -225,9 +225,7 @@ class omx_video: public qc_omx_component
 #endif
         virtual bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height) = 0;
         virtual bool dev_get_capability_ltrcount(OMX_U32 *, OMX_U32 *, OMX_U32 *) = 0;
-#ifdef _ANDROID_ICS_
         void omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer);
-#endif
         virtual bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height) = 0;
         OMX_ERRORTYPE component_role_enum(
@@ -346,8 +344,6 @@ class omx_video: public qc_omx_component
         struct venc_ion *m_pOutput_ion;
 #endif
 
-
-
     public:
         // Bit Positions
         enum flags_bit_positions {
@@ -442,12 +438,10 @@ class omx_video: public qc_omx_component
                 OMX_U32              port,
                 OMX_PTR              appData,
                 OMX_U32              bytes);
-#ifdef _ANDROID_ICS_
         OMX_ERRORTYPE allocate_input_meta_buffer(OMX_HANDLETYPE       hComp,
                 OMX_BUFFERHEADERTYPE **bufferHdr,
                 OMX_PTR              appData,
                 OMX_U32              bytes);
-#endif
         OMX_ERRORTYPE allocate_output_buffer(OMX_HANDLETYPE       hComp,
                 OMX_BUFFERHEADERTYPE **bufferHdr,
                 OMX_U32 port,OMX_PTR appData,

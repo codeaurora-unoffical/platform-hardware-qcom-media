@@ -35,6 +35,7 @@ endif
 
 AM_CPPFLAGS += -I./inc
 AM_CPPFLAGS += -I../common/inc
+AM_CPPFLAGS += -I../../../libc2dcolorconvert
 AM_CPPFLAGS += -I../../../mm-core/inc
 AM_CPPFLAGS += -I../../../mm-core/src/common
 
@@ -52,11 +53,12 @@ c_sources += src/omx_vdec_msm8974.cpp
 endif
 
 c_sources += ../common/src/extra_data_handler.cpp
-
+c_sources += ../common/src/vidc_color_converter.cpp
 
 lib_LTLIBRARIES = libOmxVdec.la
 libOmxVdec_la_SOURCES = $(c_sources)
 libOmxVdec_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
+libOmxVdec_la_CFLAGS += ../libc2d2colorconvert/libc2dcolorconvert.la
 libOmxVdec_la_LDFLAGS = -shared -version-info $(OMXVIDEO_LIBRARY_VERSION)
 
 bin_PROGRAMS = mm-vdec-omx-test
