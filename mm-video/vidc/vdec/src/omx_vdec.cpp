@@ -92,7 +92,7 @@ char ouputextradatafilename [] = "/data/extradata";
 #define DEFAULT_FPS 30
 #define MAX_NUM_SPS 32
 #define MAX_NUM_PPS 256
-#define MAX_INPUT_ERROR (MAX_NUM_SPS + MAX_NUM_PPS)
+#define MAX_INPUT_ERROR DEFAULT_FPS
 #define MAX_SUPPORTED_FPS 120
 
 #define VC1_SP_MP_START_CODE        0xC5000000
