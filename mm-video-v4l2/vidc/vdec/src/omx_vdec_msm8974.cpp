@@ -1403,7 +1403,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
     bool codec_ambiguous = false;
 #ifdef _ANDROID_
     OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_dec";
-    char platform_name[64];
+    char platform_name[PROPERTY_VALUE_MAX];
     property_get("ro.board.platform", platform_name, "0");
     if (!strncmp(platform_name, "msm8610", 7)) {
 	device_name = (OMX_STRING)"/dev/video/q6_dec";
@@ -5407,7 +5407,7 @@ if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
     int rc;
     unsigned long  print_count;
     if (temp_buffer->buffer_len == 0 || (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
-        buf.flags = V4L2_BUF_FLAG_EOS;
+        buf.flags = V4L2_QCOM_BUF_FLAG_EOS;
         DEBUG_PRINT_HIGH("\n  INPUT EOS reached \n") ;
     }
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
@@ -6427,7 +6427,7 @@ int omx_vdec::async_message_process (void *context, void* message)
                     omxhdr->nTimeStamp = vdec_msg->msgdata.output_frame.time_stamp;
                     omxhdr->nFlags = 0;
 
-                    if (v4l2_buf_ptr->flags & V4L2_BUF_FLAG_EOS) {
+                    if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_EOS) {
                         omxhdr->nFlags |= OMX_BUFFERFLAG_EOS;
                         //rc = -1;
                     }
@@ -6447,7 +6447,7 @@ int omx_vdec::async_message_process (void *context, void* message)
                     }
                     if (omxhdr && (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_DROP_FRAME) &&
                             !(v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_DECODEONLY) &&
-                            !(v4l2_buf_ptr->flags & V4L2_BUF_FLAG_EOS)) {
+                            !(v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_EOS)) {
                         omx->time_stamp_dts.remove_time_stamp(
                                 omxhdr->nTimeStamp,
                                 (omx->drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
@@ -6894,7 +6894,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                 }
             } else if(h264_scratch.nFilledLen) {
                 look_ahead_nal = true;
-                DEBUG_PRINT_LOW("\n Frame Found start Decoding Size =%lu TimeStamp = %llx",
+                DEBUG_PRINT_LOW("\n Frame Found start Decoding Size =%lu TimeStamp = %llu",
                         pdest_frame->nFilledLen,pdest_frame->nTimeStamp);
                 DEBUG_PRINT_LOW("\n Found a frame size = %lu number = %d",
                         pdest_frame->nFilledLen,frame_count++);
@@ -6990,7 +6990,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                      pdest_frame->nFlags = h264_scratch.nFlags | psource_frame->nFlags;
                 }
 
-                DEBUG_PRINT_LOW("\n pdest_frame->nFilledLen =%lu TimeStamp = %llx",
+                DEBUG_PRINT_LOW("\n pdest_frame->nFilledLen =%lu TimeStamp = %llu",
                         pdest_frame->nFilledLen,pdest_frame->nTimeStamp);
                 DEBUG_PRINT_LOW("\n Push AU frame number %d to driver", frame_count++);
 #ifndef PROCESS_EXTRADATA_IN_OUTPUT_PORT
@@ -8057,7 +8057,7 @@ void omx_vdec::print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra)
                 " Pan Scan Total Frame Num: %lu \n"
                 "   Concealed Macro Blocks: %lu \n"
                 "               frame rate: %lu \n"
-                "               Time Stamp: %lu \n"
+                "               Time Stamp: %llu \n"
                 "           Aspect Ratio X: %lu \n"
                 "           Aspect Ratio Y: %lu \n",
                 fminfo->ePicType,
