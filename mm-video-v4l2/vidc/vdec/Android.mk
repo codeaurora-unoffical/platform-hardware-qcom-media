@@ -141,7 +141,7 @@ LOCAL_SRC_FILES         += src/ts_parser.cpp
 LOCAL_SRC_FILES         += src/mp4_utils.cpp
 LOCAL_SRC_FILES         += src/hevc_utils.cpp
 ifeq ($(call is-board-platform-in-list,msm8974 msm8610 msm8226 apq8084 mpq8092 msm_bronze),true)
-LOCAL_SRC_FILES         += src/omx_vdec_msm8974.cpp
+LOCAL_SRC_FILES         += src/omx_vdec_v4l2.cpp
 else
 LOCAL_SHARED_LIBRARIES  += libhardware
 libmm-vdec-inc          += hardware/qcom/display/libhwcomposer
