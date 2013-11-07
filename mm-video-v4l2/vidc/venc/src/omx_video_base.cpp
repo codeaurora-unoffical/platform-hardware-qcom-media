@@ -1431,7 +1431,11 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamPortDefinition\n");
                 if (portDefn->nPortIndex == (OMX_U32) PORT_INDEX_IN) {
-                    DEBUG_PRINT_LOW("m_sInPortDef: size = %d, min cnt = %d, actual cnt = %d",
+                    dev_get_buf_req(&m_sInPortDef.nBufferCountMin,
+                        &m_sInPortDef.nBufferCountActual,
+                        &m_sInPortDef.nBufferSize,
+                        m_sInPortDef.nPortIndex);
+                    DEBUG_PRINT_LOW("m_sInPortDef: size = %lu, min cnt = %lu, actual cnt = %lu",
                             m_sInPortDef.nBufferSize, m_sInPortDef.nBufferCountMin,
                             m_sInPortDef.nBufferCountActual);
                     memcpy(portDefn, &m_sInPortDef, sizeof(m_sInPortDef));
@@ -1865,6 +1869,14 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                 memcpy(pParam, &m_sConfigAVCIDRPeriod, sizeof(m_sConfigAVCIDRPeriod));
                 break;
             }
+        case OMX_IndexConfigCommonDeinterlace:
+            {
+                OMX_VIDEO_CONFIG_DEINTERLACE *pParam =
+                    reinterpret_cast<OMX_VIDEO_CONFIG_DEINTERLACE*>(configData);
+                DEBUG_PRINT_LOW("get_config: OMX_IndexConfigCommonDeinterlace");
+                memcpy(pParam, &m_sConfigDeinterlace, sizeof(m_sConfigDeinterlace));
+                break;
+            }
         default:
             DEBUG_PRINT_ERROR("ERROR: unsupported index %d", (int) configIndex);
             return OMX_ErrorUnsupportedIndex;
@@ -1905,7 +1917,7 @@ OMX_ERRORTYPE  omx_video::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
 #ifdef _ANDROID_ICS_
     if (!strncmp(paramName, "OMX.google.android.index.storeMetaDataInBuffers",
             sizeof("OMX.google.android.index.storeMetaDataInBuffers") - 1)) {
-        *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamVideoEncodeMetaBufferMode;
+        *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamVideoMetaBufferMode;
         return OMX_ErrorNone;
     }
 #endif
