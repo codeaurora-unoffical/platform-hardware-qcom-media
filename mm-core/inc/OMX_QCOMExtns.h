@@ -365,7 +365,7 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     OMX_QcomIndexParamEnableTimeStampReorder = 0x7F00001B,
 
     /*"OMX.google.android.index.storeMetaDataInBuffers"*/
-    OMX_QcomIndexParamVideoEncodeMetaBufferMode = 0x7F00001C,
+    OMX_QcomIndexParamVideoMetaBufferMode = 0x7F00001C,
 
     /*"OMX.google.android.index.useAndroidNativeBuffer2"*/
     OMX_GoogleAndroidIndexUseAndroidNativeBuffer2 = 0x7F00001D,
@@ -403,10 +403,12 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     /*"OMX.QCOM.index.config.video.LTRMark"*/
     QOMX_IndexConfigVideoLTRMark = 0x7F000029,
 
-    /*"OMX.google.android.index.prependSPSPPSToIDRFrames"*/
+    /* OMX.google.android.index.prependSPSPPSToIDRFrames */
     OMX_QcomIndexParamSequenceHeaderWithIDR = 0x7F00002A,
 
     OMX_QcomIndexParamH264AUDelimiter = 0x7F00002B,
+
+    OMX_QcomIndexParamVideoDownScalar = 0x7F00002C,
 };
 
 /**
@@ -719,6 +721,18 @@ typedef struct OMX_QCOM_VIDEO_CONFIG_BOOL
    OMX_VERSIONTYPE nVersion;/** OMX specification version information */
    OMX_BOOL bEnable;        /** Enable/disable the setting */
 } OMX_QCOM_VIDEO_CONFIG_BOOL;
+
+/**
+ * This structure describes the parameters for the
+ * OMX_QcomIndexParamH264AUDelimiter extension.  It enables/disables
+ * the AU delimiters in the H264 stream, which is used by WFD.
+ */
+typedef struct OMX_QCOM_VIDEO_CONFIG_H264_AUD
+{
+   OMX_U32 nSize;           /** Size of the structure in bytes */
+   OMX_VERSIONTYPE nVersion;/** OMX specification version information */
+   OMX_BOOL bEnable;        /** Enable/disable the setting */
+} OMX_QCOM_VIDEO_CONFIG_H264_AUD;
 
 typedef struct OMX_VENDOR_EXTRADATATYPE  {
     OMX_U32 nPortIndex;
@@ -1072,6 +1086,14 @@ typedef struct QOMX_INDEXTIMESTAMPREORDER {
     OMX_U32 nPortIndex;
     OMX_BOOL bEnable;
 } QOMX_INDEXTIMESTAMPREORDER;
+
+typedef struct QOMX_INDEXDOWNSCALAR {
+        OMX_U32 nSize;
+        OMX_VERSIONTYPE nVersion;
+        OMX_U32 nPortIndex;
+        OMX_BOOL bEnable;
+} QOMX_INDEXDOWNSCALAR;
+
 
 #define OMX_QCOM_INDEX_PARAM_VIDEO_SYNCFRAMEDECODINGMODE "OMX.QCOM.index.param.video.SyncFrameDecodingMode"
 #define OMX_QCOM_INDEX_PARAM_INDEXEXTRADATA "OMX.QCOM.index.param.IndexExtraData"

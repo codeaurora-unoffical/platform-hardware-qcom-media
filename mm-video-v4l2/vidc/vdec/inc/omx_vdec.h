@@ -72,7 +72,10 @@ extern "C" {
 #include <utils/Log.h>
 }
 #include <poll.h>
+#define TIMEOUT 5000
+#endif // _ANDROID_
 
+#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
 #include <media/hardware/HardwareAPI.h>
 #include <gralloc_priv.h>
 #include <cutils/properties.h>
@@ -266,6 +269,15 @@ struct debug_cap {
     FILE *outfile;
 };
 
+#ifdef META_DATA_MODE_SUPPORTED
+struct dynamic_buf_list {
+    OMX_U32 fd;
+    OMX_U32 dup_fd;
+    OMX_U32 offset;
+    OMX_U32 ref_count;
+};
+#endif
+
 // OMX video decoder class
 class omx_vdec: public qc_omx_component
 {
@@ -403,6 +415,10 @@ class omx_vdec: public qc_omx_component
         pthread_t msg_thread_id;
         pthread_t async_thread_id;
         bool is_component_secure();
+#ifdef META_DATA_MODE_SUPPORTED
+        void buf_ref_add(OMX_U32 fd, OMX_U32 offset);
+        void buf_ref_remove(OMX_U32 fd, OMX_U32 offset);
+#endif
 
     private:
         // Bit Positions
@@ -871,6 +887,7 @@ class omx_vdec: public qc_omx_component
         bool streaming[MAX_PORT];
         OMX_CONFIG_RECTTYPE rectangle;
         int prev_n_filled_len;
+        bool is_down_scalar_enabled;
 #endif
         bool m_power_hinted;
         OMX_ERRORTYPE power_module_register();
@@ -880,6 +897,12 @@ class omx_vdec: public qc_omx_component
 
         OMX_VIDEO_PARAM_PROFILELEVELTYPE m_profile_lvl;
         OMX_U32 m_profile;
+
+#ifdef META_DATA_MODE_SUPPORTED
+        //variables to handle dynamic buffer mode
+        bool dynamic_buf_mode;
+        struct dynamic_buf_list *out_dynamic_list;
+#endif
 
         unsigned int m_fill_output_msg;
         bool client_set_fps;
