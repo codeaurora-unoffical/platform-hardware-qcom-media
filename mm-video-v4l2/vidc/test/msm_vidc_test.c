@@ -448,6 +448,10 @@ int get_extradata_value(const char * param_name)
 		val = V4L2_MPEG_VIDC_EXTRADATA_MPEG2_SEQDISP;
 	} else if ((v4l2_name = "STREAM_USERDATA") && !strncmp(param_name, v4l2_name, strlen(v4l2_name))) {
 		val = V4L2_MPEG_VIDC_EXTRADATA_STREAM_USERDATA;
+	} else if ((v4l2_name = "FRAME_QP") && !strncmp(param_name, v4l2_name, strlen(v4l2_name))) {
+		val = V4L2_MPEG_VIDC_EXTRADATA_FRAME_QP;
+	} else if ((v4l2_name = "FRAME_BITS_INFO") && !strncmp(param_name, v4l2_name, strlen(v4l2_name))) {
+		val = V4L2_MPEG_VIDC_EXTRADATA_FRAME_BITS_INFO;
 	} else {
 		E("Not found %s \n", param_name);
 		val = -1;
@@ -638,6 +642,26 @@ int handle_extradata_v4l2(struct v4l2_buffer v4l2_buf)
 					}
 					break;
 				}
+				case MSM_VIDC_EXTRADATA_FRAME_QP:
+				{
+					struct msm_vidc_frame_qp_payoad *frame_qp_payload;
+					unsigned int frame_QP;
+					frame_qp_payload = (struct msm_vidc_frame_qp_payoad *)data->data;
+					frame_QP = frame_qp_payload->frame_qp;
+					I("Frame base QP = %d\n", frame_QP);
+					break;
+				}
+				case MSM_VIDC_EXTRADATA_FRAME_BITS_INFO:
+				{
+					struct msm_vidc_frame_bits_info_payload *info_payload;
+					unsigned int frame_bits, header_bits;
+					info_payload = (struct msm_vidc_frame_bits_info_payload*)data->data;
+					frame_bits = info_payload->frame_bits;
+					header_bits = info_payload->header_bits;
+					I("Frame bits info: header = %d, frame = %d\n",
+						header_bits, frame_bits);
+					break;
+				}
 				default:
 					rc--;
 					E("MSM_VIDC_EXTRADATA not recognized by application = 0x%x\n", data->type);
@@ -709,7 +733,6 @@ int alloc_map_ion_memory(__u32 buffer_size,
 		ion_buf_info.fd_ion_data = *fd_data;
 		free_ion_memory(&ion_buf_info);
 		fd_data->fd =-1;
-		close(fd);
 		fd = -ENOMEM;
 	}
 
@@ -1620,6 +1643,53 @@ int commands_controls(void)
 				control.id = V4L2_CID_MPEG_VIDC_VIDEO_STREAM_FORMAT;
 				rc = get_control(fd, &control);
 				V("STREAM_FORMAT Get Control Done\n");
+			} else if(!(strncmp(param_name,"CURRENT_PROFILE\r",pos2))) {
+				if (!strcmp(input_args->codec_type, "H.264")) {
+					control.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT H264 PROFILE Get Control Done" \
+						"control.value:%d\n", control.value);
+					control.id = V4L2_CID_MPEG_VIDEO_H264_LEVEL;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT H264 LEVEL Get Control Done" \
+						"control.value:%d\n", control.value);
+				} else if (!strcmp(input_args->codec_type, "MPEG4")) {
+					control.id = V4L2_CID_MPEG_VIDEO_MPEG4_PROFILE;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT MPEG4 PROFILE Get Control Done" \
+						"control.value:%d\n", control.value);
+					control.id = V4L2_CID_MPEG_VIDEO_MPEG4_LEVEL;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT MPEG4 LEVEL Get Control Done"
+						"control.value:%d\n", control.value);
+				} else if (!strcmp(input_args->codec_type, "MPEG2")) {
+					control.id = V4L2_CID_MPEG_VIDC_VIDEO_MPEG2_PROFILE;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT MPEG2 PROFILE Get Control Done" \
+						"control.value:%d\n", control.value);
+					control.id = V4L2_CID_MPEG_VIDC_VIDEO_MPEG2_LEVEL;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT MPEG2 LEVEL Get Control Done" \
+						"control.value:%d\n", control.value);
+				} else if (!strcmp(input_args->codec_type, "H.263")) {
+					control.id = V4L2_CID_MPEG_VIDC_VIDEO_H263_PROFILE;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT H263 PROFILE Get Control Done" \
+						"control.value:%d\n", control.value);
+					control.id = V4L2_CID_MPEG_VIDC_VIDEO_H263_LEVEL;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT H264 LEVEL Get Control Done" \
+						"control.value:%d\n", control.value);
+				} else if (!strcmp(input_args->codec_type, "VP8")) {
+					control.id = V4L2_CID_MPEG_VIDC_VIDEO_VP8_PROFILE_LEVEL;
+					rc = get_control(fd, &control);
+					V("PROFILE_CURRENT VP8 Get Control Done control.value:%d\n",
+						control.value);
+				} else {
+					E("ERROR .... Unsupported codec\n");
+					rc = -EINVAL;
+					goto close_fd;
+				}
 			} else {
 				E("ERROR .... Wrong Control \n");
 				rc = -EINVAL;
