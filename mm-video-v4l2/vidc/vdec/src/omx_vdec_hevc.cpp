@@ -536,38 +536,39 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 #ifdef _ANDROID_
 	m_heap_ptr(NULL),
 #endif
-	m_inp_bEnabled(OMX_TRUE),
-	m_out_bEnabled(OMX_TRUE),
-	m_in_alloc_cnt(0),
-	m_platform_list(NULL),
-	m_platform_entry(NULL),
-	m_pmem_info(NULL),
-	arbitrary_bytes (true),
-	psource_frame (NULL),
-	pdest_frame (NULL),
-	m_inp_heap_ptr (NULL),
-	m_phdr_pmem_ptr(NULL),
-	m_heap_inp_bm_count (0),
-	codec_type_parse ((codec_type)0),
-	first_frame_meta (true),
-	frame_count (0),
-	nal_count (0),
-	nal_length(0),
-	look_ahead_nal (false),
-	first_frame(0),
-	first_buffer(NULL),
-	first_frame_size (0),
-	m_device_file_ptr(NULL),
-	m_vc1_profile((vc1_profile_type)0),
-	h264_last_au_ts(LLONG_MAX),
-	h264_last_au_flags(0),
-	prev_ts(LLONG_MAX),
-	rst_prev_ts(true),
-	frm_int(0),
-	in_reconfig(false),
-	m_display_id(NULL),
-	h264_parser(NULL),
-	client_extradata(0),
+    m_inp_bEnabled(OMX_TRUE),
+    m_out_bEnabled(OMX_TRUE),
+    m_in_alloc_cnt(0),
+    m_platform_list(NULL),
+    m_platform_entry(NULL),
+    m_pmem_info(NULL),
+    arbitrary_bytes (true),
+    psource_frame (NULL),
+    pdest_frame (NULL),
+    m_inp_heap_ptr (NULL),
+    m_phdr_pmem_ptr(NULL),
+    m_heap_inp_bm_count (0),
+    codec_type_parse ((codec_type)0),
+    first_frame_meta (true),
+    frame_count (0),
+    nal_count (0),
+    nal_length(0),
+    look_ahead_nal (false),
+    first_frame(0),
+    first_buffer(NULL),
+    first_frame_size (0),
+    m_device_file_ptr(NULL),
+    m_vc1_profile((vc1_profile_type)0),
+    h264_last_au_ts(LLONG_MAX),
+    h264_last_au_flags(0),
+    prev_ts(LLONG_MAX),
+    rst_prev_ts(true),
+    frm_int(0),
+    in_reconfig(false),
+    m_display_id(NULL),
+    h264_parser(NULL),
+    client_extradata(0),
+    m_other_extradata(NULL),
 #ifdef _ANDROID_
 	m_enable_android_native_buffers(OMX_FALSE),
 	m_use_android_native_buffers(OMX_FALSE),
@@ -1691,7 +1692,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 
         m_state = OMX_StateLoaded;
 #ifdef DEFAULT_EXTRADATA
-        if (eRet == OMX_ErrorNone && !secure_mode)
+        if (eRet == OMX_ErrorNone)
             enable_extradata(DEFAULT_EXTRADATA, true, true);
 #endif
         eRet=get_buffer_req(&drv_ctx.ip_buf);
@@ -4080,6 +4081,13 @@ OMX_ERRORTYPE omx_vdec::allocate_extradata()
     memset(drv_ctx.extradata_info.uaddr, 0, drv_ctx.extradata_info.size);
   }
 #endif
+  if (!m_other_extradata) {
+      m_other_extradata = (OMX_OTHER_EXTRADATATYPE *)malloc(drv_ctx.extradata_info.size);
+      if (!m_other_extradata) {
+          DEBUG_PRINT_ERROR("Failed to alloc memory\n");
+          return OMX_ErrorInsufficientResources;
+      }
+  }
   return OMX_ErrorNone;
 }
 
@@ -4092,6 +4100,10 @@ void omx_vdec::free_extradata() {
   }
   memset(&drv_ctx.extradata_info, 0, sizeof(drv_ctx.extradata_info));
 #endif
+    if (m_other_extradata) {
+        free(m_other_extradata);
+        m_other_extradata = NULL;
+    }
 }
 
 OMX_ERRORTYPE  omx_vdec::use_output_buffer(
@@ -4261,42 +4273,45 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         }
         pmem_info = (OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *)
                     pmem_list->entryList->entry;
-        DEBUG_PRINT_LOW("vdec: use buf: pmem_fd=0x%x",
-                          pmem_info->pmem_fd);
-        drv_ctx.ptr_outputbuffer[i].pmem_fd = pmem_info->pmem_fd;
-        drv_ctx.ptr_outputbuffer[i].offset = pmem_info->offset;
-        drv_ctx.ptr_outputbuffer[i].bufferaddr = buff;
-        drv_ctx.ptr_outputbuffer[i].mmaped_size =
-        drv_ctx.ptr_outputbuffer[i].buffer_len = drv_ctx.op_buf.buffer_size;
-        privateAppData = appData;
-     }
-     m_pmem_info[i].offset = drv_ctx.ptr_outputbuffer[i].offset;
-     m_pmem_info[i].pmem_fd = drv_ctx.ptr_outputbuffer[i].pmem_fd;
+                DEBUG_PRINT_LOW("vdec: use buf: pmem_fd=0x%x",
+                        pmem_info->pmem_fd);
+                drv_ctx.ptr_outputbuffer[i].pmem_fd = pmem_info->pmem_fd;
+                drv_ctx.ptr_outputbuffer[i].offset = pmem_info->offset;
+                drv_ctx.ptr_outputbuffer[i].bufferaddr = buff;
+                drv_ctx.ptr_outputbuffer[i].mmaped_size =
+                    drv_ctx.ptr_outputbuffer[i].buffer_len = drv_ctx.op_buf.buffer_size;
+                privateAppData = appData;
+            }
+        m_pmem_info[i].offset = drv_ctx.ptr_outputbuffer[i].offset;
+        m_pmem_info[i].pmem_fd = drv_ctx.ptr_outputbuffer[i].pmem_fd;
+        m_pmem_info[i].size = drv_ctx.ptr_outputbuffer[i].buffer_len;
+        m_pmem_info[i].mapped_size = drv_ctx.ptr_outputbuffer[i].mmaped_size;
+        m_pmem_info[i].buffer = drv_ctx.ptr_outputbuffer[i].bufferaddr;
 
-     *bufferHdr = (m_out_mem_ptr + i );
-     if(secure_mode)
-          drv_ctx.ptr_outputbuffer[i].bufferaddr = *bufferHdr;
-     //setbuffers.buffer_type = VDEC_BUFFER_TYPE_OUTPUT;
-     memcpy (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[i],
-             sizeof (vdec_bufferpayload));
+        *bufferHdr = (m_out_mem_ptr + i );
+        if (secure_mode)
+            drv_ctx.ptr_outputbuffer[i].bufferaddr = *bufferHdr;
+        //setbuffers.buffer_type = VDEC_BUFFER_TYPE_OUTPUT;
+        memcpy (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[i],
+                sizeof (vdec_bufferpayload));
 
-     DEBUG_PRINT_HIGH("\n Set the Output Buffer Idx: %d Addr: %p, pmem_fd=0x%x", i,
-                       drv_ctx.ptr_outputbuffer[i].bufferaddr,
-                       drv_ctx.ptr_outputbuffer[i].pmem_fd );
+        DEBUG_PRINT_HIGH("Set the Output Buffer Idx: %d Addr: %p, pmem_fd=0x%x", i,
+                drv_ctx.ptr_outputbuffer[i].bufferaddr,
+                drv_ctx.ptr_outputbuffer[i].pmem_fd );
 
-     buf.index = i;
-     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-     buf.memory = V4L2_MEMORY_USERPTR;
-     plane[0].length = drv_ctx.op_buf.buffer_size;
-     plane[0].m.userptr = (unsigned long)drv_ctx.ptr_outputbuffer[i].bufferaddr -
-             (unsigned long)drv_ctx.ptr_outputbuffer[i].offset;
-     plane[0].reserved[0] = drv_ctx.ptr_outputbuffer[i].pmem_fd;
-     plane[0].reserved[1] = drv_ctx.ptr_outputbuffer[i].offset;
-     plane[0].data_offset = 0;
-     extra_idx = EXTRADATA_IDX(drv_ctx.num_planes);
-     if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
-       plane[extra_idx].length = drv_ctx.extradata_info.buffer_size;
-       plane[extra_idx].m.userptr = (long unsigned int) (drv_ctx.extradata_info.uaddr + i * drv_ctx.extradata_info.buffer_size);
+        buf.index = i;
+        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+        buf.memory = V4L2_MEMORY_USERPTR;
+        plane[0].length = drv_ctx.op_buf.buffer_size;
+        plane[0].m.userptr = (unsigned long)drv_ctx.ptr_outputbuffer[i].bufferaddr -
+            (unsigned long)drv_ctx.ptr_outputbuffer[i].offset;
+        plane[0].reserved[0] = drv_ctx.ptr_outputbuffer[i].pmem_fd;
+        plane[0].reserved[1] = drv_ctx.ptr_outputbuffer[i].offset;
+        plane[0].data_offset = 0;
+        extra_idx = EXTRADATA_IDX(drv_ctx.num_planes);
+        if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
+            plane[extra_idx].length = drv_ctx.extradata_info.buffer_size;
+            plane[extra_idx].m.userptr = (long unsigned int) (drv_ctx.extradata_info.uaddr + i * drv_ctx.extradata_info.buffer_size);
 #ifdef USE_ION
        plane[extra_idx].reserved[0] = drv_ctx.extradata_info.ion.fd_ion_data.fd;
 #endif
@@ -5078,49 +5093,45 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
         drv_ctx.op_buf_ion_info[i].ion_alloc_data = ion_alloc_data;
         drv_ctx.op_buf_ion_info[i].fd_ion_data = fd_ion_data;
 #endif
+                /*Create a mapping between buffers*/
+                bufHdr->pOutputPortPrivate = &drv_ctx.ptr_respbuffer[i];
+                drv_ctx.ptr_respbuffer[i].client_data = (void *)\
+                                                        &drv_ctx.ptr_outputbuffer[i];
+                drv_ctx.ptr_outputbuffer[i].offset = drv_ctx.op_buf.buffer_size*i;
+                drv_ctx.ptr_outputbuffer[i].bufferaddr =
+                    pmem_baseaddress + (drv_ctx.op_buf.buffer_size*i);
+                m_pmem_info[i].size = drv_ctx.ptr_outputbuffer[i].buffer_len;
+                m_pmem_info[i].mapped_size = drv_ctx.ptr_outputbuffer[i].mmaped_size;
+                m_pmem_info[i].buffer = drv_ctx.ptr_outputbuffer[i].bufferaddr;
 
-        /*Create a mapping between buffers*/
-        bufHdr->pOutputPortPrivate = &drv_ctx.ptr_respbuffer[i];
-        drv_ctx.ptr_respbuffer[i].client_data = (void *)\
-                                            &drv_ctx.ptr_outputbuffer[i];
-        drv_ctx.ptr_outputbuffer[i].offset = drv_ctx.op_buf.buffer_size*i;
-        drv_ctx.ptr_outputbuffer[i].bufferaddr =
-          pmem_baseaddress + (drv_ctx.op_buf.buffer_size*i);
-
-        DEBUG_PRINT_LOW("\n pmem_fd = %d offset = %d address = %p",
-          pmem_fd, drv_ctx.ptr_outputbuffer[i].offset,
-          drv_ctx.ptr_outputbuffer[i].bufferaddr);
-        // Move the buffer and buffer header pointers
-        bufHdr++;
-        pPMEMInfo++;
-        pPlatformEntry++;
-        pPlatformList++;
-      }
-    }
-    else
-    {
-      DEBUG_PRINT_ERROR("Output buf mem alloc failed[0x%p][0x%p]\n",\
-                                        m_out_mem_ptr, pPtr);
-      if(m_out_mem_ptr)
-      {
-        free(m_out_mem_ptr);
-        m_out_mem_ptr = NULL;
-      }
-      if(pPtr)
-      {
-        free(pPtr);
-        pPtr = NULL;
-      }
-      if(drv_ctx.ptr_outputbuffer)
-      {
-        free(drv_ctx.ptr_outputbuffer);
-        drv_ctx.ptr_outputbuffer = NULL;
-      }
-      if(drv_ctx.ptr_respbuffer)
-      {
-        free(drv_ctx.ptr_respbuffer);
-        drv_ctx.ptr_respbuffer = NULL;
-      }
+                DEBUG_PRINT_LOW("pmem_fd = %d offset = %d address = %p",
+                        pmem_fd, drv_ctx.ptr_outputbuffer[i].offset,
+                        drv_ctx.ptr_outputbuffer[i].bufferaddr);
+                // Move the buffer and buffer header pointers
+                bufHdr++;
+                pPMEMInfo++;
+                pPlatformEntry++;
+                pPlatformList++;
+            }
+        } else {
+            DEBUG_PRINT_ERROR("Output buf mem alloc failed[0x%p][0x%p]",\
+                    m_out_mem_ptr, pPtr);
+            if (m_out_mem_ptr) {
+                free(m_out_mem_ptr);
+                m_out_mem_ptr = NULL;
+            }
+            if (pPtr) {
+                free(pPtr);
+                pPtr = NULL;
+            }
+            if (drv_ctx.ptr_outputbuffer) {
+                free(drv_ctx.ptr_outputbuffer);
+                drv_ctx.ptr_outputbuffer = NULL;
+            }
+            if (drv_ctx.ptr_respbuffer) {
+                free(drv_ctx.ptr_respbuffer);
+                drv_ctx.ptr_respbuffer = NULL;
+            }
 #ifdef USE_ION
     if (drv_ctx.op_buf_ion_info) {
         DEBUG_PRINT_LOW("\n Free o/p ion context");
@@ -8596,108 +8607,125 @@ void omx_vdec::adjust_timestamp(OMX_S64 &act_timestamp)
 
 void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
 {
-  OMX_OTHER_EXTRADATATYPE *p_extra = NULL, *p_sei = NULL, *p_vui = NULL;
-  OMX_U32 num_conceal_MB = 0;
-  OMX_U32 frame_rate = 0;
-  int consumed_len = 0;
-  OMX_U32 num_MB_in_frame;
-  OMX_U32 recovery_sei_flags = 1;
-  int buf_index = p_buf_hdr - m_out_mem_ptr;
-  struct msm_vidc_panscan_window_payload *panscan_payload = NULL;
-  OMX_U8 *pBuffer = (OMX_U8 *)(drv_ctx.ptr_outputbuffer[buf_index].bufferaddr) +
-      p_buf_hdr->nOffset;
-  if (!drv_ctx.extradata_info.uaddr) {
-    return;
-  }
-  p_extra = (OMX_OTHER_EXTRADATATYPE *)
-    ((unsigned)(pBuffer + p_buf_hdr->nOffset + p_buf_hdr->nFilledLen + 3)&(~3));
-  char *p_extradata = drv_ctx.extradata_info.uaddr + buf_index * drv_ctx.extradata_info.buffer_size;
-  if ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))
-    p_extra = NULL;
-  OMX_OTHER_EXTRADATATYPE *data = (struct OMX_OTHER_EXTRADATATYPE *)p_extradata;
-  if (data) {
-    while((consumed_len < drv_ctx.extradata_info.buffer_size)
-        && (data->eType != (OMX_EXTRADATATYPE)EXTRADATA_NONE)) {
-      if ((consumed_len + data->nSize) > drv_ctx.extradata_info.buffer_size) {
-        DEBUG_PRINT_LOW("Invalid extra data size");
-        break;
-      }
-      switch((unsigned long)data->eType) {
-      case EXTRADATA_INTERLACE_VIDEO:
-        struct msm_vidc_interlace_payload *payload;
-        payload = (struct msm_vidc_interlace_payload *)data->data;
-        if (payload->format != INTERLACE_FRAME_PROGRESSIVE) {
-          int enable = 1;
-          OMX_U32 mbaff = 0;
-          mbaff = (h264_parser)? (h264_parser->is_mbaff()): false;
-          if ((payload->format == INTERLACE_FRAME_PROGRESSIVE)  && !mbaff)
-            drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
-          else
-            drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
-          if(m_enable_android_native_buffers)
-            setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
-              PP_PARAM_INTERLACED, (void*)&enable);
-        }
-        if (!secure_mode && (client_extradata & OMX_INTERLACE_EXTRADATA)) {
-          append_interlace_extradata(p_extra, payload->format);
-          p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
-        }
-        break;
-      case EXTRADATA_FRAME_RATE:
-        struct msm_vidc_framerate_payload *frame_rate_payload;
-        frame_rate_payload = (struct msm_vidc_framerate_payload *)data->data;
-        frame_rate = frame_rate_payload->frame_rate;
-      break;
-      case EXTRADATA_TIMESTAMP:
-        struct msm_vidc_ts_payload *time_stamp_payload;
-        time_stamp_payload = (struct msm_vidc_ts_payload *)data->data;
-        p_buf_hdr->nTimeStamp = time_stamp_payload->timestamp_lo;
-        p_buf_hdr->nTimeStamp |= ((unsigned long long)time_stamp_payload->timestamp_hi << 32);
-      break;
-      case EXTRADATA_NUM_CONCEALED_MB:
-        struct msm_vidc_concealmb_payload *conceal_mb_payload;
-        conceal_mb_payload = (struct msm_vidc_concealmb_payload *)data->data;
-        num_MB_in_frame = ((drv_ctx.video_resolution.frame_width + 15) *
-                     (drv_ctx.video_resolution.frame_height + 15)) >> 8;
-        num_conceal_MB = ((num_MB_in_frame > 0)?(conceal_mb_payload->num_mbs * 100 / num_MB_in_frame) : 0);
-      break;
-      case EXTRADATA_ASPECT_RATIO:
-        struct msm_vidc_aspect_ratio_payload *aspect_ratio_payload;
-        aspect_ratio_payload = (struct msm_vidc_aspect_ratio_payload *)data->data;
-        ((struct vdec_output_frameinfo *)
-            p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info.par_width = aspect_ratio_payload->aspect_width;
-        ((struct vdec_output_frameinfo *)
-            p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info.par_height = aspect_ratio_payload->aspect_height;
-      break;
-      case EXTRADATA_RECOVERY_POINT_SEI:
-        struct msm_vidc_recoverysei_payload *recovery_sei_payload;
-        recovery_sei_payload = (struct msm_vidc_recoverysei_payload *)data->data;
-        recovery_sei_flags = recovery_sei_payload->flags;
-       if (recovery_sei_flags != FRAME_RECONSTRUCTION_CORRECT) {
-        p_buf_hdr->nFlags |= OMX_BUFFERFLAG_DATACORRUPT;
-        DEBUG_PRINT_HIGH("Extradata: OMX_BUFFERFLAG_DATACORRUPT Received\n");
-       }
-      break;
-      case EXTRADATA_PANSCAN_WINDOW:
-        panscan_payload = (struct msm_vidc_panscan_window_payload *)data->data;
-        break;
-      default:
-        goto unrecognized_extradata;
-      }
-      consumed_len += data->nSize;
-      data = (OMX_OTHER_EXTRADATATYPE *)((char *)data + data->nSize);
+    OMX_OTHER_EXTRADATATYPE *p_extra = NULL, *p_sei = NULL, *p_vui = NULL;
+    OMX_U32 num_conceal_MB = 0;
+    OMX_U32 frame_rate = 0;
+    int consumed_len = 0;
+    OMX_U32 num_MB_in_frame;
+    OMX_U32 recovery_sei_flags = 1;
+    int buf_index = p_buf_hdr - m_out_mem_ptr;
+    struct msm_vidc_panscan_window_payload *panscan_payload = NULL;
+    OMX_U8 *pBuffer = (OMX_U8 *)(drv_ctx.ptr_outputbuffer[buf_index].bufferaddr) +
+        p_buf_hdr->nOffset;
+    if (!drv_ctx.extradata_info.uaddr) {
+        return;
     }
-    if (!secure_mode && (client_extradata & OMX_FRAMEINFO_EXTRADATA)) {
-      p_buf_hdr->nFlags |= OMX_BUFFERFLAG_EXTRADATA;
-      append_frame_info_extradata(p_extra,
-        num_conceal_MB, ((struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate)->pic_type, frame_rate,
-        panscan_payload,&((struct vdec_output_frameinfo *)
-        p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info);}
+
+    if (!secure_mode)
+        p_extra = (OMX_OTHER_EXTRADATATYPE *)
+            ((unsigned)(pBuffer + p_buf_hdr->nOffset + p_buf_hdr->nFilledLen + 3)&(~3));
+    else
+        p_extra = m_other_extradata;
+
+    char *p_extradata = drv_ctx.extradata_info.uaddr + buf_index * drv_ctx.extradata_info.buffer_size;
+
+  if (!secure_mode && ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))) {
+        p_extra = NULL;
+        return;
   }
+    OMX_OTHER_EXTRADATATYPE *data = (struct OMX_OTHER_EXTRADATATYPE *)p_extradata;
+    if (data) {
+        while ((consumed_len < drv_ctx.extradata_info.buffer_size)
+                && (data->eType != (OMX_EXTRADATATYPE)EXTRADATA_NONE)) {
+            if ((consumed_len + data->nSize) > drv_ctx.extradata_info.buffer_size) {
+                DEBUG_PRINT_LOW("Invalid extra data size");
+                break;
+            }
+            switch ((unsigned long)data->eType) {
+                case EXTRADATA_INTERLACE_VIDEO:
+                    struct msm_vidc_interlace_payload *payload;
+                    payload = (struct msm_vidc_interlace_payload *)data->data;
+                    if (payload->format != INTERLACE_FRAME_PROGRESSIVE) {
+                        int enable = 1;
+                        OMX_U32 mbaff = 0;
+                        mbaff = (h264_parser)? (h264_parser->is_mbaff()): false;
+                        if ((payload->format == INTERLACE_FRAME_PROGRESSIVE)  && !mbaff)
+                            drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
+                        else
+                            drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
+                        if (m_enable_android_native_buffers)
+                            setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
+                                    PP_PARAM_INTERLACED, (void*)&enable);
+                    }
+                    if (client_extradata & OMX_INTERLACE_EXTRADATA) {
+                        append_interlace_extradata(p_extra, payload->format);
+                        p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
+                    }
+                    break;
+                case EXTRADATA_FRAME_RATE:
+                    struct msm_vidc_framerate_payload *frame_rate_payload;
+                    frame_rate_payload = (struct msm_vidc_framerate_payload *)data->data;
+                    frame_rate = frame_rate_payload->frame_rate;
+                    break;
+                case EXTRADATA_TIMESTAMP:
+                    struct msm_vidc_ts_payload *time_stamp_payload;
+                    time_stamp_payload = (struct msm_vidc_ts_payload *)data->data;
+                    p_buf_hdr->nTimeStamp = time_stamp_payload->timestamp_lo;
+                    p_buf_hdr->nTimeStamp |= ((unsigned long long)time_stamp_payload->timestamp_hi << 32);
+                    break;
+                case EXTRADATA_NUM_CONCEALED_MB:
+                    struct msm_vidc_concealmb_payload *conceal_mb_payload;
+                    conceal_mb_payload = (struct msm_vidc_concealmb_payload *)data->data;
+                    num_MB_in_frame = ((drv_ctx.video_resolution.frame_width + 15) *
+                            (drv_ctx.video_resolution.frame_height + 15)) >> 8;
+                    num_conceal_MB = ((num_MB_in_frame > 0)?(conceal_mb_payload->num_mbs * 100 / num_MB_in_frame) : 0);
+                    break;
+                case EXTRADATA_ASPECT_RATIO:
+                    struct msm_vidc_aspect_ratio_payload *aspect_ratio_payload;
+                    aspect_ratio_payload = (struct msm_vidc_aspect_ratio_payload *)data->data;
+                    ((struct vdec_output_frameinfo *)
+                     p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info.par_width = aspect_ratio_payload->aspect_width;
+                    ((struct vdec_output_frameinfo *)
+                     p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info.par_height = aspect_ratio_payload->aspect_height;
+                    break;
+                case EXTRADATA_RECOVERY_POINT_SEI:
+                    struct msm_vidc_recoverysei_payload *recovery_sei_payload;
+                    recovery_sei_payload = (struct msm_vidc_recoverysei_payload *)data->data;
+                    recovery_sei_flags = recovery_sei_payload->flags;
+                    if (recovery_sei_flags != FRAME_RECONSTRUCTION_CORRECT) {
+                        p_buf_hdr->nFlags |= OMX_BUFFERFLAG_DATACORRUPT;
+                        DEBUG_PRINT_HIGH("Extradata: OMX_BUFFERFLAG_DATACORRUPT Received");
+                    }
+                    break;
+                case EXTRADATA_PANSCAN_WINDOW:
+                    panscan_payload = (struct msm_vidc_panscan_window_payload *)data->data;
+                    break;
+                default:
+                    goto unrecognized_extradata;
+            }
+            consumed_len += data->nSize;
+            data = (OMX_OTHER_EXTRADATATYPE *)((char *)data + data->nSize);
+        }
+        if (client_extradata & OMX_FRAMEINFO_EXTRADATA) {
+            p_buf_hdr->nFlags |= OMX_BUFFERFLAG_EXTRADATA;
+            append_frame_info_extradata(p_extra,
+                num_conceal_MB, ((struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate)->pic_type, frame_rate,
+                panscan_payload,&((struct vdec_output_frameinfo *)
+                p_buf_hdr->pOutputPortPrivate)->aspect_ratio_info);
+                p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
+        }
+    }
 unrecognized_extradata:
-  if(!secure_mode && client_extradata)
-    append_terminator_extradata(p_extra);
-  return;
+    if (client_extradata)
+        append_terminator_extradata(p_extra);
+    if (secure_mode) {
+        memcpy(p_extradata, m_other_extradata, drv_ctx.extradata_info.buffer_size);
+        ((struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate)->metadata_info.metabufaddr =
+            (void *)p_extradata;
+        ((struct vdec_output_frameinfo *)p_buf_hdr->pOutputPortPrivate)->metadata_info.size =
+            drv_ctx.extradata_info.buffer_size;
+    }
+    return;
 }
 
 OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U32 requested_extradata,

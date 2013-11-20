@@ -855,14 +855,15 @@ private:
 #ifdef _ANDROID_
     DivXDrmDecrypt* iDivXDrmDecrypt;
 #endif //_ANDROID_
-    OMX_PARAM_PORTDEFINITIONTYPE m_port_def;
-    omx_time_stamp_reorder time_stamp_dts;
-    desc_buffer_hdr *m_desc_buffer_ptr;
-    bool secure_mode;
-    bool external_meta_buffer;
-    bool external_meta_buffer_iommu;
-    OMX_QCOM_EXTRADATA_FRAMEINFO *m_extradata;
-    bool codec_config_flag;
+        OMX_PARAM_PORTDEFINITIONTYPE m_port_def;
+        omx_time_stamp_reorder time_stamp_dts;
+        desc_buffer_hdr *m_desc_buffer_ptr;
+        bool secure_mode;
+        bool external_meta_buffer;
+        bool external_meta_buffer_iommu;
+        OMX_QCOM_EXTRADATA_FRAMEINFO *m_extradata;
+        OMX_OTHER_EXTRADATATYPE *m_other_extradata;
+        bool codec_config_flag;
 #ifdef _MSM8974_
     int capture_capability;
     int output_capability;
