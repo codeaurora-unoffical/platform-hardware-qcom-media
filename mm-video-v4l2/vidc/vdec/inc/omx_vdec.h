@@ -634,26 +634,29 @@ private:
                                     OMX_U32 interlaced_format_type, OMX_U32 buf_index);
     OMX_ERRORTYPE enable_extradata(OMX_U32 requested_extradata, bool enable = true);
 #endif
-    void append_frame_info_extradata(OMX_OTHER_EXTRADATATYPE *extra,
-                               OMX_U32 num_conceal_mb,
-                               OMX_U32 picture_type,
-                               OMX_S64 timestamp,
-                               OMX_U32 frame_rate,
-                               struct vdec_aspectratioinfo *aspect_ratio_info);
-    void fill_aspect_ratio_info(struct vdec_aspectratioinfo *aspect_ratio_info,
-                                OMX_QCOM_EXTRADATA_FRAMEINFO *frame_info);
-    void append_terminator_extradata(OMX_OTHER_EXTRADATATYPE *extra);
-    OMX_ERRORTYPE update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn);
-    void append_portdef_extradata(OMX_OTHER_EXTRADATATYPE *extra);
-    void append_extn_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_extn);
-    void append_user_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_user);
-    void insert_demux_addr_offset(OMX_U32 address_offset);
-    void extract_demux_addr_offsets(OMX_BUFFERHEADERTYPE *buf_hdr);
-    OMX_ERRORTYPE handle_demux_data(OMX_BUFFERHEADERTYPE *buf_hdr);
-    OMX_U32 count_MB_in_extradata(OMX_OTHER_EXTRADATATYPE *extra);
+        void append_frame_info_extradata(OMX_OTHER_EXTRADATATYPE *extra,
+                OMX_U32 num_conceal_mb,
+                OMX_U32 picture_type,
+                OMX_S64 timestamp,
+                OMX_U32 frame_rate,
+                struct vdec_aspectratioinfo *aspect_ratio_info);
+        void fill_aspect_ratio_info(struct vdec_aspectratioinfo *aspect_ratio_info,
+                OMX_QCOM_EXTRADATA_FRAMEINFO *frame_info);
+        void append_terminator_extradata(OMX_OTHER_EXTRADATATYPE *extra);
+        OMX_ERRORTYPE update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn);
+        void append_portdef_extradata(OMX_OTHER_EXTRADATATYPE *extra);
+        void append_extn_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_extn);
+        void append_user_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_user);
+        void append_concealmb_extradata(OMX_OTHER_EXTRADATATYPE *extra,
+                OMX_OTHER_EXTRADATATYPE *p_concealmb, OMX_U8 *conceal_mb_data);
+        void insert_demux_addr_offset(OMX_U32 address_offset);
+        void extract_demux_addr_offsets(OMX_BUFFERHEADERTYPE *buf_hdr);
+        OMX_ERRORTYPE handle_demux_data(OMX_BUFFERHEADERTYPE *buf_hdr);
+        OMX_U32 count_MB_in_extradata(OMX_OTHER_EXTRADATATYPE *extra);
 
-    bool align_pmem_buffers(int pmem_fd, OMX_U32 buffer_size,
-                            OMX_U32 alignment);
+        bool align_pmem_buffers(int pmem_fd, OMX_U32 buffer_size,
+                OMX_U32 alignment);
+
 #ifdef USE_ION
     int alloc_map_ion_memory(OMX_U32 buffer_size,
               OMX_U32 alignment, struct ion_allocation_data *alloc_data,
@@ -880,14 +883,15 @@ private:
 #ifdef _ANDROID_
     DivXDrmDecrypt* iDivXDrmDecrypt;
 #endif //_ANDROID_
-    OMX_PARAM_PORTDEFINITIONTYPE m_port_def;
-    omx_time_stamp_reorder time_stamp_dts;
-    desc_buffer_hdr *m_desc_buffer_ptr;
-    bool secure_mode;
-    bool external_meta_buffer;
-    bool external_meta_buffer_iommu;
-    OMX_QCOM_EXTRADATA_FRAMEINFO *m_extradata;
-    bool codec_config_flag;
+        OMX_PARAM_PORTDEFINITIONTYPE m_port_def;
+        omx_time_stamp_reorder time_stamp_dts;
+        desc_buffer_hdr *m_desc_buffer_ptr;
+        bool secure_mode;
+        bool external_meta_buffer;
+        bool external_meta_buffer_iommu;
+        OMX_QCOM_EXTRADATA_FRAMEINFO *m_extradata;
+        OMX_OTHER_EXTRADATATYPE *m_other_extradata;
+        bool codec_config_flag;
 #ifdef _MSM8974_
     int capture_capability;
     int output_capability;
