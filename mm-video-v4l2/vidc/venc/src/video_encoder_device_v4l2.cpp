@@ -1277,6 +1277,23 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
       }
       break;
     }
+  case OMX_QcomIndexParamVideoQPRange:
+	{
+		 DEBUG_PRINT_LOW("venc_set_param: OMX_QcomIndexParamVideoQPRange");
+		 OMX_QCOM_VIDEO_PARAM_QPRANGETYPE *qp_range =
+			 (OMX_QCOM_VIDEO_PARAM_QPRANGETYPE *)paramData;
+		  if (qp_range->nPortIndex == (OMX_U32) PORT_INDEX_OUT) {
+			  DEBUG_PRINT_LOW("minqp: %d, minqp: %d\n", qp_range->minQP, qp_range->maxQP);
+			  if(venc_set_qp_range (qp_range->minQP,
+					qp_range->maxQP) == false) {
+				  DEBUG_PRINT_ERROR("\nERROR: Setting QP Range failed");
+				  return false;
+			  }
+		  }
+		  else
+			  DEBUG_PRINT_ERROR("ERROR: Invalid Port Index for OMX_QcomIndexParamVideoQPRange");
+		break;
+	}
   case OMX_QcomIndexEnableSliceDeliveryMode:
     {
        QOMX_EXTNINDEX_PARAMTYPE* pParam =
@@ -1604,6 +1621,7 @@ void venc_dev::venc_config_print()
 
   DEBUG_PRINT_HIGH("\nENC_CONFIG: IntraMB/Frame: %ld, HEC: %ld, IDR Period: %ld\n",
                    intra_refresh.mbcount, hec.header_extension, idrperiod.idrperiod);
+  DEBUG_PRINT_HIGH("\nENC_CONFIG: Min_QP: %ld, MAX_QP: %ld\n", qprange.minqp, qprange.maxqp);
 
 }
 
@@ -2079,6 +2097,37 @@ bool venc_dev::venc_set_session_qp(OMX_U32 i_frame_qp, OMX_U32 p_frame_qp,OMX_U3
 	}
 
   return true;
+}
+
+bool venc_dev::venc_set_qp_range(OMX_U32 min_qp, OMX_U32 max_qp)
+{
+	struct v4l2_control control;
+	int rc = 0;
+
+	if ((max_qp > 0) && (max_qp > min_qp) && (max_qp <= 51)) {
+		control.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP;
+		control.value = max_qp;
+		rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+		if (rc) {
+			DEBUG_PRINT_ERROR("Failed to set max_qp control");
+			return false;
+		}
+		qprange.minqp = max_qp;
+	} else
+		DEBUG_PRINT_ERROR("Invalid max_qp value : %d", max_qp);
+
+	if ((min_qp > 0) && (min_qp < max_qp)) {
+		control.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP;
+		control.value = min_qp;
+		rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+		if (rc) {
+			DEBUG_PRINT_ERROR("Failed to set min_qp control");
+			return false;
+		}
+		qprange.minqp = min_qp;
+	} else
+		DEBUG_PRINT_ERROR("Invalid min_qp value : %d", min_qp);
+	return true;
 }
 
 bool venc_dev::venc_set_profile_level(OMX_U32 eProfile,OMX_U32 eLevel)
