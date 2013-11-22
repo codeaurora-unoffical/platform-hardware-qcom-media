@@ -139,7 +139,6 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
 
 void* message_thread(void *);
 
-
 // OMX video class
 class omx_video: public qc_omx_component
 {
@@ -154,6 +153,7 @@ class omx_video: public qc_omx_component
         bool get_syntaxhdr_enable;
         OMX_BUFFERHEADERTYPE  *psource_frame;
         OMX_BUFFERHEADERTYPE  *pdest_frame;
+        bool secure_session;
 
         class omx_c2d_conv
         {
@@ -216,6 +216,7 @@ class omx_video: public qc_omx_component
         virtual bool dev_loaded_stop(void) = 0;
         virtual bool dev_loaded_start_done(void) = 0;
         virtual bool dev_loaded_stop_done(void) = 0;
+        virtual bool is_secure_session(void) = 0;
 #ifdef _MSM8974_
         virtual int dev_handle_extradata(void*, int) = 0;
         virtual int dev_set_format(int) = 0;
@@ -564,6 +565,7 @@ class omx_video: public qc_omx_component
         QOMX_VIDEO_CONFIG_LTRPERIOD_TYPE m_sConfigLTRPeriod;
         QOMX_VIDEO_CONFIG_LTRUSE_TYPE m_sConfigLTRUse;
         OMX_VIDEO_CONFIG_AVCINTRAPERIOD m_sConfigAVCIDRPeriod;
+        OMX_VIDEO_CONFIG_DEINTERLACE m_sConfigDeinterlace;
         OMX_U32 m_sExtraData;
         OMX_U32 m_input_msg_id;
 
