@@ -866,6 +866,7 @@ class omx_vdec: public qc_omx_component
         bool m_debug_extradata;
         bool m_debug_concealedmb;
         bool m_reject_avc_1080p_mp;
+        OMX_U32 m_conceal_color;
 #endif
 #ifdef MAX_RES_1080P
         MP4_Utils mp4_headerparser;
