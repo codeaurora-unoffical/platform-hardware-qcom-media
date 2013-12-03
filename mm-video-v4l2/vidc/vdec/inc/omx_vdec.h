@@ -278,14 +278,12 @@ struct debug_cap {
     FILE *outfile;
 };
 
-#ifdef META_DATA_MODE_SUPPORTED
 struct dynamic_buf_list {
     OMX_U32 fd;
     OMX_U32 dup_fd;
     OMX_U32 offset;
     OMX_U32 ref_count;
 };
-#endif
 
 // OMX video decoder class
 class omx_vdec: public qc_omx_component
@@ -424,10 +422,8 @@ class omx_vdec: public qc_omx_component
         pthread_t msg_thread_id;
         pthread_t async_thread_id;
         bool is_component_secure();
-#ifdef META_DATA_MODE_SUPPORTED
         void buf_ref_add(OMX_U32 fd, OMX_U32 offset);
         void buf_ref_remove(OMX_U32 fd, OMX_U32 offset);
-#endif
 
     private:
         // Bit Positions
@@ -658,6 +654,8 @@ class omx_vdec: public qc_omx_component
         void append_portdef_extradata(OMX_OTHER_EXTRADATATYPE *extra);
         void append_extn_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_extn);
         void append_user_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_user);
+        void append_concealmb_extradata(OMX_OTHER_EXTRADATATYPE *extra,
+                OMX_OTHER_EXTRADATATYPE *p_concealmb, OMX_U8 *conceal_mb_data);
         void insert_demux_addr_offset(OMX_U32 address_offset);
         void extract_demux_addr_offsets(OMX_BUFFERHEADERTYPE *buf_hdr);
         OMX_ERRORTYPE handle_demux_data(OMX_BUFFERHEADERTYPE *buf_hdr);
@@ -893,6 +891,7 @@ class omx_vdec: public qc_omx_component
         bool external_meta_buffer;
         bool external_meta_buffer_iommu;
         OMX_QCOM_EXTRADATA_FRAMEINFO *m_extradata;
+        OMX_OTHER_EXTRADATATYPE *m_other_extradata;
         bool codec_config_flag;
 #ifdef _MSM8974_
         int capture_capability;
@@ -911,11 +910,9 @@ class omx_vdec: public qc_omx_component
         OMX_VIDEO_PARAM_PROFILELEVELTYPE m_profile_lvl;
         OMX_U32 m_profile;
 
-#ifdef META_DATA_MODE_SUPPORTED
         //variables to handle dynamic buffer mode
         bool dynamic_buf_mode;
         struct dynamic_buf_list *out_dynamic_list;
-#endif
 
         unsigned int m_fill_output_msg;
         bool client_set_fps;
