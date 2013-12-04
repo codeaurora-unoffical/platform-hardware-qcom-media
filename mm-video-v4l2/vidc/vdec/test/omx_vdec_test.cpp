@@ -4093,11 +4093,11 @@ void overlay_set()
     printf("overlayp->vert_deci = %u \n", overlayp->vert_deci);
     printf("overlayp->horz_deci = %u \n", overlayp->horz_deci);
 
-    overlayp->z_order = 0;
+    overlayp->z_order = 3;//"z_order=3" means, this is top overlay
     overlayp->alpha = 0xff;
     overlayp->transp_mask = 0xFFFFFFFF;
     overlayp->flags = 0;
-    overlayp->is_fg = 0;
+    overlayp->is_fg = 1;
 
     overlayp->id = MSMFB_NEW_REQUEST;
 
