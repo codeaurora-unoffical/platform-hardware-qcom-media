@@ -33,7 +33,7 @@ Required parameters in configuration file:
 input_file     # Valid input file that shall match the codec_type or yuv format
 input_height   # Height
 input_width    # Width
-codec_type     # H.264 | MPEG4 | VP8
+codec_type     # H.264 | MPEG4 | VP8 | MVC
 output_file    # output file name
 device_mode    # DECODE | ENCODE
 frame_count    # Minimum number of output frames to be generated.
@@ -164,6 +164,40 @@ SET_CTRL
     #   SCS_THRESHOLD
     #       id: V4L2_CID_MPEG_VIDC_VIDEO_SCS_THRESHOLD
     #       val: 1 -> INT_MAX
+    #
+    #   PERF_LEVEL
+    #       id: V4L2_CID_MPEG_VIDC_SET_PERF_LEVEL
+    #       val: 0 | 1 | 2
+    #              v4l2 control                           val
+    #       V4L2_CID_MPEG_VIDC_PERF_LEVEL_NOMINAL          0
+    #       V4L2_CID_MPEG_VIDC_PERF_LEVEL_PERFORMANCE      1
+    #       V4L2_CID_MPEG_VIDC_PERF_LEVEL_TURBO            2
+    #
+    #   ENABLE_PIC_TYPE
+    #       id: V4L2_CID_MPEG_VIDC_VIDEO_ENABLE_PICTURE_TYPE
+    #       val: 0x1 | 0x2 | 0x4 | 0x8
+    #                    val
+    #       PICTURE_I    0x01
+    #       PICTURE_P    0x02
+    #       PICTURE_B    0x04
+    #       PICTURE_IDR  0x08
+    #
+    #   OUTPUT_ORDER
+    #       id: V4L2_CID_MPEG_VIDC_VIDEO_OUTPUT_ORDER
+    #       val: 0 | 1
+    #               v4l2 control                          val
+    #       V4L2_MPEG_VIDC_VIDEO_OUTPUT_ORDER_DISPLAY      0
+    #       V4L2_MPEG_VIDC_VIDEO_OUTPUT_ORDER_DECODE       1
+    #
+    #   BUFFER_LAYOUT
+    #       id: V4L2_CID_MPEG_VIDC_VIDEO_MVC_BUFFER_LAYOUT
+    #       val: 0 | 1
+    #       0: V4L2_MPEG_VIDC_VIDEO_MVC_SEQUENTIAL
+    #       1: V4L2_MPEG_VIDC_VIDEO_MVC_TOP_BOTTOM
+    #       In case of top-bottom to view the YUV output you must select:
+    #       width = input_width
+    #       height = 2*input_height
+    #       ex. For MVC VGA top-bottom layout, output YUV is 640x960
 
 GET_CTRL
     # Get Controls
@@ -203,7 +237,18 @@ SLEEP
     # Will pause the execution using the sleep() call.
     # Options: # of seconds to sleep.
 
-
+FLUSH
+    # The FLUSH command s used to flush OUTPUT or CAPTURE or both ports.
+    # It will flush output or capture buffers based on the selected options.
+    # Also it will exit if an error.
+    # The IOCTLs used while in flush are:
+    # VIDIOC_DECODER_CMD function from the driver.
+    # Options: OUTPUT | CAPTURE | ALL
+    #           1     |   2     | 3
+    #
+    #               v4l2 controls               val
+    #          V4L2_DEC_QCOM_CMD_FLUSH_OUTPUT    1
+    #          V4L2_DEC_QCOM_CMD_FLUSH_CAPTURE   2
 
 Configurations file samples:
 Sample 1, Basic video decoder:
@@ -317,3 +362,34 @@ Sample fix_buf_size_file:
 5743
 8218
 11316
+
+Trick mode:
+normal playback to smooth trick mode
+SEQUENCE          : SET_CTRL PERF_LEVEL 2
+SEQUENCE          : OUTPUT_ORDER 0
+
+smooth trick mode to normal playback
+SEQUENCE          : SET_CTRL PERF_LEVEL 0
+SEQUENCE          : OUTPUT_ORDER 0
+
+smooth to coarse trick mode
+SEQUENCE          : SET_CTRL PERF_LEVEL 2
+SEQUENCE          : OUTPUT_ORDER 0
+SEQUENCE          : FLUSH ALL
+SEQUENCE          : SET_CTRL ENABLE_PIC 9
+SEQUENCE          : SET_CTRL OUTPUT_ORDER 1
+
+coarse to smooth trick mode
+SEQUENCE          : SET_CTRL PERF_LEVEL 2
+SEQUENCE          : SET_CTRL ENABLE_PIC 9
+SEQUENCE          : SET_CTRL OUTPUT_ORDER 1
+SEQUENCE          : FLUSH ALL
+SEQUENCE          : OUTPUT_ORDER 0
+
+coarse trick mode to normal playback
+SEQUENCE          : SET_CTRL PERF_LEVEL 2
+SEQUENCE          : SET_CTRL ENABLE_PIC 9
+SEQUENCE          : SET_CTRL OUTPUT_ORDER 1
+SEQUENCE          : FLUSH ALL
+SEQUENCE          : SET_CTRL PERF_LEVEL 0
+SEQUENCE          : OUTPUT_ORDER 0
