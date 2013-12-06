@@ -93,9 +93,6 @@ typedef struct OMXComponentCapabilityFlagsType {
 
 } OMXComponentCapabilityFlagsType;
 #define OMX_COMPONENT_CAPABILITY_TYPE_INDEX 0xFF7A347
-#ifdef OUTPUT_BUFFER_LOG
-extern FILE *outputBufferFile1;
-#endif
 
 void* message_thread(void *input)
 {
@@ -3823,11 +3820,9 @@ OMX_ERRORTYPE omx_video::fill_buffer_done(OMX_HANDLETYPE hComp,
         if (buffer->nFilledLen > 0) {
             m_fbd_count++;
 
-#ifdef OUTPUT_BUFFER_LOG
-            if (outputBufferFile1) {
-                fwrite((const char *)buffer->pBuffer, buffer->nFilledLen, 1, outputBufferFile1);
+            if (dev_get_output_log_flag()) {
+                dev_output_log_buffers((const char*)buffer->pBuffer, buffer->nFilledLen);
             }
-#endif
         }
 #ifdef _MSM8974_
         if (buffer->nFlags & OMX_BUFFERFLAG_EXTRADATA) {
@@ -4007,7 +4002,7 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
 
     if (profileLevelType->nPortIndex == 1) {
         if (m_sOutPortDef.format.video.eCompressionFormat == OMX_VIDEO_CodingAVC) {
-#ifdef _MSM8974_
+#if defined _MSM8974_ && !defined _MSM8226_
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileBaseline;
                 profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
@@ -4036,6 +4031,11 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
             } else if (profileLevelType->nProfileIndex == 2) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileHigh;
                 profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
+#ifdef _MSM8226_
+            } else if (profileLevelType->nProfileIndex == 3) {
+                profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
+                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
+#endif
             } else {
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %d",
                         profileLevelType->nProfileIndex);
