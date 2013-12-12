@@ -49,7 +49,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
 #include <media/hardware/HardwareAPI.h>
 #endif
 #include <media/msm_media_info.h>
@@ -64,7 +64,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "DivXDrmDecrypt.h"
 #endif //_ANDROID_
 
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
 #include "QComOMXMetadata.h"
 #endif
 
@@ -245,7 +245,7 @@ void* async_message_thread (void *input)
                     break;
                 }
             }
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
             else if (dqevent.type == V4L2_EVENT_MSM_VIDC_RELEASE_BUFFER_REFERENCE) {
                 unsigned int *ptr = (unsigned int *)dqevent.u.data;
                 DEBUG_PRINT_LOW("REFERENCE RELEASE EVENT RECVD fd = %d offset = %d", ptr[0], ptr[1]);
@@ -560,6 +560,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     h264_parser(NULL),
     client_extradata(0),
     m_reject_avc_1080p_mp (0),
+    m_other_extradata(NULL),
 #ifdef _ANDROID_
     m_enable_android_native_buffers(OMX_FALSE),
     m_use_android_native_buffers(OMX_FALSE),
@@ -664,7 +665,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 #endif
     client_buffers.set_vdec_client(this);
     m_fill_output_msg = OMX_COMPONENT_GENERATE_FTB;
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
     dynamic_buf_mode = false;
     out_dynamic_list = NULL;
 #endif
@@ -674,7 +675,7 @@ static const int event_type[] = {
     V4L2_EVENT_MSM_VIDC_FLUSH_DONE,
     V4L2_EVENT_MSM_VIDC_PORT_SETTINGS_CHANGED_SUFFICIENT,
     V4L2_EVENT_MSM_VIDC_PORT_SETTINGS_CHANGED_INSUFFICIENT,
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
     V4L2_EVENT_MSM_VIDC_RELEASE_BUFFER_REFERENCE,
     V4L2_EVENT_MSM_VIDC_RELEASE_UNQUEUED_BUFFER,
 #endif
@@ -1465,6 +1466,11 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         secure_mode = true;
         arbitrary_bytes = false;
         role = (OMX_STRING)"OMX.qcom.video.decoder.avc";
+    } else if (!strncmp(role, "OMX.qcom.video.decoder.mpeg2.secure",
+        OMX_MAX_STRINGNAME_SIZE)){
+        secure_mode = true;
+        arbitrary_bytes = false;
+        role = (OMX_STRING)"OMX.qcom.video.decoder.mpeg2";
     }
 
     drv_ctx.video_driver_fd = open(device_name, O_RDWR);
@@ -1754,7 +1760,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 
         m_state = OMX_StateLoaded;
 #ifdef DEFAULT_EXTRADATA
-        if (eRet == OMX_ErrorNone && !secure_mode)
+        if (eRet == OMX_ErrorNone)
             enable_extradata(DEFAULT_EXTRADATA, true, true);
 #endif
         eRet=get_buffer_req(&drv_ctx.ip_buf);
@@ -3449,7 +3455,7 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                      break;
 
                                  }
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
         case OMX_QcomIndexParamVideoMetaBufferMode:
         {
             StoreMetaDataInBuffersParams *metabuffer =
@@ -3867,7 +3873,7 @@ OMX_ERRORTYPE  omx_vdec::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
         *indexType = (OMX_INDEXTYPE)OMX_GoogleAndroidIndexGetAndroidNativeBufferUsage;
     }
 #endif
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
     else if (!strncmp(paramName, "OMX.google.android.index.storeMetaDataInBuffers", sizeof("OMX.google.android.index.storeMetaDataInBuffers") - 1)) {
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamVideoMetaBufferMode;
     }
@@ -3968,6 +3974,13 @@ OMX_ERRORTYPE omx_vdec::allocate_extradata()
         }
     }
 #endif
+    if (!m_other_extradata) {
+        m_other_extradata = (OMX_OTHER_EXTRADATATYPE *)malloc(drv_ctx.extradata_info.buffer_size);
+        if (!m_other_extradata) {
+            DEBUG_PRINT_ERROR("Failed to alloc memory\n");
+            return OMX_ErrorInsufficientResources;
+        }
+    }
     return OMX_ErrorNone;
 }
 
@@ -3981,6 +3994,10 @@ void omx_vdec::free_extradata()
     }
     memset(&drv_ctx.extradata_info, 0, sizeof(drv_ctx.extradata_info));
 #endif
+    if (m_other_extradata) {
+        free(m_other_extradata);
+        m_other_extradata = NULL;
+    }
 }
 
 OMX_ERRORTYPE  omx_vdec::use_output_buffer(
@@ -4023,8 +4040,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         DEBUG_PRINT_ERROR("Already using %d o/p buffers", drv_ctx.op_buf.actualcount);
         eRet = OMX_ErrorInsufficientResources;
     }
-
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
     if (dynamic_buf_mode) {
         *bufferHdr = (m_out_mem_ptr + i );
         (*bufferHdr)->pBuffer = NULL;
@@ -4178,6 +4194,9 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
             }
         m_pmem_info[i].offset = drv_ctx.ptr_outputbuffer[i].offset;
         m_pmem_info[i].pmem_fd = drv_ctx.ptr_outputbuffer[i].pmem_fd;
+        m_pmem_info[i].size = drv_ctx.ptr_outputbuffer[i].buffer_len;
+        m_pmem_info[i].mapped_size = drv_ctx.ptr_outputbuffer[i].mmaped_size;
+        m_pmem_info[i].buffer = drv_ctx.ptr_outputbuffer[i].bufferaddr;
 
         *bufferHdr = (m_out_mem_ptr + i );
         if (secure_mode)
@@ -4942,6 +4961,9 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
                 drv_ctx.ptr_outputbuffer[i].offset = drv_ctx.op_buf.buffer_size*i;
                 drv_ctx.ptr_outputbuffer[i].bufferaddr =
                     pmem_baseaddress + (drv_ctx.op_buf.buffer_size*i);
+                m_pmem_info[i].size = drv_ctx.ptr_outputbuffer[i].buffer_len;
+                m_pmem_info[i].mapped_size = drv_ctx.ptr_outputbuffer[i].mmaped_size;
+                m_pmem_info[i].buffer = drv_ctx.ptr_outputbuffer[i].bufferaddr;
 
                 DEBUG_PRINT_LOW("pmem_fd = %d offset = %d address = %p",
                         pmem_fd, drv_ctx.ptr_outputbuffer[i].offset,
@@ -5646,7 +5668,7 @@ if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
 OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* buffer)
 {
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
     if (dynamic_buf_mode) {
         private_handle_t *handle = NULL;
         struct VideoDecoderOutputMetaData *meta;
@@ -6358,8 +6380,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     DEBUG_PRINT_LOW("fill_buffer_done: bufhdr = %p, bufhdr->pBuffer = %p",
             buffer, buffer->pBuffer);
     pending_output_buffers --;
-
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
     if (dynamic_buf_mode && !secure_mode) {
         unsigned int nPortIndex = 0;
         nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)client_buffers.get_il_buf_hdr());
@@ -6367,7 +6388,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
                         drv_ctx.ptr_outputbuffer[nPortIndex].mmaped_size);
     }
 #endif
-
     if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
         DEBUG_PRINT_HIGH("Output EOS has been reached");
         if (!output_flush_progress)
@@ -6643,7 +6663,7 @@ int omx_vdec::async_message_process (void *context, void* message)
                     ((omxhdr - omx->m_out_mem_ptr) < (int)omx->drv_ctx.op_buf.actualcount) &&
                     (((struct vdec_output_frameinfo *)omxhdr->pOutputPortPrivate
                       - omx->drv_ctx.ptr_respbuffer) < (int)omx->drv_ctx.op_buf.actualcount)) {
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
                 if (omx->dynamic_buf_mode && vdec_msg->msgdata.output_frame.len) {
                     vdec_msg->msgdata.output_frame.len = omxhdr->nAllocLen;
                 }
@@ -6672,13 +6692,12 @@ int omx_vdec::async_message_process (void *context, void* message)
                     if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_DECODEONLY) {
                         omxhdr->nFlags |= OMX_BUFFERFLAG_DECODEONLY;
                     }
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
                     if (v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_READONLY) {
                          omxhdr->nFlags |= OMX_BUFFERFLAG_READONLY;
                          DEBUG_PRINT_LOW("F_B_D: READONLY BUFFER - REFERENCE WITH F/W fd = %d",
                                     omx->drv_ctx.ptr_outputbuffer[v4l2_buf_ptr->index].pmem_fd);
                     }
-
                     if (omx->dynamic_buf_mode && !(v4l2_buf_ptr->flags & V4L2_QCOM_BUF_FLAG_READONLY)) {
                         omx->buf_ref_remove(omx->drv_ctx.ptr_outputbuffer[v4l2_buf_ptr->index].pmem_fd,
                             omxhdr->nOffset);
@@ -7372,7 +7391,7 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
         alloc_data->flags |= ION_SECURE;
 
     alloc_data->heap_mask = ION_HEAP(ION_IOMMU_HEAP_ID);
-    if (secure_mode)
+    if (secure_mode && (alloc_data->flags & ION_SECURE))
         alloc_data->heap_mask = ION_HEAP(MEM_HEAP_ID);
     rc = ioctl(fd,ION_IOC_ALLOC,alloc_data);
     if (rc || !alloc_data->handle) {
@@ -7391,7 +7410,6 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
         ion_buf_info.fd_ion_data = *fd_data;
         free_ion_memory(&ion_buf_info);
         fd_data->fd =-1;
-        close(fd);
         fd = -ENOMEM;
     }
 
@@ -7446,7 +7464,7 @@ void omx_vdec::free_output_buffer_header()
         drv_ctx.op_buf_ion_info = NULL;
     }
 #endif
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
     if (out_dynamic_list) {
         free(out_dynamic_list);
         out_dynamic_list = NULL;
@@ -7844,7 +7862,7 @@ OMX_ERRORTYPE omx_vdec::allocate_output_headers()
         drv_ctx.op_buf_ion_info = (struct vdec_ion * ) \
                       calloc (sizeof(struct vdec_ion),drv_ctx.op_buf.actualcount);
 #endif
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
         if (dynamic_buf_mode) {
             out_dynamic_list = (struct dynamic_buf_list *) \
                 calloc (sizeof(struct dynamic_buf_list), drv_ctx.op_buf.actualcount);
@@ -8071,11 +8089,18 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
     if (!drv_ctx.extradata_info.uaddr) {
         return;
     }
-    p_extra = (OMX_OTHER_EXTRADATATYPE *)
+    if (!secure_mode)
+        p_extra = (OMX_OTHER_EXTRADATATYPE *)
         ((unsigned)(pBuffer + p_buf_hdr->nOffset + p_buf_hdr->nFilledLen + 3)&(~3));
+    else
+        p_extra = m_other_extradata;
+
     char *p_extradata = drv_ctx.extradata_info.uaddr + buf_index * drv_ctx.extradata_info.buffer_size;
-    if ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))
+
+  if (!secure_mode && ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))) {
         p_extra = NULL;
+        return;
+  }
     OMX_OTHER_EXTRADATATYPE *data = (struct OMX_OTHER_EXTRADATATYPE *)p_extradata;
     if (data) {
         while ((consumed_len < drv_ctx.extradata_info.buffer_size)
@@ -8104,7 +8129,7 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                         setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                                 PP_PARAM_INTERLACED, (void*)&enable);
 #endif
-                    if (!secure_mode && (client_extradata & OMX_INTERLACE_EXTRADATA)) {
+                   if (client_extradata & OMX_INTERLACE_EXTRADATA) {
                         append_interlace_extradata(p_extra, payload->format);
                         p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
                     }
@@ -9012,8 +9037,7 @@ bool omx_vdec::allocate_color_convert_buf::get_color_format(OMX_COLOR_FORMATTYPE
     }
     return status;
 }
-
-#ifdef META_DATA_MODE_SUPPORTED
+#ifdef METADATA_FOR_DYNAMIC_MODE
 void omx_vdec::buf_ref_add(OMX_U32 fd, OMX_U32 offset)
 {
     int i = 0;
