@@ -4535,36 +4535,39 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
         setbuffers.buffer_type = VDEC_BUFFER_TYPE_OUTPUT;
         memcpy (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[index],
                 sizeof (vdec_bufferpayload));
+
+        if (!dynamic_buf_mode) {
 #ifdef _ANDROID_
-        if (m_enable_android_native_buffers) {
-            if (!secure_mode) {
-                if (drv_ctx.ptr_outputbuffer[index].pmem_fd > 0) {
-                    munmap(drv_ctx.ptr_outputbuffer[index].bufferaddr,
-                            drv_ctx.ptr_outputbuffer[index].mmaped_size);
-                }
-            }
-            drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
-        } else {
-#endif
-            if (drv_ctx.ptr_outputbuffer[0].pmem_fd > 0 && !ouput_egl_buffers && !m_use_output_pmem) {
+            if (m_enable_android_native_buffers) {
                 if (!secure_mode) {
-                    DEBUG_PRINT_LOW("unmap the output buffer fd = %d",
-                            drv_ctx.ptr_outputbuffer[0].pmem_fd);
-                    DEBUG_PRINT_LOW("unmap the ouput buffer size=%d  address = %p",
-                            drv_ctx.ptr_outputbuffer[0].mmaped_size * drv_ctx.op_buf.actualcount,
-                            drv_ctx.ptr_outputbuffer[0].bufferaddr);
-                    munmap (drv_ctx.ptr_outputbuffer[0].bufferaddr,
-                            drv_ctx.ptr_outputbuffer[0].mmaped_size * drv_ctx.op_buf.actualcount);
+                    if (drv_ctx.ptr_outputbuffer[index].pmem_fd > 0) {
+                        munmap(drv_ctx.ptr_outputbuffer[index].bufferaddr,
+                                drv_ctx.ptr_outputbuffer[index].mmaped_size);
+                    }
                 }
-                close (drv_ctx.ptr_outputbuffer[0].pmem_fd);
-                drv_ctx.ptr_outputbuffer[0].pmem_fd = -1;
+                drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
+            } else {
+#endif
+                if (drv_ctx.ptr_outputbuffer[0].pmem_fd > 0 && !ouput_egl_buffers && !m_use_output_pmem) {
+                    if (!secure_mode) {
+                        DEBUG_PRINT_LOW("unmap the output buffer fd = %d",
+                                drv_ctx.ptr_outputbuffer[0].pmem_fd);
+                        DEBUG_PRINT_LOW("unmap the ouput buffer size=%d  address = %p",
+                                drv_ctx.ptr_outputbuffer[0].mmaped_size * drv_ctx.op_buf.actualcount,
+                                drv_ctx.ptr_outputbuffer[0].bufferaddr);
+                        munmap (drv_ctx.ptr_outputbuffer[0].bufferaddr,
+                                drv_ctx.ptr_outputbuffer[0].mmaped_size * drv_ctx.op_buf.actualcount);
+                    }
+                    close (drv_ctx.ptr_outputbuffer[0].pmem_fd);
+                    drv_ctx.ptr_outputbuffer[0].pmem_fd = -1;
 #ifdef USE_ION
-                free_ion_memory(&drv_ctx.op_buf_ion_info[0]);
+                    free_ion_memory(&drv_ctx.op_buf_ion_info[0]);
 #endif
-            }
+                }
 #ifdef _ANDROID_
-        }
+            }
 #endif
+        } //!dynamic_buf_mode
         if (release_output_done()) {
             free_extradata();
         }
@@ -8333,6 +8336,11 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
     int enable = 0;
     OMX_U32 mbaff = 0;
     int buf_index = p_buf_hdr - m_out_mem_ptr;
+    if (buf_index >= drv_ctx.extradata_info.count) {
+        DEBUG_PRINT_ERROR("handle_extradata: invalid index(%d) max(%d)",
+                buf_index, drv_ctx.extradata_info.count);
+        return;
+    }
     struct msm_vidc_panscan_window_payload *panscan_payload = NULL;
     OMX_U8 *pBuffer = (OMX_U8 *)(drv_ctx.ptr_outputbuffer[buf_index].bufferaddr) +
         p_buf_hdr->nOffset;
@@ -8360,14 +8368,29 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                     struct msm_vidc_interlace_payload *payload;
                     payload = (struct msm_vidc_interlace_payload *)data->data;
                     mbaff = (h264_parser)? (h264_parser->is_mbaff()): false;
-                    if (payload && (payload->format == MSM_VIDC_INTERLACE_FRAME_PROGRESSIVE)  && !mbaff)
-                        drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
-                    else if (payload && (payload->format == MSM_VIDC_INTERLACE_FRAME_TOPFIELDFIRST ||
-                        payload->format == MSM_VIDC_INTERLACE_FRAME_BOTTOMFIELDFIRST)  && !mbaff) {
-                        drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
-                        enable = 1;
-                    } else {
-                        drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
+                    if (payload && !mbaff) {
+                        switch (payload->format) {
+                            case MSM_VIDC_INTERLACE_FRAME_PROGRESSIVE:
+                            case MSM_VIDC_INTERLACE_INTERLEAVE_FRAME_TOPFIELDFIRST:
+                            case MSM_VIDC_INTERLACE_INTERLEAVE_FRAME_BOTTOMFIELDFIRST:
+                                drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
+                                enable = 1;
+                                break;
+                           default:
+                               DEBUG_PRINT_LOW("unsupported interlace type");
+                        }
+                    } else if (payload && mbaff) {
+                        switch (payload->format) {
+                            case MSM_VIDC_INTERLACE_INTERLEAVE_FRAME_TOPFIELDFIRST:
+                                drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
+                                break;
+                            case MSM_VIDC_INTERLACE_INTERLEAVE_FRAME_BOTTOMFIELDFIRST:
+                                drv_ctx.interlace = VDEC_InterlaceInterleaveFrameBottomFieldFirst;
+                                break;
+                            default:
+                                DEBUG_PRINT_LOW("default case - set interlace to topfield");
+                                drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
+                        }
                         enable = 1;
                     }
                     if (m_enable_android_native_buffers)
@@ -8707,17 +8730,17 @@ void omx_vdec::append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
     interlace_format->nVersion.nVersion = OMX_SPEC_VERSION;
     interlace_format->nPortIndex = OMX_CORE_OUTPUT_PORT_INDEX;
     mbaff = (h264_parser)? (h264_parser->is_mbaff()): false;
-    if ((interlaced_format_type == MSM_VIDC_INTERLACE_FRAME_PROGRESSIVE)  && !mbaff) {
+    if ((interlaced_format_type == MSM_VIDC_INTERLACE_FRAME_PROGRESSIVE) && !mbaff) {
         interlace_format->bInterlaceFormat = OMX_FALSE;
         interlace_format->nInterlaceFormats = OMX_InterlaceFrameProgressive;
         drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
-    } else if ((interlaced_format_type == MSM_VIDC_INTERLACE_FRAME_TOPFIELDFIRST)  && !mbaff) {
+    } else if ((interlaced_format_type == MSM_VIDC_INTERLACE_INTERLEAVE_FRAME_TOPFIELDFIRST) && !mbaff) {
         interlace_format->bInterlaceFormat = OMX_TRUE;
-        interlace_format->nInterlaceFormats = OMX_InterlaceFrameTopFieldFirst;
+        interlace_format->nInterlaceFormats =  OMX_InterlaceInterleaveFrameTopFieldFirst;
         drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
-    } else if ((interlaced_format_type == MSM_VIDC_INTERLACE_FRAME_BOTTOMFIELDFIRST)  && !mbaff) {
+    } else if ((interlaced_format_type == MSM_VIDC_INTERLACE_INTERLEAVE_FRAME_BOTTOMFIELDFIRST) && !mbaff) {
         interlace_format->bInterlaceFormat = OMX_TRUE;
-        interlace_format->nInterlaceFormats = OMX_InterlaceFrameBottomFieldFirst;
+        interlace_format->nInterlaceFormats = OMX_InterlaceInterleaveFrameBottomFieldFirst;
         drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
     } else {
         interlace_format->bInterlaceFormat = OMX_TRUE;
