@@ -69,6 +69,12 @@ fix_buf_size_file # Provides a list with the amount of bytes to be read from
                # Must be used in combination with "read_mode : FIX".
                # See "Sample fix_buf_size_file" below.
 
+pts_file       # Provides a list with the presentation time stamps (PTS) to be
+               # use by the input buffers been queue to the driver.
+               # The file format is one PTS per line in the following foramt:
+               # "<sec>-<usec> or "<sec> <usec>"
+               # See "Sample pts_file" below.
+
 ring_num_headers  # Set the number of header buffers to be use by the ring
                # buffer.
 
@@ -93,6 +99,13 @@ errors_before_stop  # Set the number of continue empty buffer done (EBD)
                # this case the application doesn't do a codec switch it
                # just close the session when the number of continue errors
                # are reach.
+
+write_NV12     # TRUE | FALSE
+               # TRUE::
+               #  Write the FBD buffer data to a file without formatting.
+               # FALSE::
+               #  This is the default value, it writes to output into a
+               #  YCbCr 4:2:0 format which is supported by must YUV players.
 
 
 SEQUENCE commands at configuration file, this commands are run in order from
@@ -259,6 +272,7 @@ codec_type         : H.264
 output_file        : /mnt/sdcard/test/output.yuv
 device_mode        : DECODE
 frame_count        : 100
+write_NV12         : FALSE
 
 SEQUENCE           : OPEN
 SEQUENCE           : SUBSCRIBE_EVENT
@@ -362,6 +376,17 @@ Sample fix_buf_size_file:
 5743
 8218
 11316
+
+Sample pts_files:
+ex. 1:
+0-0
+0-40
+0-60
+
+ex. 2
+0 0
+0 40
+0 60
 
 Trick mode:
 normal playback to smooth trick mode
