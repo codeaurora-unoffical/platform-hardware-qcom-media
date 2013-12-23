@@ -4473,9 +4473,11 @@ int omx_video::alloc_map_ion_memory(int size,struct ion_allocation_data *alloc_d
 
         if (secure_session)
            alloc_data->heap_mask = (ION_HEAP(MEM_HEAP_ID) | ION_SECURE);
-        else
+        else {
            alloc_data->heap_mask = (ION_HEAP(MEM_HEAP_ID) |
                 ION_HEAP(ION_IOMMU_HEAP_ID));
+           alloc_data->flags |= ION_FORCE_CONTIGUOUS;
+	}
 
         pthread_mutex_lock(&m_venc_ionlock);
         rc = ioctl(ion_device_fd,ION_IOC_ALLOC,alloc_data);
