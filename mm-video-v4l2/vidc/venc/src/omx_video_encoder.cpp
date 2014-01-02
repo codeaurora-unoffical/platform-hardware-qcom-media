@@ -825,6 +825,8 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
       memcpy(&m_sParamAVC,pParam, sizeof(struct OMX_VIDEO_PARAM_AVCTYPE));
       m_sIntraperiod.nPFrames = m_sParamAVC.nPFrames;
       m_sIntraperiod.nBFrames = m_sParamAVC.nBFrames;
+      m_sParamProfileLevel.eProfile = m_sParamAVC.eProfile;
+      m_sParamProfileLevel.eLevel = m_sParamAVC.eLevel;
       break;
     }
   case OMX_IndexParamVideoProfileLevelCurrent:
@@ -837,8 +839,8 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                           "Level :%lu", pParam->eProfile, pParam->eLevel);
         return OMX_ErrorUnsupportedSetting;
       }
-      m_sParamProfileLevel.eProfile = pParam->eProfile;
-      m_sParamProfileLevel.eLevel = pParam->eLevel;
+      m_sParamAVC.eProfile = m_sParamProfileLevel.eProfile = pParam->eProfile;
+      m_sParamAVC.eLevel = m_sParamProfileLevel.eLevel = pParam->eLevel;
 
       if(!strncmp((char *)m_nkind, "OMX.qcom.video.encoder.mpeg4",\
           OMX_MAX_STRINGNAME_SIZE))
