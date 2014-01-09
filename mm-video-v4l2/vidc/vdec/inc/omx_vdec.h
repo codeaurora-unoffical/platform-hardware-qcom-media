@@ -118,11 +118,11 @@ using namespace android;
 class VideoHeap : public MemoryHeapBase
 {
     public:
-        VideoHeap(int devicefd, size_t size, void* base,struct ion_handle *handle,int mapfd);
+        VideoHeap(int devicefd, size_t size, void* base,ion_user_handle_t handle,int mapfd);
         virtual ~VideoHeap() {}
     private:
         int m_ion_device_fd;
-        struct ion_handle *m_ion_handle;
+        ion_user_handle_t m_ion_handle;
 };
 #else
 // local pmem heap object
@@ -984,6 +984,9 @@ class omx_vdec: public qc_omx_component
         struct debug_cap m_debug;
         int log_input_buffers(const char *, int);
         int log_output_buffers(OMX_BUFFERHEADERTYPE *);
+#ifdef _MSM8974_
+        void send_codec_config();
+#endif
 };
 
 #ifdef _MSM8974_
