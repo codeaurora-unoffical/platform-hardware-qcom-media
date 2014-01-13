@@ -558,7 +558,8 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     m_desc_buffer_ptr(NULL),
     secure_mode(false),
     m_profile(0),
-    client_set_fps(false)
+    client_set_fps(false),
+    m_last_rendered_TS(-1)
 {
     /* Assumption is that , to begin with , we have all the frames with decoder */
     DEBUG_PRINT_HIGH("In OMX vdec Constructor");
@@ -2423,6 +2424,9 @@ bool omx_vdec::execute_output_flush()
     /*Generate FBD for all Buffers in the FTBq*/
     pthread_mutex_lock(&m_lock);
     DEBUG_PRINT_LOW("Initiate Output Flush");
+    //reset last render flag
+    m_last_rendered_TS = -1;
+
     while (m_ftb_q.m_size) {
         DEBUG_PRINT_LOW("Buffer queue size %d pending buf cnt %d",
                 m_ftb_q.m_size,pending_output_buffers);
@@ -3044,6 +3048,7 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                        }
                                    }
                                } else if (OMX_DirInput == portDefn->eDir) {
+                                   DEBUG_PRINT_LOW("set_parameter: OMX_IndexParamPortDefinition IP port");
                                    bool port_format_changed = false;
                                    if ((portDefn->format.video.xFramerate >> 16) > 0 &&
                                            (portDefn->format.video.xFramerate >> 16) <= MAX_SUPPORTED_FPS) {
@@ -3067,8 +3072,23 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                        DEBUG_PRINT_LOW("set_parameter: frm_int(%lu) fps(%.2f)",
                                                frm_int, drv_ctx.frame_rate.fps_numerator /
                                                (float)drv_ctx.frame_rate.fps_denominator);
+
+                                       struct v4l2_outputparm oparm;
+                                       /*XXX: we're providing timing info as seconds per frame rather than frames
+                                        * per second.*/
+                                       oparm.timeperframe.numerator = drv_ctx.frame_rate.fps_denominator;
+                                       oparm.timeperframe.denominator = drv_ctx.frame_rate.fps_numerator;
+
+                                       struct v4l2_streamparm sparm;
+                                       sparm.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+                                       sparm.parm.output = oparm;
+                                       if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_PARM, &sparm)) {
+                                           DEBUG_PRINT_ERROR("Unable to convey fps info to driver, performance might be affected");
+                                           eRet = OMX_ErrorHardware;
+                                           break;
+                                       }
                                    }
-                                   DEBUG_PRINT_LOW("set_parameter: OMX_IndexParamPortDefinition IP port");
+
                                    if (drv_ctx.video_resolution.frame_height !=
                                            portDefn->format.video.nFrameHeight ||
                                            drv_ctx.video_resolution.frame_width  !=
@@ -3266,7 +3286,8 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                           eRet = OMX_ErrorUnsupportedSetting;
                                       }
                                   } else if ((!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx", OMX_MAX_STRINGNAME_SIZE)) ||
-                                          (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx311", OMX_MAX_STRINGNAME_SIZE))
+                                          (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx311", OMX_MAX_STRINGNAME_SIZE)) ||
+                                          (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx4", OMX_MAX_STRINGNAME_SIZE))
                                         ) {
                                       if (!strncmp((const char*)comp_role->cRole, "video_decoder.divx", OMX_MAX_STRINGNAME_SIZE)) {
                                           strlcpy((char*)m_cRole, "video_decoder.divx", OMX_MAX_STRINGNAME_SIZE);
@@ -5663,9 +5684,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
 
     }
 
-    if (!(client_extradata & OMX_TIMEINFO_EXTRADATA))
-        set_frame_rate(buffer->nTimeStamp);
-
     frameinfo.bufferaddr = temp_buffer->bufferaddr;
     frameinfo.client_data = (void *) buffer;
     frameinfo.datalen = temp_buffer->buffer_len;
@@ -5812,7 +5830,6 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
     if (dynamic_buf_mode) {
         private_handle_t *handle = NULL;
         struct VideoDecoderOutputMetaData *meta;
-        OMX_U8 *buff = NULL;
         unsigned int nPortIndex = 0;
 
         if (!buffer || !buffer->pBuffer) {
@@ -5829,24 +5846,10 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
             DEBUG_PRINT_ERROR("FTB: Error: IL client passed an invalid buf handle - %p", handle);
             return OMX_ErrorBadParameter;
         }
-
-        //map the buffer handle based on the size set on output port definition.
-        if (!secure_mode) {
-            buff = (OMX_U8*)mmap(0, drv_ctx.op_buf.buffer_size,
-                          PROT_READ|PROT_WRITE, MAP_SHARED, handle->fd, 0);
-        } else {
-            buff = (OMX_U8*) buffer;
-        }
-
         //Fill outputbuffer with buffer details, this will be sent to f/w during VIDIOC_QBUF
         nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)client_buffers.get_il_buf_hdr());
         drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd = handle->fd;
-        drv_ctx.ptr_outputbuffer[nPortIndex].offset = 0;
-        drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr = buff;
-        drv_ctx.ptr_outputbuffer[nPortIndex].buffer_len = drv_ctx.op_buf.buffer_size;
-        drv_ctx.ptr_outputbuffer[nPortIndex].mmaped_size = drv_ctx.op_buf.buffer_size;
-        buf_ref_add(drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd,
-                    drv_ctx.ptr_outputbuffer[nPortIndex].offset);
+        drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr = (OMX_U8*) buffer;
 
         //Store private handle from GraphicBuffer
         native_buffer[nPortIndex].privatehandle = handle;
@@ -5918,6 +5921,22 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
         m_cb.FillBufferDone (hComp,m_app_data,buffer);
         return OMX_ErrorNone;
     }
+
+    if (dynamic_buf_mode) {
+        //map the buffer handle based on the size set on output port definition.
+        if (!secure_mode) {
+            drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr =
+                (OMX_U8*)mmap(0, drv_ctx.op_buf.buffer_size,
+                       PROT_READ|PROT_WRITE, MAP_SHARED,
+                       drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd, 0);
+        }
+        drv_ctx.ptr_outputbuffer[nPortIndex].offset = 0;
+        drv_ctx.ptr_outputbuffer[nPortIndex].buffer_len = drv_ctx.op_buf.buffer_size;
+        drv_ctx.ptr_outputbuffer[nPortIndex].mmaped_size = drv_ctx.op_buf.buffer_size;
+        buf_ref_add(drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd,
+                    drv_ctx.ptr_outputbuffer[nPortIndex].offset);
+    }
+
     pending_output_buffers++;
     buffer = client_buffers.get_dr_buf_hdr(bufferAdd);
     ptr_respbuffer = (struct vdec_output_frameinfo*)buffer->pOutputPortPrivate;
@@ -6630,12 +6649,14 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
 
 
     }
+
     if (m_cb.FillBufferDone) {
         if (buffer->nFilledLen > 0) {
-            if (client_extradata & OMX_TIMEINFO_EXTRADATA)
-                set_frame_rate(buffer->nTimeStamp);
-            else if (arbitrary_bytes)
+            if (arbitrary_bytes)
                 adjust_timestamp(buffer->nTimeStamp);
+            else
+                set_frame_rate(buffer->nTimeStamp);
+
             if (perf_flag) {
                 if (!proc_frms) {
                     dec_time.stop();
@@ -6686,6 +6707,24 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
         DEBUG_PRINT_LOW("Before FBD callback Accessed Pmeminfo %lu",pPMEMInfo->pmem_fd);
         OMX_BUFFERHEADERTYPE *il_buffer;
         il_buffer = client_buffers.get_il_buf_hdr(buffer);
+
+        //First frame after start \ pause \ seek
+        if(il_buffer && m_last_rendered_TS < 0){
+           DEBUG_PRINT_LOW("--- First Frame (%lld) -- render it", il_buffer->nTimeStamp);
+           m_last_rendered_TS = il_buffer->nTimeStamp;
+        } else if (il_buffer) {
+           int ts_delta = (int)llabs(il_buffer->nTimeStamp - m_last_rendered_TS);
+           if(il_buffer->nTimeStamp ==  0 || ts_delta >= 16000) {
+               //mark for rendering
+               DEBUG_PRINT_LOW("-- rendering frame with TS %lld gap is %d ", il_buffer->nTimeStamp,ts_delta);
+               m_last_rendered_TS = il_buffer->nTimeStamp;
+           } else {
+               //mark for droping
+               DEBUG_PRINT_LOW("-- dropping frame with TS %lld gap is %d ", il_buffer->nTimeStamp,ts_delta);
+               buffer->nFilledLen = 0;
+           }
+        }
+
         if (il_buffer)
             m_cb.FillBufferDone (hComp,m_app_data,il_buffer);
         else {
@@ -8117,8 +8156,8 @@ OMX_ERRORTYPE omx_vdec::update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn)
     portDefn->nSize = sizeof(portDefn);
     portDefn->eDomain    = OMX_PortDomainVideo;
     if (drv_ctx.frame_rate.fps_denominator > 0)
-        portDefn->format.video.xFramerate = drv_ctx.frame_rate.fps_numerator /
-            drv_ctx.frame_rate.fps_denominator;
+        portDefn->format.video.xFramerate = (drv_ctx.frame_rate.fps_numerator /
+            drv_ctx.frame_rate.fps_denominator) << 16; //Q16 format
     else {
         DEBUG_PRINT_ERROR("Error: Divide by zero");
         return OMX_ErrorBadParameter;
