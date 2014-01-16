@@ -3320,6 +3320,10 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                 eRet = enable_extradata(OMX_FRAMEPACK_EXTRADATA, false,
                                            ((QOMX_ENABLETYPE *)paramData)->bEnable);
                                 break;
+        case OMX_QcomIndexEnableExtnUserData:
+                                eRet = enable_extradata(OMX_EXTNUSER_EXTRADATA, false,
+                                           ((QOMX_ENABLETYPE *)paramData)->bEnable);
+                                break;
         case OMX_QcomIndexParamVideoDivx: {
                               QOMX_VIDEO_PARAM_DIVXTYPE* divXType = (QOMX_VIDEO_PARAM_DIVXTYPE *) paramData;
                           }
@@ -3883,6 +3887,8 @@ OMX_ERRORTYPE  omx_vdec::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexParamVideoFramePackingExtradata;
     } else if (extn_equals(paramName, OMX_QCOM_INDEX_CONFIG_VIDEO_FRAMEPACKING_INFO)) {
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexConfigVideoFramePackingArrangement;
+    } else if (extn_equals(paramName, OMX_QCOM_INDEX_PARAM_VIDEO_EXTNUSER_EXTRADATA)) {
+        *indexType = (OMX_INDEXTYPE)OMX_QcomIndexEnableExtnUserData;
     }
 #if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
     else if (extn_equals(paramName, "OMX.google.android.index.enableAndroidNativeBuffers")) {
@@ -7720,6 +7726,11 @@ OMX_ERRORTYPE omx_vdec::get_buffer_req(vdec_allocatorproperty *buffer_prop)
             client_extra_data_size += OMX_FRAMEPACK_EXTRADATA_SIZE;
             DEBUG_PRINT_HIGH("framepack extradata enabled");
         }
+        if (client_extradata & OMX_EXTNUSER_EXTRADATA) {
+            client_extra_data_size += OMX_USERDATA_EXTRADATA_SIZE;
+            DEBUG_PRINT_HIGH("Userdata extradata enabled");
+        }
+
         if (client_extra_data_size) {
             client_extra_data_size += sizeof(OMX_OTHER_EXTRADATATYPE); //Space for terminator
             buf_size = ((buf_size + 3)&(~3)); //Align extradata start address to 64Bit
@@ -7733,6 +7744,10 @@ OMX_ERRORTYPE omx_vdec::get_buffer_req(vdec_allocatorproperty *buffer_prop)
         buf_size = (buf_size + buffer_prop->alignment - 1)&(~(buffer_prop->alignment - 1));
         DEBUG_PRINT_LOW("GetBufReq UPDATE: ActCnt(%d) Size(%d) BufSize(%d)",
                 buffer_prop->actualcount, buffer_prop->buffer_size, buf_size);
+        if (extra_data_size)
+            DEBUG_PRINT_LOW("GetBufReq UPDATE: extradata: TotalSize(%d) BufferSize(%d)",
+                drv_ctx.extradata_info.size, drv_ctx.extradata_info.buffer_size);
+
         if (in_reconfig) // BufReq will be set to driver when port is disabled
             buffer_prop->buffer_size = buf_size;
         else if (buf_size != buffer_prop->buffer_size) {
@@ -8174,13 +8189,12 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
         p_extra = m_other_extradata;
 
     char *p_extradata = drv_ctx.extradata_info.uaddr + buf_index * drv_ctx.extradata_info.buffer_size;
-
-  if (!secure_mode && ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))) {
+    if (drv_ctx.extradata_info.buffer_size > (p_buf_hdr->nAllocLen - p_buf_hdr->nFilledLen)) {
+        DEBUG_PRINT_ERROR("Error: Insufficient size allocated for extra-data");
         p_extra = NULL;
-        return;
-  }
+    }
     OMX_OTHER_EXTRADATATYPE *data = (struct OMX_OTHER_EXTRADATATYPE *)p_extradata;
-    if (data) {
+    if (data && p_extra) {
         while ((consumed_len < drv_ctx.extradata_info.buffer_size)
                 && (data->eType != (OMX_EXTRADATATYPE)EXTRADATA_NONE)) {
             if ((consumed_len + data->nSize) > (unsigned)drv_ctx.extradata_info.buffer_size) {
@@ -8275,7 +8289,14 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                         p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
                     }
                     break;
+                case EXTRADATA_STREAM_USERDATA:
+                    if (!secure_mode && (client_extradata & OMX_EXTNUSER_EXTRADATA)) {
+                        append_user_extradata(p_extra, data);
+                        p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + p_extra->nSize);
+                    }
+                    break;
                 default:
+                    DEBUG_PRINT_LOW("Unrecognized extradata");
                     goto unrecognized_extradata;
             }
             consumed_len += data->nSize;
@@ -8291,8 +8312,11 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
         }
     }
 unrecognized_extradata:
-    if (client_extradata)
+    if (client_extradata && p_extra) {
+        p_buf_hdr->nFlags |= OMX_BUFFERFLAG_EXTRADATA;
         append_terminator_extradata(p_extra);
+    }
+
     if (secure_mode) {
         struct vdec_output_frameinfo  *ptr_extradatabuff = NULL;
         memcpy(p_extradata, m_other_extradata, drv_ctx.extradata_info.buffer_size);
@@ -8382,6 +8406,13 @@ OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U32 requested_extradata,
                 }
             } else {
                 DEBUG_PRINT_HIGH("OMX_FRAMEPACK_EXTRADATA supported for H264 only");
+            }
+        }
+        if (requested_extradata & OMX_EXTNUSER_EXTRADATA) {
+            control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
+            control.value = V4L2_MPEG_VIDC_EXTRADATA_STREAM_USERDATA;
+            if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control)) {
+                DEBUG_PRINT_HIGH("Failed to set stream userdata extradata");
             }
         }
     }
@@ -8511,6 +8542,24 @@ void omx_vdec::print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra)
                 framepack->reserved_byte,
                 framepack->repetition_period,
                 framepack->extension_flag);
+    } else if (extra->eType == (OMX_EXTRADATATYPE)OMX_ExtraDataMP2UserData) {
+        OMX_QCOM_EXTRADATA_USERDATA *userdata = (OMX_QCOM_EXTRADATA_USERDATA *)extra->data;
+        OMX_U8 *data_ptr = (OMX_U8 *)userdata->data;
+        OMX_U32 userdata_size = extra->nDataSize - sizeof(userdata->type);
+        OMX_U32 i = 0;
+        DEBUG_PRINT_HIGH(
+                "--------------  Userdata  -------------\n"
+                "    Stream userdata type: %d\n"
+                "          userdata size: %d\n"
+                "    STREAM_USERDATA:",
+                userdata->type, userdata_size);
+                for (i = 0; i < userdata_size; i+=4) {
+                    DEBUG_PRINT_HIGH("        %x %x %x %x",
+                        data_ptr[i], data_ptr[i+1],
+                        data_ptr[i+2], data_ptr[i+3]);
+                }
+        DEBUG_PRINT_HIGH(
+                "=========== End of Userdata ===========");
     } else if (extra->eType == OMX_ExtraDataNone) {
         DEBUG_PRINT_HIGH("========== End of Terminator ===========");
     } else {
@@ -8667,6 +8716,24 @@ void omx_vdec::append_framepack_extradata(OMX_OTHER_EXTRADATATYPE *extra,
         sizeof(struct msm_vidc_s3d_frame_packing_payload));
     memcpy(&m_frame_pack_arrangement, framepack,
         sizeof(OMX_QCOM_FRAME_PACK_ARRANGEMENT));
+    print_debug_extradata(extra);
+}
+
+void omx_vdec::append_user_extradata(OMX_OTHER_EXTRADATATYPE *extra,
+            OMX_OTHER_EXTRADATATYPE *p_user)
+{
+    int userdata_size = 0;
+    struct msm_vidc_stream_userdata_payload *userdata_payload = NULL;
+    userdata_payload =
+        (struct msm_vidc_stream_userdata_payload *)p_user->data;
+    userdata_size = p_user->nDataSize;
+    extra->nSize = OMX_USERDATA_EXTRADATA_SIZE;
+    extra->nVersion.nVersion = OMX_SPEC_VERSION;
+    extra->nPortIndex = OMX_CORE_OUTPUT_PORT_INDEX;
+    extra->eType = (OMX_EXTRADATATYPE)OMX_ExtraDataMP2UserData;
+    extra->nDataSize = userdata_size;
+    if (extra->data && p_user->data && extra->nDataSize)
+        memcpy(extra->data, p_user->data, extra->nDataSize);
     print_debug_extradata(extra);
 }
 
