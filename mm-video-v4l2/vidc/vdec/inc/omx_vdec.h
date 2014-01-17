@@ -188,6 +188,8 @@ class VideoHeap : public MemoryHeapBase
 #define OMX_EXTNUSER_EXTRADATA  0x00100000
 #define OMX_FRAMEDIMENSION_EXTRADATA  0x00200000
 #define OMX_FRAMEPACK_EXTRADATA 0x00400000
+#define OMX_QP_EXTRADATA        0x00800000
+#define OMX_BITSINFO_EXTRADATA  0x01000000
 #define DRIVER_EXTRADATA_MASK   0x0000FFFF
 
 #define OMX_INTERLACE_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
@@ -200,6 +202,10 @@ class VideoHeap : public MemoryHeapBase
             sizeof(OMX_QCOM_EXTRADATA_FRAMEDIMENSION) + 3)&(~3)
 #define OMX_FRAMEPACK_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
             sizeof(OMX_QCOM_FRAME_PACK_ARRANGEMENT) + 3)&(~3))
+#define OMX_QP_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
+            sizeof(OMX_QCOM_EXTRADATA_QP) + 3)&(~3))
+#define OMX_BITSINFO_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
+            sizeof(OMX_QCOM_EXTRADATA_BITS_INFO) + 3)&(~3))
 
 //  Define next macro with required values to enable default extradata,
 //    VDEC_EXTRADATA_MB_ERROR_MAP
@@ -665,6 +671,10 @@ class omx_vdec: public qc_omx_component
         void append_user_extradata(OMX_OTHER_EXTRADATATYPE *extra, OMX_OTHER_EXTRADATATYPE *p_user);
         void append_framepack_extradata(OMX_OTHER_EXTRADATATYPE *extra,
                 struct msm_vidc_s3d_frame_packing_payload *s3d_frame_packing_payload);
+        void append_qp_extradata(OMX_OTHER_EXTRADATATYPE *extra,
+                struct msm_vidc_frame_qp_payoad *qp_payload);
+        void append_bitsinfo_extradata(OMX_OTHER_EXTRADATATYPE *extra,
+                struct msm_vidc_frame_bits_info_payload *bits_payload);
         void insert_demux_addr_offset(OMX_U32 address_offset);
         void extract_demux_addr_offsets(OMX_BUFFERHEADERTYPE *buf_hdr);
         OMX_ERRORTYPE handle_demux_data(OMX_BUFFERHEADERTYPE *buf_hdr);
@@ -988,6 +998,26 @@ class omx_vdec: public qc_omx_component
         void send_codec_config();
 #endif
         OMX_TICKS m_last_rendered_TS;
+
+        class perf_control {
+            // 2 cores will be requested if framerate is beyond 45 fps
+            static const int MIN_FRAME_DURATION_FOR_PERF_REQUEST_US = (1e6 / 45);
+            typedef int (*perf_lock_acquire_t)(int, int, int*, int);
+            typedef int (*perf_lock_release_t)(int);
+
+            public:
+                perf_control();
+                ~perf_control();
+                void request_cores(int frame_duration_us);
+            private:
+                void *m_perf_lib;
+                int m_perf_handle;
+                perf_lock_acquire_t m_perf_lock_acquire;
+                perf_lock_release_t m_perf_lock_release;
+                //void (*perf_cpu_boost)(int ntasks);
+                void load_lib();
+        };
+        perf_control m_perf_control;
 };
 
 #ifdef _MSM8974_
