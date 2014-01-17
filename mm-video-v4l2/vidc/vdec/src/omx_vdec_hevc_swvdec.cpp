@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -5775,10 +5775,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         codec_config_flag = true;
         DEBUG_PRINT_LOW("%s: codec_config buffer", __FUNCTION__);
     }
-    else
-    {
-        codec_config_flag = false;
-    }
 
 #ifdef _ANDROID_
     if(iDivXDrmDecrypt)
@@ -6062,6 +6058,8 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
             DEBUG_PRINT_ERROR("Failed to qbuf Input buffer to driver");
             return OMX_ErrorHardware;
         }
+        codec_config_flag = false;
+        DEBUG_PRINT_LOW("%s: codec_config cleared", __FUNCTION__);
         if(!streaming[OUTPUT_PORT])
         {
             enum v4l2_buf_type buf_type;
@@ -8645,7 +8643,7 @@ OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U32 requested_extradata,
                     DEBUG_PRINT_HIGH("Failed to set panscan extradata");
                 }
                 control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
-                control.value = V4L2_MPEG_VIDC_INDEX_EXTRADATA_ASPECT_RATIO;
+                control.value = V4L2_MPEG_VIDC_EXTRADATA_ASPECT_RATIO;
                 if(ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control)) {
                     DEBUG_PRINT_HIGH("Failed to set panscan extradata");
                 }
