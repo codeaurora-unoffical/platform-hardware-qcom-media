@@ -102,6 +102,7 @@ libmm-vdec-inc          += hardware/qcom/media/mm-core/inc
 libmm-vdec-inc	        += $(OMX_VIDEO_PATH)/DivxDrmDecrypt/inc
 libmm-vdec-inc          += hardware/qcom/display/libgralloc
 libmm-vdec-inc          += frameworks/native/include/media/openmax
+libmm-vdec-inc          += frameworks/native/include/media/editor
 libmm-vdec-inc          += frameworks/native/include/media/hardware
 libmm-vdec-inc          += $(vdec-inc)
 libmm-vdec-inc          += hardware/qcom/display/libqdutils
@@ -137,6 +138,7 @@ endif
 
 LOCAL_SRC_FILES         += ../common/src/extra_data_handler.cpp
 LOCAL_SRC_FILES         += ../common/src/vidc_color_converter.cpp
+LOCAL_SRC_FILES         += ../common/src/softwareColorConverter.cpp
 LOCAL_ADDITIONAL_DEPENDENCIES  := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 
 include $(BUILD_SHARED_LIBRARY)
