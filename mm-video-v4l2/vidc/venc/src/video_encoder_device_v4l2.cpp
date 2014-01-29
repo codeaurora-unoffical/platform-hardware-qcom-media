@@ -319,6 +319,9 @@ void* venc_dev::async_venc_message_thread (void *input)
                 if (omx->handle->num_planes > 1 && v4l2_buf.m.planes->bytesused)
                     venc_msg.buf.flags |= OMX_BUFFERFLAG_EXTRADATA;
 
+                if (omxhdr->nFilledLen)
+                    venc_msg.buf.flags |= OMX_BUFFERFLAG_ENDOFFRAME;
+
                 omx->handle->fbd++;
 
                 if (omx->async_message_process(input,&venc_msg) < 0) {
@@ -691,6 +694,8 @@ bool venc_dev::venc_open(OMX_U32 codec)
         session_qp_range.minqp = 1;
         session_qp_range.maxqp = 128;
     }
+    session_qp_values.minqp = session_qp_range.minqp;
+    session_qp_values.maxqp = session_qp_range.maxqp;
 
     int ret;
     ret = subscribe_to_events(m_nDriver_fd);
@@ -1413,6 +1418,9 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
                         DEBUG_PRINT_ERROR("ERROR: Setting QP Range[%d %d] failed",
                             session_qp_range->minQP, session_qp_range->maxQP);
                         return false;
+                    } else {
+                        session_qp_values.minqp = session_qp_range->minQP;
+                        session_qp_values.maxqp = session_qp_range->maxQP;
                     }
                 } else {
                     DEBUG_PRINT_ERROR("ERROR: Invalid Port Index for OMX_QcomIndexParamVideoQPRange");
@@ -1829,7 +1837,7 @@ void venc_dev::venc_config_print()
             session_qp.iframeqp, session_qp.pframqp,session_qp.bframqp);
 
     DEBUG_PRINT_HIGH("ENC_CONFIG: minQP: %d, maxQP: %d",
-            session_qp_range.minqp, session_qp_range.maxqp);
+            session_qp_values.minqp, session_qp_values.maxqp);
 
     DEBUG_PRINT_HIGH("ENC_CONFIG: VOP_Resolution: %ld, Slice-Mode: %ld, Slize_Size: %ld",
             voptimecfg.voptime_resolution, multislice.mslice_mode,
@@ -2079,13 +2087,20 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         // CPU (Eg: MediaCodec)  0            --             0              bufhdr
         // ---------------------------------------------------------------------------------------
         if (metadatamode) {
+            plane.m.userptr = index;
             meta_buf = (encoder_media_buffer_type *)bufhdr->pBuffer;
 
-            if (!meta_buf)
-                return false;
-
-            if (!color_format) {
-                plane.m.userptr = index;
+            if (!meta_buf) {
+                //empty EOS buffer
+                if (!bufhdr->nFilledLen && (bufhdr->nFlags & OMX_BUFFERFLAG_EOS)) {
+                    plane.data_offset = bufhdr->nOffset;
+                    plane.length = bufhdr->nAllocLen;
+                    plane.bytesused = bufhdr->nFilledLen;
+                    DEBUG_PRINT_LOW("venc_empty_buf: empty EOS buffer");
+                } else {
+                    return false;
+                }
+            } else if (!color_format) {
                 if (meta_buf->buffer_type == kMetadataBufferTypeCameraSource) {
                     if (meta_buf->meta_handle->data[3] & private_handle_t::PRIV_FLAGS_ITU_R_709)
                         buf.flags = V4L2_MSM_BUF_FLAG_YUV_601_709_CLAMP;
@@ -2100,19 +2115,17 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     plane.data_offset = 0;
                     plane.length = handle->size;
                     plane.bytesused = handle->size;
-                    DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d filled %d of %d",
-                            fd, plane.bytesused, plane.length);
+                        DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d "
+                                ": filled %d of %d", fd, plane.bytesused, plane.length);
                 }
             } else {
-                plane.m.userptr = (unsigned long) bufhdr->pBuffer;
                 plane.data_offset = bufhdr->nOffset;
                 plane.length = bufhdr->nAllocLen;
                 plane.bytesused = bufhdr->nFilledLen;
-                DEBUG_PRINT_LOW("venc_empty_buf: Opaque non-camera buf: fd = %d filled %d of %d",
-                        fd, plane.bytesused, plane.length);
+                DEBUG_PRINT_LOW("venc_empty_buf: Opaque non-camera buf: fd = %d "
+                        ": filled %d of %d", fd, plane.bytesused, plane.length);
             }
         } else {
-            plane.m.userptr = (unsigned long) bufhdr->pBuffer;
             plane.data_offset = bufhdr->nOffset;
             plane.length = bufhdr->nAllocLen;
             plane.bytesused = bufhdr->nFilledLen;
