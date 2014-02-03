@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
@@ -306,6 +306,13 @@ struct debug_cap {
     FILE *imbfile;
 };
 
+struct dynamic_buf_list {
+    OMX_U32 fd;
+    OMX_U32 dup_fd;
+    OMX_U32 offset;
+    OMX_U32 ref_count;
+};
+
 // OMX video decoder class
 class omx_vdec: public qc_omx_component
 {
@@ -443,6 +450,9 @@ public:
     pthread_t msg_thread_id;
     pthread_t async_thread_id;
     bool is_component_secure();
+
+    void buf_ref_add(int index, OMX_U32 fd, OMX_U32 offset);
+    void buf_ref_remove(OMX_U32 fd, OMX_U32 offset);
 
     static SWVDEC_STATUS swvdec_input_buffer_done_cb(SWVDEC_HANDLE pSwDec, SWVDEC_IPBUFFER *pIpBuffer, void *pClientHandle);
     static SWVDEC_STATUS swvdec_fill_buffer_done_cb(SWVDEC_HANDLE pSwDec, SWVDEC_OPBUFFER *pOpBuffer, void *pClientHandle);
@@ -1003,6 +1013,14 @@ private:
     OMX_ERRORTYPE power_module_deregister();
     bool msg_thread_created;
     bool async_thread_created;
+
+    bool dynamic_buf_mode;
+    struct dynamic_buf_list *out_dynamic_list;
+
+    bool m_smoothstreaming_mode;
+    OMX_U32 m_smoothstreaming_width;
+    OMX_U32 m_smoothstreaming_height;
+    OMX_ERRORTYPE enable_smoothstreaming();
 
     unsigned int m_fill_output_msg;
     class allocate_color_convert_buf {
