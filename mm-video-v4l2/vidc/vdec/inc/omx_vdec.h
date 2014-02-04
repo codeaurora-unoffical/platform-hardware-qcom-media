@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2014, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
@@ -734,7 +734,6 @@ class omx_vdec: public qc_omx_component
         nativebuffer native_buffer[MAX_NUM_INPUT_OUTPUT_BUFFERS];
 #endif
 
-
         //*************************************************************
         //*******************MEMBER VARIABLES *************************
         //*************************************************************
@@ -862,6 +861,7 @@ class omx_vdec: public qc_omx_component
         bool m_use_android_native_buffers;
         bool m_debug_extradata;
         bool m_debug_concealedmb;
+        OMX_U32 m_conceal_color;
 #endif
 #ifdef MAX_RES_1080P
         MP4_Utils mp4_headerparser;
@@ -908,6 +908,7 @@ class omx_vdec: public qc_omx_component
         bool is_down_scalar_enabled;
 #endif
         bool m_power_hinted;
+        bool is_q6_platform;
         OMX_ERRORTYPE power_module_register();
         OMX_ERRORTYPE power_module_deregister();
         bool msg_thread_created;
@@ -980,6 +981,10 @@ class omx_vdec: public qc_omx_component
         struct debug_cap m_debug;
         int log_input_buffers(const char *, int);
         int log_output_buffers(OMX_BUFFERHEADERTYPE *);
+#ifdef _MSM8974_
+        void send_codec_config();
+#endif
+        OMX_TICKS m_last_rendered_TS;
 };
 
 #ifdef _MSM8974_
