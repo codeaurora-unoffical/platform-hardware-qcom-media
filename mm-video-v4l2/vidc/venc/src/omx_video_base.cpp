@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -1691,19 +1691,30 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderSliceInfo) {
                     if (pParam->nPortIndex == PORT_INDEX_OUT) {
                         pParam->bEnabled =
-                            (OMX_BOOL)((m_sExtraData & VEN_EXTRADATA_SLICEINFO) ? 1 : 0);
+                            (OMX_BOOL)(m_sExtraData & VEN_EXTRADATA_SLICEINFO);
                         DEBUG_PRINT_HIGH("Slice Info extradata %d", pParam->bEnabled);
                     } else {
                         DEBUG_PRINT_ERROR("get_parameter: slice information is "
                                 "valid for output port only");
-                        eRet =OMX_ErrorUnsupportedIndex;
+                        eRet = OMX_ErrorUnsupportedIndex;
+                    }
+                }
+                if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderMBInfo) {
+                    if (pParam->nPortIndex == PORT_INDEX_OUT) {
+                        pParam->bEnabled =
+                            (OMX_BOOL)(m_sExtraData & VEN_EXTRADATA_MBINFO);
+                        DEBUG_PRINT_HIGH("MB Info extradata %d", pParam->bEnabled);
+                    } else {
+                        DEBUG_PRINT_ERROR("get_parameter: MB information is "
+                                "valid for output port only");
+                        eRet = OMX_ErrorUnsupportedIndex;
                     }
                 }
 #ifndef _MSM8974_
                 else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoLTRInfo) {
                     if (pParam->nPortIndex == PORT_INDEX_OUT) {
                         pParam->bEnabled =
-                            (OMX_BOOL)((m_sExtraData & VEN_EXTRADATA_LTRINFO) ? 1 : 0);
+                            (OMX_BOOL)(m_sExtraData & VEN_EXTRADATA_LTRINFO);
                         DEBUG_PRINT_HIGH("LTR Info extradata %d", pParam->bEnabled);
                     } else {
                         DEBUG_PRINT_ERROR("get_parameter: LTR information is "
@@ -1739,6 +1750,14 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 }
             }
             break;
+        case OMX_QcomIndexParamVideoLTRCount:
+            {
+                DEBUG_PRINT_LOW("get_parameter: OMX_QcomIndexParamVideoLTRCount");
+                OMX_QCOM_VIDEO_PARAM_LTRCOUNT_TYPE *pParam =
+                        reinterpret_cast<OMX_QCOM_VIDEO_PARAM_LTRCOUNT_TYPE*>(paramData);
+                memcpy(pParam, &m_sParamLTRCount, sizeof(m_sParamLTRCount));
+                break;
+            }
 #endif
         case QOMX_IndexParamVideoSyntaxHdr:
             {
@@ -1783,6 +1802,13 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     BITMASK_CLEAR(&m_flags, OMX_COMPONENT_LOADED_STOP_PENDING);
                     eRet = OMX_ErrorHardware;
                 }
+                break;
+            }
+        case OMX_QcomIndexHierarchicalStructure:
+            {
+                QOMX_VIDEO_HIERARCHICALLAYERS* hierp = (QOMX_VIDEO_HIERARCHICALLAYERS*) paramData;
+                DEBUG_PRINT_LOW("get_parameter: OMX_QcomIndexHierarchicalStructure");
+                memcpy(hierp, &m_sHierLayers, sizeof(m_sHierLayers));
                 break;
             }
         case OMX_IndexParamVideoSliceFMO:
@@ -1877,6 +1903,14 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                 memcpy(pParam, &m_sConfigDeinterlace, sizeof(m_sConfigDeinterlace));
                 break;
             }
+       case OMX_IndexConfigVideoVp8ReferenceFrame:
+           {
+               OMX_VIDEO_VP8REFERENCEFRAMETYPE* pParam =
+                   reinterpret_cast<OMX_VIDEO_VP8REFERENCEFRAMETYPE*>(configData);
+               DEBUG_PRINT_LOW("get_config: OMX_IndexConfigVideoVp8ReferenceFrame");
+               memcpy(pParam, &m_sConfigVp8ReferenceFrame, sizeof(m_sConfigVp8ReferenceFrame));
+               break;
+           }
         default:
             DEBUG_PRINT_ERROR("ERROR: unsupported index %d", (int) configIndex);
             return OMX_ErrorUnsupportedIndex;

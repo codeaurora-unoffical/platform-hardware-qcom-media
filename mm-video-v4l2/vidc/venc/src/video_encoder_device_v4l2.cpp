@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -34,6 +34,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "video_encoder_device_v4l2.h"
 #include "omx_video_encoder.h"
 #include <linux/android_pmem.h>
+#include <media/msm_vidc.h>
 #ifdef USE_ION
 #include <linux/msm_ion.h>
 #endif
@@ -46,6 +47,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <gralloc_priv.h>
 #endif
 
+#define ALIGN(x, to_align) ((((unsigned) x) + (to_align - 1)) & ~(to_align - 1))
 #define EXTRADATA_IDX(__num_planes) (__num_planes  - 1)
 
 #define MPEG4_SP_START 0
@@ -212,6 +214,8 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&hec, 0, sizeof(hec));
     memset(&voptimecfg, 0, sizeof(voptimecfg));
     memset(&capability, 0, sizeof(capability));
+    memset(&hier_p_layers,0,sizeof(hier_p_layers));
+    memset(&ltrinfo, 0, sizeof(ltrinfo));
 }
 
 venc_dev::~venc_dev()
@@ -313,6 +317,9 @@ void* venc_dev::async_venc_message_thread (void *input)
 
                 if (omx->handle->num_planes > 1 && v4l2_buf.m.planes->bytesused)
                     venc_msg.buf.flags |= OMX_BUFFERFLAG_EXTRADATA;
+
+                if (omxhdr->nFilledLen)
+                    venc_msg.buf.flags |= OMX_BUFFERFLAG_ENDOFFRAME;
 
                 omx->handle->fbd++;
 
@@ -427,6 +434,22 @@ static OMX_ERRORTYPE subscribe_to_events(int fd)
     return eRet;
 }
 
+int venc_dev::append_mbi_extradata(void *dst, struct msm_vidc_extradata_header* src)
+{
+    OMX_QCOM_EXTRADATA_MBINFO *mbi = (OMX_QCOM_EXTRADATA_MBINFO *)dst;
+
+    if (!dst || !src)
+        return 0;
+
+    /* TODO: Once Venus 3XX target names are known, nFormat should 2 for those
+     * targets, since the payload format will be different */
+    mbi->nFormat = 1;
+    mbi->nDataSize = src->data_size;
+    memcpy(&mbi->data, &src->data, src->data_size);
+
+    return mbi->nDataSize + sizeof(*mbi);
+}
+
 bool venc_dev::handle_extradata(void *buffer, int index)
 {
     OMX_BUFFERHEADERTYPE *p_bufhdr = (OMX_BUFFERHEADERTYPE *) buffer;
@@ -437,16 +460,67 @@ bool venc_dev::handle_extradata(void *buffer, int index)
         return false;
     }
 
-    p_extra = (OMX_OTHER_EXTRADATATYPE *) ((unsigned)(p_bufhdr->pBuffer + p_bufhdr->nOffset + p_bufhdr->nFilledLen + 3)&(~3));
-    char *p_extradata = extradata_info.uaddr + index * extradata_info.buffer_size;
+    p_extra = (OMX_OTHER_EXTRADATATYPE *)ALIGN(p_bufhdr->pBuffer +
+                p_bufhdr->nOffset + p_bufhdr->nFilledLen, 4);
 
-    if ((OMX_U8*)p_extra > (p_bufhdr->pBuffer + p_bufhdr->nAllocLen)) {
-        DEBUG_PRINT_ERROR("Insufficient buffer size");
+    if (extradata_info.buffer_size >
+            p_bufhdr->nAllocLen - ALIGN(p_bufhdr->nOffset + p_bufhdr->nFilledLen, 4)) {
+        DEBUG_PRINT_ERROR("Insufficient buffer size for extradata");
         p_extra = NULL;
+        return false;
+    } else if (sizeof(msm_vidc_extradata_header) != sizeof(OMX_OTHER_EXTRADATATYPE)) {
+        /* A lot of the code below assumes this condition, so error out if it's not met */
+        DEBUG_PRINT_ERROR("Extradata ABI mismatch");
         return false;
     }
 
-    memcpy(p_extra, p_extradata, extradata_info.buffer_size);
+    struct msm_vidc_extradata_header *p_extradata = NULL;
+    do {
+        p_extradata = (struct msm_vidc_extradata_header *) (p_extradata ?
+            ((char *)p_extradata) + p_extradata->size :
+            extradata_info.uaddr + index * extradata_info.buffer_size);
+
+        switch (p_extradata->type) {
+            case EXTRADATA_METADATA_MBI:
+            {
+                OMX_U32 payloadSize = append_mbi_extradata(&p_extra->data, p_extradata);
+                p_extra->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE) + payloadSize, 4);
+                p_extra->nVersion.nVersion = OMX_SPEC_VERSION;
+                p_extra->nPortIndex = OMX_DirOutput;
+                p_extra->eType = (OMX_EXTRADATATYPE)OMX_ExtraDataVideoEncoderMBInfo;
+                p_extra->nDataSize = payloadSize;
+                break;
+            }
+            case EXTRADATA_NONE:
+                p_extra->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE), 4);
+                p_extra->nVersion.nVersion = OMX_SPEC_VERSION;
+                p_extra->nPortIndex = OMX_DirOutput;
+                p_extra->eType = OMX_ExtraDataNone;
+                p_extra->nDataSize = 0;
+                break;
+            default:
+                /* No idea what this stuff is, just skip over it */
+                DEBUG_PRINT_HIGH("Found an unrecognised extradata (%x) ignoring it",
+                        p_extradata->type);
+                continue;
+        }
+
+        p_extra = (OMX_OTHER_EXTRADATATYPE *)(((char *)p_extra) + p_extra->nSize);
+    } while (p_extradata->type != EXTRADATA_NONE);
+
+    /* Just for debugging: Traverse the list of extra datas  and spit it out onto log */
+    p_extra = (OMX_OTHER_EXTRADATATYPE *)ALIGN(p_bufhdr->pBuffer +
+                p_bufhdr->nOffset + p_bufhdr->nFilledLen, 4);
+    while(p_extra->eType != OMX_ExtraDataNone)
+    {
+        DEBUG_PRINT_LOW("[%p/%d] found extradata type %x of size %d (%d) at %x",
+                p_bufhdr->pBuffer, p_bufhdr->nFilledLen, p_extra->eType,
+                p_extra->nSize, p_extra->nDataSize, p_extra);
+
+        p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) +
+                p_extra->nSize);
+    }
+
     return true;
 }
 
@@ -467,7 +541,7 @@ int venc_dev::venc_set_format(int format)
 OMX_ERRORTYPE venc_dev::allocate_extradata()
 {
     if (extradata_info.allocated) {
-        DEBUG_PRINT_ERROR("2nd allocation return");
+        DEBUG_PRINT_ERROR("Extradata already allocated!");
         return OMX_ErrorNone;
     }
 
@@ -480,7 +554,7 @@ OMX_ERRORTYPE venc_dev::allocate_extradata()
             venc_handle->free_ion_memory(&extradata_info.ion);
         }
 
-        extradata_info.size = (extradata_info.size + 4095) & (~4095);
+        extradata_info.size = ALIGN(extradata_info.size, SZ_4K);
 
         extradata_info.ion.ion_device_fd = venc_handle->alloc_map_ion_memory(
                 extradata_info.size,
@@ -618,11 +692,8 @@ bool venc_dev::venc_open(OMX_U32 codec)
     }
 
     struct v4l2_capability cap;
-
     struct v4l2_fmtdesc fdesc;
-
     struct v4l2_format fmt;
-
     struct v4l2_requestbuffers bufreq;
 
     ret = ioctl(m_nDriver_fd, VIDIOC_QUERYCAP, &cap);
@@ -887,7 +958,7 @@ bool venc_dev::venc_get_buf_req(unsigned long *min_buff_count,
         // For ION memory allocations of the allocated buffer size
         // must be 4k aligned, hence aligning the input buffer
         // size to 4k.
-        m_sInput_buff_property.datasize = (m_sInput_buff_property.datasize + 4095) & (~4095);
+        m_sInput_buff_property.datasize = ALIGN(m_sInput_buff_property.datasize, SZ_4K);
 #endif
         *buff_size = m_sInput_buff_property.datasize;
     } else {
@@ -943,7 +1014,7 @@ bool venc_dev::venc_get_buf_req(unsigned long *min_buff_count,
     return true;
 }
 
-bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
+bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
 {
     DEBUG_PRINT_LOW("venc_set_param:: venc-720p");
     struct v4l2_format fmt;
@@ -1233,6 +1304,10 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
                                         pParam->eProfile, pParam->eLevel);
                     return false;
                 }
+                if(!venc_set_ltrmode(1, 1)) {
+                   DEBUG_PRINT_ERROR("ERROR: Failed to enable ltrmode");
+                   return false;
+                }
                 break;
             }
         case OMX_IndexParamVideoIntraRefresh:
@@ -1349,11 +1424,23 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
         case OMX_ExtraDataVideoEncoderSliceInfo:
             {
                 DEBUG_PRINT_LOW("venc_set_param: OMX_ExtraDataVideoEncoderSliceInfo");
-                OMX_U32 extra_data = *(OMX_U32 *)paramData;
+                OMX_BOOL extra_data = *(OMX_BOOL *)(&paramData);
 
-                if (venc_set_extradata(extra_data) == false) {
-                    DEBUG_PRINT_ERROR("ERROR: Setting "
-                            "OMX_ExtraDataVideoEncoderSliceInfo failed");
+                if (venc_set_extradata(OMX_ExtraDataVideoEncoderSliceInfo, extra_data) == false) {
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_ExtraDataVideoEncoderSliceInfo failed");
+                    return false;
+                }
+
+                extradata = true;
+                break;
+            }
+        case OMX_ExtraDataVideoEncoderMBInfo:
+            {
+                DEBUG_PRINT_LOW("venc_set_param: OMX_ExtraDataVideoEncoderMBInfo");
+                OMX_BOOL extra_data = *(OMX_BOOL *)(&paramData);
+
+                if (venc_set_extradata(OMX_ExtraDataVideoEncoderMBInfo, extra_data) == false) {
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_ExtraDataVideoEncoderMBInfo failed");
                     return false;
                 }
 
@@ -1384,6 +1471,40 @@ bool venc_dev::venc_set_param(void *paramData,OMX_INDEXTYPE index )
                     return OMX_ErrorUnsupportedSetting;
                 }
 
+                break;
+            }
+         case OMX_QcomIndexHierarchicalStructure:
+           {
+               QOMX_VIDEO_HIERARCHICALLAYERS* pParam =
+                   (QOMX_VIDEO_HIERARCHICALLAYERS*)paramData;
+                if (pParam->nPortIndex == PORT_INDEX_OUT) {
+                    if (!venc_set_hier_layers(pParam->eHierarchicalCodingType, pParam->nNumLayers)) {
+                        DEBUG_PRINT_ERROR("Setting Hier P count failed");
+                        return OMX_ErrorUnsupportedSetting;
+                    }
+                } else {
+                    DEBUG_PRINT_ERROR("OMX_QcomIndexHierarchicalStructure called on wrong port(%d)", pParam->nPortIndex);
+                    return OMX_ErrorBadPortIndex;
+                }
+
+                break;
+           }
+        case OMX_QcomIndexParamVideoLTRCount:
+            {
+                DEBUG_PRINT_LOW("venc_set_param: OMX_QcomIndexParamVideoLTRCount");
+                OMX_QCOM_VIDEO_PARAM_LTRCOUNT_TYPE* pParam =
+                        (OMX_QCOM_VIDEO_PARAM_LTRCOUNT_TYPE*)paramData;
+                if (pParam->nCount > 0) {
+                    if (venc_set_ltrmode(1, pParam->nCount) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: Enable LTR mode failed");
+                        return false;
+                    }
+                } else {
+                    if (venc_set_ltrmode(0, 0) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: Disable LTR mode failed");
+                        return false;
+                    }
+                }
                 break;
             }
         case OMX_IndexParamVideoSliceFMO:
@@ -1520,6 +1641,55 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                     }
                 } else {
                     DEBUG_PRINT_ERROR("ERROR: Invalid Port Index for OMX_IndexConfigCommonDeinterlace");
+                }
+                break;
+            }
+        case OMX_IndexConfigVideoVp8ReferenceFrame:
+            {
+                OMX_VIDEO_VP8REFERENCEFRAMETYPE* vp8refframe = (OMX_VIDEO_VP8REFERENCEFRAMETYPE*) configData;
+                DEBUG_PRINT_LOW("venc_set_config: OMX_IndexConfigVideoVp8ReferenceFrame");
+                if ((vp8refframe->nPortIndex == (OMX_U32)PORT_INDEX_IN) &&
+                        (vp8refframe->bUseGoldenFrame)) {
+                    if(venc_set_useltr(0x1) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: use goldenframe failed");
+                        return false;
+                    }
+                } else if((vp8refframe->nPortIndex == (OMX_U32)PORT_INDEX_IN) &&
+                        (vp8refframe->bGoldenFrameRefresh)) {
+                    if(venc_set_markltr(0x1) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: Setting goldenframe failed");
+                        return false;
+                    }
+                } else {
+                    DEBUG_PRINT_ERROR("ERROR: Invalid Port Index for OMX_IndexConfigVideoVp8ReferenceFrame");
+                }
+                break;
+            }
+        case OMX_QcomIndexConfigVideoLTRUse:
+            {
+                OMX_QCOM_VIDEO_CONFIG_LTRUSE_TYPE* pParam = (OMX_QCOM_VIDEO_CONFIG_LTRUSE_TYPE*)configData;
+                DEBUG_PRINT_LOW("venc_set_config: OMX_QcomIndexConfigVideoLTRUse");
+                if (pParam->nPortIndex == (OMX_U32)PORT_INDEX_IN) {
+                    if (venc_set_useltr(pParam->nID) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: Use LTR failed");
+                        return false;
+                    }
+                } else {
+                    DEBUG_PRINT_ERROR("ERROR: Invalid Port Index for OMX_QcomIndexConfigVideoLTRUse");
+                }
+                break;
+            }
+        case OMX_QcomIndexConfigVideoLTRMark:
+            {
+                OMX_QCOM_VIDEO_CONFIG_LTRMARK_TYPE* pParam = (OMX_QCOM_VIDEO_CONFIG_LTRMARK_TYPE*)configData;
+                DEBUG_PRINT_LOW("venc_set_config: OMX_QcomIndexConfigVideoLTRMark");
+                if (pParam->nPortIndex == (OMX_U32)PORT_INDEX_IN) {
+                    if (venc_set_markltr(pParam->nID) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: Mark LTR failed");
+                        return false;
+                    }
+                }  else {
+                    DEBUG_PRINT_ERROR("ERROR: Invalid Port Index for OMX_QcomIndexConfigVideoLTRMark");
                 }
                 break;
             }
@@ -1721,6 +1891,10 @@ void venc_dev::venc_config_print()
     DEBUG_PRINT_HIGH("ENC_CONFIG: IntraMB/Frame: %ld, HEC: %ld, IDR Period: %ld",
             intra_refresh.mbcount, hec.header_extension, idrperiod.idrperiod);
 
+    DEBUG_PRINT_HIGH("ENC_CONFIG: Hier-P layers: %d", hier_p_layers.numlayers);
+
+    DEBUG_PRINT_HIGH("ENC_CONFIG: LTR Enabled: %d, Count: %d",
+            ltrinfo.enabled, ltrinfo.count);
 }
 
 bool venc_dev::venc_reconfig_reqbufs()
@@ -2168,21 +2342,55 @@ bool venc_dev::venc_set_au_delimiter(OMX_BOOL enable)
     return true;
 }
 
-bool venc_dev::venc_set_extradata(OMX_U32 extra_data)
+bool venc_dev::venc_set_hier_layers(QOMX_VIDEO_HIERARCHICALCODINGTYPE type,
+                                    OMX_U32 num_layers)
 {
     struct v4l2_control control;
-    control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
-    control.value = V4L2_MPEG_VIDC_EXTRADATA_MULTISLICE_INFO;
-    DEBUG_PRINT_HIGH("venc_set_extradata:: %x", (int) extra_data);
-
-    if (multislice.mslice_mode && multislice.mslice_mode != V4L2_MPEG_VIDEO_MULTI_SLICE_MODE_SINGLE) {
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS;
+    if (type == QOMX_HIERARCHICALCODING_P) {
+        control.value = num_layers;
+        DEBUG_PRINT_HIGH("Set Hier P num layers: %d", num_layers);
         if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
-            DEBUG_PRINT_ERROR("ERROR: Request for setting extradata failed");
+            DEBUG_PRINT_ERROR("Request to set Hier P num layers failed");
             return false;
         }
+        hier_p_layers.numlayers = num_layers;
     } else {
-        DEBUG_PRINT_ERROR("Failed to set slice extradata, slice_mode "
-                "is set to [%lu]", multislice.mslice_mode);
+        DEBUG_PRINT_ERROR("Request to set hier num layers failed for type: %d", type);
+        return false;
+    }
+    return true;
+}
+
+bool venc_dev::venc_set_extradata(OMX_U32 extra_data, OMX_BOOL enable)
+{
+    struct v4l2_control control;
+
+    DEBUG_PRINT_HIGH("venc_set_extradata:: %x", (int) extra_data);
+
+    if (enable == OMX_FALSE) {
+        /* No easy way to turn off extradata to the driver
+         * at the moment */
+        return false;
+    }
+
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
+    switch (extra_data) {
+        case OMX_ExtraDataVideoEncoderSliceInfo:
+            control.value = V4L2_MPEG_VIDC_EXTRADATA_MULTISLICE_INFO;
+            break;
+        case OMX_ExtraDataVideoEncoderMBInfo:
+            control.value = V4L2_MPEG_VIDC_EXTRADATA_METADATA_MBI;
+            break;
+        default:
+            DEBUG_PRINT_ERROR("Unrecognized extradata index 0x%x", extra_data);
+            return false;
+    }
+
+    if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
+        DEBUG_PRINT_ERROR("ERROR: Request for setting extradata (%x) failed %d",
+                extra_data, errno);
+        return false;
     }
 
     return true;
@@ -2929,10 +3137,10 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
         return false;
     }
 
-	if (error_resilience->nResynchMarkerSpacing) {
-		resynchMarkerSpacingBytes = error_resilience->nResynchMarkerSpacing;
-		resynchMarkerSpacingBytes = ((resynchMarkerSpacingBytes + 7) & ~7) >> 3;
-	}
+    if (error_resilience->nResynchMarkerSpacing) {
+        resynchMarkerSpacingBytes = error_resilience->nResynchMarkerSpacing;
+        resynchMarkerSpacingBytes = ALIGN(resynchMarkerSpacingBytes, 8) >> 3;
+    }
     if (( m_sVenc_cfg.codectype != V4L2_PIX_FMT_H263) &&
             (error_resilience->nResynchMarkerSpacing)) {
         multislice_cfg.mslice_mode = VEN_MSLICE_CNT_BYTE;
@@ -3172,6 +3380,98 @@ bool venc_dev::venc_set_deinterlace(OMX_U32 enable)
     }
     DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
     deinterlace_enabled = true;
+    return true;
+}
+
+bool venc_dev::venc_set_ltrmode(OMX_U32 enable, OMX_U32 count)
+{
+    DEBUG_PRINT_LOW("venc_set_ltrmode: enable = %lu", enable);
+    struct v4l2_control control;
+    struct v4l2_ext_control ctrl[2];
+    struct v4l2_ext_controls controls;
+    int rc;
+
+    ctrl[0].id = V4L2_CID_MPEG_VIDC_VIDEO_LTRMODE;
+    if (enable)
+        ctrl[0].value = V4L2_MPEG_VIDC_VIDEO_LTR_MODE_MANUAL;
+    else
+        ctrl[0].value = V4L2_MPEG_VIDC_VIDEO_LTR_MODE_DISABLE;
+
+    ctrl[1].id = V4L2_CID_MPEG_VIDC_VIDEO_LTRCOUNT;
+    if (enable && count > 0)
+        ctrl[1].value = count;
+    else if (enable)
+        ctrl[1].value = 1;
+    else
+        ctrl[1].value = 0;
+
+    controls.count = 2;
+    controls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+    controls.controls = ctrl;
+
+    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%x, val=%d id=%x, val=%d",
+                    controls.controls[0].id, controls.controls[0].value,
+                    controls.controls[1].id, controls.controls[1].value);
+
+    rc = ioctl(m_nDriver_fd, VIDIOC_S_EXT_CTRLS, &controls);
+    if (rc) {
+        DEBUG_PRINT_ERROR("Failed to set ltrmode %d", rc);
+        return false;
+    }
+    ltrinfo.enabled = enable;
+    ltrinfo.count = count;
+
+    DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, val=%d id=%x, val=%d",
+                    controls.controls[0].id, controls.controls[0].value,
+                    controls.controls[1].id, controls.controls[1].value);
+
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
+    control.value = V4L2_MPEG_VIDC_EXTRADATA_LTR;
+
+    if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
+        DEBUG_PRINT_ERROR("ERROR: Request for setting extradata failed");
+        return false;
+    }
+    return true;
+}
+
+bool venc_dev::venc_set_useltr(OMX_U32 frameIdx)
+{
+    DEBUG_PRINT_LOW("venc_use_goldenframe");
+    int rc = true;
+    struct v4l2_control control;
+
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_USELTRFRAME;
+    control.value = frameIdx;
+
+    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+    if (rc) {
+        DEBUG_PRINT_ERROR("Failed to set use_ltr %d", rc);
+        return false;
+    }
+
+    DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, val=%d",
+                    control.id, control.value);
+    return true;
+}
+
+bool venc_dev::venc_set_markltr(OMX_U32 frameIdx)
+{
+    DEBUG_PRINT_LOW("venc_set_goldenframe");
+    int rc = true;
+    struct v4l2_control control;
+
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_MARKLTRFRAME;
+    control.value = frameIdx;
+
+    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+    if (rc) {
+        DEBUG_PRINT_ERROR("Failed to set ltrmode %d", rc);
+        return false;
+    }
+
+    DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, val=%d",
+                    control.id, control.value);
     return true;
 }
 
