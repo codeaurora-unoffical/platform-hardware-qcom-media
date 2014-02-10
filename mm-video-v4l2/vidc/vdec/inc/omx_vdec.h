@@ -101,6 +101,10 @@ extern "C" {
 #include <linux/msm_vidc_dec.h>
 #include <media/msm_vidc.h>
 #include "frameparser.h"
+#ifdef _ANDROID_
+#include <android/rect.h>
+#include "softwareColorConverter.h"
+#endif
 #ifdef MAX_RES_1080P
 #include "mp4_utils.h"
 #endif
@@ -758,6 +762,11 @@ class omx_vdec: public qc_omx_component
 #ifdef _ANDROID_
         // Timestamp list
         ts_arr_list           m_timestamp_list;
+#endif
+
+#ifdef _ANDROID_
+        softwareColorConverter*     mSoftwareColorConverter;
+        ARect  mCropRect;
 #endif
 
         bool input_flush_progress;

@@ -6500,6 +6500,12 @@ int omx_vdec::async_message_process (void *context, void* message)
                     DEBUG_PRINT_HIGH("Left: %d, Right: %d, top: %d, Bottom: %d\n",
                                       vdec_msg->msgdata.output_frame.framesize.left,vdec_msg->msgdata.output_frame.framesize.right,
                                       vdec_msg->msgdata.output_frame.framesize.top, vdec_msg->msgdata.output_frame.framesize.bottom);
+#ifdef _ANDROID_
+                    omx->mCropRect.left   = vdec_msg->msgdata.output_frame.framesize.left;
+                    omx->mCropRect.right  = vdec_msg->msgdata.output_frame.framesize.right;
+                    omx->mCropRect.top    = vdec_msg->msgdata.output_frame.framesize.top;
+                    omx->mCropRect.bottom = vdec_msg->msgdata.output_frame.framesize.bottom;
+#endif
                     if (format_notably_changed) {
                         if (omx->is_video_session_supported()) {
                             omx->post_event (NULL, vdec_msg->status_code,
@@ -8478,6 +8484,9 @@ bool omx_vdec::allocate_color_convert_buf::set_color_format(
                 status = false;
             } else
                 enabled = true;
+#ifdef _ANDROID_
+            omx->mSoftwareColorConverter = new softwareColorConverter;
+#endif
         }
     } else {
         if (enabled)
@@ -8517,9 +8526,25 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr()
         bool status;
         if (!omx->in_reconfig && !omx->output_flush_progress && bufadd->nFilledLen) {
             pthread_mutex_lock(&omx->c_lock);
+#ifdef _ANDROID_
+            if (!omx->mSoftwareColorConverter) {
+                status = c2d.convert(omx->drv_ctx.ptr_outputbuffer[index].pmem_fd,
+                        omx->m_out_mem_ptr->pBuffer, bufadd->pBuffer, pmem_fd[index],
+                        pmem_baseaddress[index], pmem_baseaddress[index]);
+            } else {
+                status = omx->mSoftwareColorConverter->convertDecoderOutputToI420(
+                            (uint8_t *)bufadd->pBuffer,  // SrcdecoderBits
+                            omx->drv_ctx.video_resolution.frame_width,  // decoderWidth
+                            omx->drv_ctx.video_resolution.frame_height,  // decoderHeight
+                            omx->mCropRect,  // decoderRect
+                            pmem_baseaddress[index] /* dstBits */) == 0;
+
+            }
+#else
             status = c2d.convert(omx->drv_ctx.ptr_outputbuffer[index].pmem_fd,
-                    omx->m_out_mem_ptr->pBuffer, bufadd->pBuffer, pmem_fd[index],
-                    pmem_baseaddress[index], pmem_baseaddress[index]);
+                        omx->m_out_mem_ptr->pBuffer, bufadd->pBuffer, pmem_fd[index],
+                        pmem_baseaddress[index], pmem_baseaddress[index]);
+#endif
             pthread_mutex_unlock(&omx->c_lock);
             m_out_mem_ptr_client[index].nFilledLen = buffer_size_req;
             if (!status) {
