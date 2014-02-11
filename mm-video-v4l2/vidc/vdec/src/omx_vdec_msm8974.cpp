@@ -498,6 +498,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     output_flush_progress (false),
     input_use_buffer (false),
     output_use_buffer (false),
+    is_first_allocate_buffer (false),
     ouput_egl_buffers(false),
     m_use_output_pmem(OMX_FALSE),
     m_out_mem_region_smi(OMX_FALSE),
@@ -1389,6 +1390,34 @@ int omx_vdec::log_output_buffers(OMX_BUFFERHEADERTYPE *buffer) {
         }
     }
     return 0;
+}
+
+void omx_vdec::clear_padding_region(OMX_BUFFERHEADERTYPE *buffer) {
+    if (!is_component_secure() && is_first_allocate_buffer && buffer && buffer->nFilledLen) {
+        if (drv_ctx.video_resolution.frame_width <= 480 && drv_ctx.video_resolution.frame_height <= 360) {
+            int buf_index = buffer - m_out_mem_ptr;
+            int stride = drv_ctx.video_resolution.stride;
+            int scanlines = drv_ctx.video_resolution.scan_lines;
+            char *temp = (char *)drv_ctx.ptr_outputbuffer[buf_index].bufferaddr;
+            unsigned i;
+            for (i = 0; i < drv_ctx.video_resolution.frame_height; i++) {
+                // set concealment color of line padding to 0 (green)
+                memset(temp+drv_ctx.video_resolution.frame_width,0x0,
+                        stride-drv_ctx.video_resolution.frame_width);
+                temp += stride;
+            }
+            // clear padding lines between y and uv
+            memset(temp,0x0,stride*(scanlines-drv_ctx.video_resolution.frame_height));
+            temp += stride*(scanlines-drv_ctx.video_resolution.frame_height);
+            for(i = 0; i < drv_ctx.video_resolution.frame_height/2; i++) {
+                memset(temp+drv_ctx.video_resolution.frame_width,0x0,
+                        stride-drv_ctx.video_resolution.frame_width);
+                temp += stride;
+            }
+            memset(temp,0x0,stride*(scanlines-drv_ctx.video_resolution.frame_height)/2);
+        }
+        is_first_allocate_buffer = false;
+    }
 }
 
 /* ======================================================================
@@ -5069,6 +5098,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
         }
     }
 
+    is_first_allocate_buffer = true;
     return eRet;
 }
 
@@ -6395,6 +6425,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
 
     DEBUG_PRINT_LOW("In fill Buffer done call address %p ",buffer);
     log_output_buffers(buffer);
+    clear_padding_region(buffer);
 
     if (!output_flush_progress && (buffer->nFilledLen > 0)) {
         DEBUG_PRINT_LOW("Processing extradata");
