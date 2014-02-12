@@ -667,7 +667,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
         codec_profile.profile = V4L2_MPEG_VIDC_VIDEO_VP8_UNUSED;
         profile_level.level = V4L2_MPEG_VIDC_VIDEO_VP8_VERSION_0;
         session_qp_range.minqp = 1;
-        session_qp_range.maxqp = 51;
+        session_qp_range.maxqp = 128;
 #ifdef OUTPUT_BUFFER_LOG
         strcat(outputfilename, "ivf");
 #endif
@@ -808,6 +808,13 @@ bool venc_dev::venc_open(OMX_U32 codec)
         capability.max_width = frmsize.stepwise.max_width;
         capability.min_height = frmsize.stepwise.min_height;
         capability.max_height = frmsize.stepwise.max_height;
+    }
+    //Initialize non-default parameters
+    if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_VP8) {
+        control.id = V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAMES;
+        control.value = 0x7fffffff;
+        if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control))
+            DEBUG_PRINT_ERROR("Failed to set V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAMES");
     }
 
     return true;
@@ -2488,10 +2495,13 @@ bool venc_dev::venc_set_session_qp_range(OMX_U32 min_qp, OMX_U32 max_qp)
 
     if ((min_qp >= session_qp_range.minqp) && (max_qp <= session_qp_range.maxqp)) {
 
-        control.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP;
+        if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_VP8)
+            control.id = V4L2_CID_MPEG_VIDC_VIDEO_VP8_MIN_QP;
+        else
+            control.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP;
         control.value = min_qp;
 
-        DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d\n",
+        DEBUG_PRINT_LOW("Calling IOCTL set MIN_QP control id=%d, val=%d",
                 control.id, control.value);
         rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
         if (rc) {
@@ -2499,10 +2509,13 @@ bool venc_dev::venc_set_session_qp_range(OMX_U32 min_qp, OMX_U32 max_qp)
             return false;
         }
 
-        control.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP;
+        if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_VP8)
+            control.id = V4L2_CID_MPEG_VIDC_VIDEO_VP8_MAX_QP;
+        else
+            control.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP;
         control.value = max_qp;
 
-        DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d\n",
+        DEBUG_PRINT_LOW("Calling IOCTL set MAX_QP control id=%d, val=%d",
                 control.id, control.value);
         rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
         if (rc) {
