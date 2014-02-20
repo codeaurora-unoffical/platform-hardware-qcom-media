@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -204,9 +204,7 @@ class venc_dev
         unsigned venc_pause(void);
         unsigned venc_start(void);
         unsigned venc_flush(unsigned);
-#ifdef _ANDROID_ICS_
         bool venc_set_meta_mode(bool);
-#endif
         unsigned venc_resume(void);
         unsigned venc_start_done(void);
         unsigned venc_stop_done(void);
@@ -232,7 +230,8 @@ class venc_dev
         bool venc_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height);
 
-        OMX_U32 m_nDriver_fd;
+        struct venc_debug_cap m_debug;
+	OMX_U32 m_nDriver_fd;
         bool m_profile_set;
         bool m_level_set;
         int num_planes;

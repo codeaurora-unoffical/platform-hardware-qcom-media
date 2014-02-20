@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -29,13 +29,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include "video_encoder_device.h"
 #include <stdio.h>
-#ifdef _ANDROID_ICS_
-#include <media/hardware/HardwareAPI.h>
-#endif
+
 #ifdef _ANDROID_
+#include <media/hardware/HardwareAPI.h>
 #include <cutils/properties.h>
-#endif
-#ifndef _ANDROID_
+#else
+#include <omx_meta_mode.h>
 #include <glib.h>
 #define strlcpy g_strlcpy
 #endif
@@ -51,7 +50,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 extern int m_pipe;
 int debug_level = PRIO_ERROR;
-
+static int bframes;
+static int entropy;
 // factory function executed by the core to create instances
 void *get_omx_component_factory_fn(void)
 {
@@ -62,18 +62,27 @@ void *get_omx_component_factory_fn(void)
 
 omx_venc::omx_venc()
 {
-#ifdef _ANDROID_ICS_
     meta_mode_enable = false;
     memset(meta_buffer_hdr,0,sizeof(meta_buffer_hdr));
     memset(meta_buffers,0,sizeof(meta_buffers));
     memset(opaque_buffer_hdr,0,sizeof(opaque_buffer_hdr));
     mUseProxyColorFormat = false;
     get_syntaxhdr_enable = false;
-#endif
+    bframes = entropy = 0;
+#ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.debug.level", property_value, "0");
     debug_level = atoi(property_value);
     property_value[0] = '\0';
+    property_get("vidc.debug.bframes", property_value, "0");
+    bframes = atoi(property_value);
+    property_value[0] = '\0';
+    property_get("vidc.debug.entropy", property_value, "0");
+    entropy = !!atoi(property_value);
+    property_value[0] = '\0';
+#else
+    debug_level = 7;
+#endif
 }
 
 omx_venc::~omx_venc()
@@ -532,7 +541,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     DEBUG_PRINT_LOW("i/p previous min cnt = %lu", m_sInPortDef.nBufferCountMin);
                     memcpy(&m_sInPortDef, portDefn,sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
 
-#ifdef _ANDROID_ICS_
                     if (portDefn->format.video.eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
                         m_sInPortDef.format.video.eColorFormat = (OMX_COLOR_FORMATTYPE)
@@ -548,7 +556,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
                     } else
                         mUseProxyColorFormat = false;
-#endif
                     /*Query Input Buffer Requirements*/
                     dev_get_buf_req   (&m_sInPortDef.nBufferCountMin,
                             &m_sInPortDef.nBufferCountActual,
@@ -614,7 +621,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                             portFmt->eColorFormat);
                     update_profile_level(); //framerate
 
-#ifdef _ANDROID_ICS_
                     if (portFmt->eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
                         m_sInPortFormat.eColorFormat = (OMX_COLOR_FORMATTYPE)
@@ -629,7 +635,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         mUseProxyColorFormat = true;
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
                     } else
-#endif
                     {
                         m_sInPortFormat.eColorFormat = portFmt->eColorFormat;
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB;
@@ -681,6 +686,14 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         mp4_param.nBFrames = 0;
                     }
 #endif
+#ifdef _MSM8974_
+                    if (pParam->nBFrames || bframes)
+                        mp4_param.nBFrames = (pParam->nBFrames > (unsigned int) bframes)? pParam->nBFrames : bframes;
+                    if (mp4_param.nBFrames > 3)
+                        mp4_param.nBFrames = 3;
+                    DEBUG_PRINT_HIGH("MPEG4: %lu BFrames are being set", mp4_param.nBFrames);
+#endif
+
                 } else {
                     if (pParam->nBFrames) {
                         DEBUG_PRINT_ERROR("Warning: B frames not supported");
@@ -692,7 +705,10 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 }
                 memcpy(&m_sParamMPEG4,pParam, sizeof(struct OMX_VIDEO_PARAM_MPEG4TYPE));
                 m_sIntraperiod.nPFrames = m_sParamMPEG4.nPFrames;
-                m_sIntraperiod.nBFrames = m_sParamMPEG4.nBFrames;
+                if (pParam->nBFrames || bframes)
+                    m_sIntraperiod.nBFrames = m_sParamMPEG4.nBFrames = mp4_param.nBFrames;
+                else
+                    m_sIntraperiod.nBFrames = m_sParamMPEG4.nBFrames;
                 break;
             }
         case OMX_IndexParamVideoH263:
@@ -735,6 +751,23 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         avc_param.nRefFrames = 1;
                     }
 #endif
+#ifdef _MSM8974_
+                    if (pParam->nBFrames || bframes) {
+                        avc_param.nBFrames = (pParam->nBFrames > (unsigned int) bframes)? pParam->nBFrames : bframes;
+                        avc_param.nRefFrames = avc_param.nBFrames + 1;
+                    } else {
+                        avc_param.nBFrames = 1;
+                        avc_param.nRefFrames = 2;
+                    }
+                    if (avc_param.nBFrames > 3) {
+                        avc_param.nBFrames = 3;
+                        avc_param.nRefFrames = avc_param.nBFrames + 1;
+                    }
+                    DEBUG_PRINT_HIGH("AVC: RefFrames: %lu, BFrames: %lu", avc_param.nRefFrames, avc_param.nBFrames);
+
+                    avc_param.bEntropyCodingCABAC = (OMX_BOOL)(avc_param.bEntropyCodingCABAC && entropy);
+                    avc_param.nCabacInitIdc = entropy ? avc_param.nCabacInitIdc : 0;
+#endif
                 } else {
                     if (pParam->nRefFrames != 1) {
                         DEBUG_PRINT_ERROR("Warning: Only 1 RefFrame is supported, changing RefFrame from %lu to 1)", pParam->nRefFrames);
@@ -750,7 +783,10 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 }
                 memcpy(&m_sParamAVC,pParam, sizeof(struct OMX_VIDEO_PARAM_AVCTYPE));
                 m_sIntraperiod.nPFrames = m_sParamAVC.nPFrames;
-                m_sIntraperiod.nBFrames = m_sParamAVC.nBFrames;
+                if (pParam->nBFrames || bframes)
+                    m_sIntraperiod.nBFrames = m_sParamAVC.nBFrames = avc_param.nBFrames;
+                else
+                    m_sIntraperiod.nBFrames = m_sParamAVC.nBFrames;
                 break;
             }
         case (OMX_INDEXTYPE)OMX_IndexParamVideoVp8:
@@ -984,7 +1020,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 memcpy(&m_sIntraRefresh, pParam, sizeof(m_sIntraRefresh));
                 break;
             }
-#ifdef _ANDROID_ICS_
         case OMX_QcomIndexParamVideoMetaBufferMode:
             {
                 StoreMetaDataInBuffersParams *pParam =
@@ -1020,7 +1055,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 }
             }
             break;
-#endif
 #if !defined(MAX_RES_720P) || defined(_MSM8974_)
         case OMX_QcomIndexParamIndexExtraDataType:
             {
@@ -1537,11 +1571,7 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     }
 
     /*Check if the input buffers have to be cleaned up*/
-    if (m_inp_mem_ptr
-#ifdef _ANDROID_ICS_
-            && !meta_mode_enable
-#endif
-       ) {
+    if (m_inp_mem_ptr && !meta_mode_enable) {
         DEBUG_PRINT_LOW("Freeing the Input Memory");
         for (i=0; i<m_sInPortDef.nBufferCountActual; i++ ) {
             free_input_buffer (&m_inp_mem_ptr[i]);
@@ -1770,9 +1800,7 @@ int omx_venc::async_message_process (void *context, void* message)
                 m_sVenc_msg->statuscode = VEN_S_EFAIL;
             }
 
-#ifdef _ANDROID_ICS_
             omx->omx_release_meta_buffer(omxhdr);
-#endif
             omx->post_event ((unsigned int)omxhdr,m_sVenc_msg->statuscode,
                     OMX_COMPONENT_GENERATE_EBD);
             break;

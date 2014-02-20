@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2011, 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2011, 2013-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -38,6 +38,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/msm_ion.h>
 #endif
 
+#ifdef _ANDROID_
+#include <cutils/properties.h>
+#endif
+
+#define PROPERTY_VALUE_MAX 92
 #define OMX_VIDEO_DEC_NUM_INPUT_BUFFERS   2
 #define OMX_VIDEO_DEC_NUM_OUTPUT_BUFFERS  2
 
@@ -68,6 +73,17 @@ struct pmem {
     unsigned offset;
     unsigned size;
 };
+
+struct venc_debug_cap {
+    bool in_buffer_log;
+    bool out_buffer_log;
+    char infile_name[PROPERTY_VALUE_MAX];
+    char outfile_name[PROPERTY_VALUE_MAX];
+    char log_loc[PROPERTY_VALUE_MAX];
+    FILE *infile;
+    FILE *outfile;
+};
+
 #ifdef USE_ION
 struct venc_ion {
     int ion_device_fd;

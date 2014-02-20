@@ -31,7 +31,9 @@
 #define C2D_ColorConverter_H_
 
 #include <c2d2.h>
+#ifdef _ANDROID_
 #include <ColorConverter.h>
+#endif
 #include <sys/types.h>
 
 typedef C2D_STATUS (*LINK_c2dCreateSurface)( uint32 *surface_id,
@@ -66,7 +68,9 @@ typedef C2D_STATUS (*LINK_c2dMapAddr)( int mem_fd, void * hostptr, uint32 len, u
 
 typedef C2D_STATUS (*LINK_c2dUnMapAddr)(void * gpuaddr);
 
+#ifdef _ANDROID_
 namespace android {
+#endif
 
 /*TODO: THIS NEEDS TO ENABLED FOR JB PLUS*/
 enum ColorConvertFormat {
@@ -107,6 +111,7 @@ public:
 typedef C2DColorConverterBase* createC2DColorConverter_t(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags, size_t srcStride);
 typedef void destroyC2DColorConverter_t(C2DColorConverterBase*);
 
+#ifdef _ANDROID_
 }
-
+#endif
 #endif  // C2D_ColorConverter_H_
