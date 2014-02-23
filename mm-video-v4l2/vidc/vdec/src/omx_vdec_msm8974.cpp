@@ -1707,6 +1707,16 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
             DEBUG_PRINT_ERROR("Failed to set conceal color %d\n", ret);
         }
 
+        property_get("persist.vidc.dec.conceal_color", property_value, DEFAULT_CONCEAL_COLOR);
+        m_conceal_color= atoi(property_value);
+        DEBUG_PRINT_HIGH("trying to set 0x%x as conceal color\n",m_conceal_color);
+        control.id = V4L2_CID_MPEG_VIDC_VIDEO_CONCEAL_COLOR;
+        control.value = m_conceal_color;
+        ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control);
+        if (ret) {
+            DEBUG_PRINT_ERROR("Failed to set conceal color %d\n", ret);
+        }
+
         //Get the hardware capabilities
         memset((void *)&frmsize,0,sizeof(frmsize));
         frmsize.index = 0;
