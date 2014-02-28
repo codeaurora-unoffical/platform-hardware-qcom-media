@@ -773,6 +773,7 @@ class omx_vdec: public qc_omx_component
         bool output_flush_progress;
         bool input_use_buffer;
         bool output_use_buffer;
+        bool is_first_allocate_buffer;
         bool ouput_egl_buffers;
         OMX_BOOL m_use_output_pmem;
         OMX_BOOL m_out_mem_region_smi;
@@ -975,6 +976,9 @@ class omx_vdec: public qc_omx_component
         struct debug_cap m_debug;
         int log_input_buffers(const char *, int);
         int log_output_buffers(OMX_BUFFERHEADERTYPE *);
+#ifdef _MSM8974_
+        void clear_padding_region(OMX_BUFFERHEADERTYPE *buffer);
+#endif
 };
 
 #ifdef _MSM8974_
