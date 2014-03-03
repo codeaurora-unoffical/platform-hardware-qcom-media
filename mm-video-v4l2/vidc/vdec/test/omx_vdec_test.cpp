@@ -3650,6 +3650,8 @@ int drawBG(void)
 #else
     short * p;
 #endif
+
+#ifndef _NOFBMEM_
     void *fb_buf = mmap (NULL, finfo.smem_len,PROT_READ|PROT_WRITE, MAP_SHARED, fb_fd, 0);
 
     if (fb_buf == MAP_FAILED) {
@@ -3675,6 +3677,7 @@ int drawBG(void)
     }
 
     DEBUG_PRINT("drawBG success!\n");
+#endif
     return 0;
 }
 
@@ -3803,6 +3806,13 @@ int overlay_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr)
 {
     OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *pPMEMInfo = NULL;
     struct msmfb_overlay_data ov_front;
+#ifdef _NOFBMEM_
+    struct mdp_display_commit commit;
+    memset(&commit, 0x00, sizeof(commit));
+    commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+    commit.wait_for_finish = 1;
+#endif
+
     memset(&ov_front, 0, sizeof(struct msmfb_overlay_data));
 #if defined(_ANDROID_) && !defined(USE_EGL_IMAGE_TEST_APP) && !defined(USE_EXTERN_PMEM_BUF)
     MemoryHeapBase *vheap = NULL;
@@ -3842,10 +3852,18 @@ int overlay_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr)
                 __LINE__);
         return -1;
     }
+
+#ifdef _NOFBMEM_
+    if ( ioctl(fb_fd, MSMFB_DISPLAY_COMMIT, &commit)) {
+        printf("ERROR: MSMFB_DISPLAY_COMMIT failed! line=%d\n", __LINE__);
+        return -1;
+    }
+#else
     if (ioctl(fb_fd, FBIOPAN_DISPLAY, &vinfo) < 0) {
         printf("ERROR: FBIOPAN_DISPLAY failed! line=%d\n", __LINE__);
         return -1;
     }
+#endif
 
     DEBUG_PRINT("\nMSMFB_OVERLAY_PLAY successfull");
     return 0;
@@ -4000,11 +4018,12 @@ void render_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr)
 
     //e->src_rect.w = portFmt.format.video.nStride;
     //e->src_rect.h = portFmt.format.video.nSliceHeight;
-
+#if 0
     if (ioctl(fb_fd, MSMFB_BLIT, &img)) {
         DEBUG_PRINT_ERROR("MSMFB_BLIT ioctl failed!\n");
         return;
     }
+#endif
 
     if (ioctl(fb_fd, FBIOPAN_DISPLAY, &vinfo) < 0) {
         DEBUG_PRINT_ERROR("FBIOPAN_DISPLAY failed! line=%d\n", __LINE__);

@@ -67,6 +67,7 @@ mm_vdec_omx_test_CPPFLAGS = -I./inc
 mm_vdec_omx_test_CPPFLAGS += -I../../../mm-core/inc
 mm_vdec_omx_test_CPPFLAGS += -I../common/inc
 mm_vdec_omx_test_CPPFLAGS += -DUSE_ION
+mm_vdec_omx_test_CPPFLAGS += -D_NOFBMEM_
 
 if TARGET_B_FAMILY
 mm_vdec_omx_test_CPPFLAGS += -D_MSM8974_
