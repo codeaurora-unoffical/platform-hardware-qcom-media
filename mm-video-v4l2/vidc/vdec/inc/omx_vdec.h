@@ -300,6 +300,20 @@ struct dynamic_buf_list {
     OMX_U32 ref_count;
 };
 
+inline void* memcpy_test(void *to, const void *from, size_t count)
+{
+const unsigned char *f = (unsigned char *)from;
+char *temp = (char *)to;
+
+while (count) {
+count--;
+*temp = *f;
+f++;
+temp++;
+}
+return to;
+}
+
 // OMX video decoder class
 class omx_vdec: public qc_omx_component
 {

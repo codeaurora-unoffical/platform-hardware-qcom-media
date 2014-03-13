@@ -1300,7 +1300,7 @@ OMX_ERRORTYPE omx_vdec::is_video_session_supported()
                 m_decoder_capability.min_height,
                 m_decoder_capability.max_width,
                 m_decoder_capability.max_height);
-        return OMX_ErrorUnsupportedSetting;
+//        return OMX_ErrorUnsupportedSetting;
     }
     DEBUG_PRINT_HIGH("video session supported");
     return OMX_ErrorNone;
@@ -3815,7 +3815,7 @@ OMX_ERRORTYPE  omx_vdec::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                                           if (drv_ctx.decoder_format == VDEC_CODECTYPE_H264) {
                                               OMX_QCOM_FRAME_PACK_ARRANGEMENT *configFmt =
                                                   (OMX_QCOM_FRAME_PACK_ARRANGEMENT *) configData;
-                                              memcpy(configFmt, &m_frame_pack_arrangement,
+                                              memcpy_test(configFmt, &m_frame_pack_arrangement,
                                                   sizeof(OMX_QCOM_FRAME_PACK_ARRANGEMENT));
                                           } else {
                                               DEBUG_PRINT_ERROR("get_config: Framepack data not supported for non H264 codecs");
@@ -3824,7 +3824,7 @@ OMX_ERRORTYPE  omx_vdec::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                                       }
         case OMX_IndexConfigCommonOutputCrop: {
                                   OMX_CONFIG_RECTTYPE *rect = (OMX_CONFIG_RECTTYPE *) configData;
-                                  memcpy(rect, &rectangle, sizeof(OMX_CONFIG_RECTTYPE));
+                                  memcpy_test(rect, &rectangle, sizeof(OMX_CONFIG_RECTTYPE));
                                   break;
                               }
         default: {
@@ -3911,7 +3911,7 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 len = len << 8;
                 len |= *(pSrcBuf + 1);
                 psize = (uint8 *) & len;
-                memcpy(pDestBuf + nal_length, pSrcBuf + 2,len);
+                memcpy_test(pDestBuf + nal_length, pSrcBuf + 2,len);
                 for (unsigned int i = 0; i < nal_length; i++) {
                     pDestBuf[i] = psize[nal_length - 1 - i];
                 }
@@ -3927,7 +3927,7 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
             m_vendor_config.nPortIndex = config->nPortIndex;
             m_vendor_config.nDataSize = config->nDataSize;
             m_vendor_config.pData = (OMX_U8 *) malloc((config->nDataSize));
-            memcpy(m_vendor_config.pData, config->pData,config->nDataSize);
+            memcpy_test(m_vendor_config.pData, config->pData,config->nDataSize);
         } else if (!strcmp(drv_ctx.kind, "OMX.qcom.video.decoder.vc1")) {
             if (m_vendor_config.pData) {
                 free(m_vendor_config.pData);
@@ -3943,7 +3943,7 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 m_vendor_config.nDataSize = config->nDataSize;
                 m_vendor_config.pData =
                     (OMX_U8 *) malloc(config->nDataSize);
-                memcpy(m_vendor_config.pData, config->pData,
+                memcpy_test(m_vendor_config.pData, config->pData,
                         config->nDataSize);
                 m_vc1_profile = VC1_SP_MP_RCV;
             } else if (*((OMX_U32 *) config->pData) == VC1_AP_SEQ_START_CODE) {
@@ -3952,7 +3952,7 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 m_vendor_config.nDataSize = config->nDataSize;
                 m_vendor_config.pData =
                     (OMX_U8 *) malloc((config->nDataSize));
-                memcpy(m_vendor_config.pData, config->pData,
+                memcpy_test(m_vendor_config.pData, config->pData,
                         config->nDataSize);
                 m_vc1_profile = VC1_AP;
             } else if ((config->nDataSize == VC1_STRUCT_C_LEN)) {
@@ -3960,7 +3960,7 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 m_vendor_config.nPortIndex = config->nPortIndex;
                 m_vendor_config.nDataSize  = config->nDataSize;
                 m_vendor_config.pData = (OMX_U8*)malloc(config->nDataSize);
-                memcpy(m_vendor_config.pData,config->pData,config->nDataSize);
+                memcpy_test(m_vendor_config.pData,config->pData,config->nDataSize);
                 m_vc1_profile = VC1_SP_MP_RCV;
             } else {
                 DEBUG_PRINT_LOW("set_config - Error: Unknown VC1 profile");
@@ -4443,7 +4443,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         if (secure_mode)
             drv_ctx.ptr_outputbuffer[i].bufferaddr = *bufferHdr;
         //setbuffers.buffer_type = VDEC_BUFFER_TYPE_OUTPUT;
-        memcpy (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[i],
+        memcpy_test (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[i],
                 sizeof (vdec_bufferpayload));
 
         DEBUG_PRINT_HIGH("Set the Output Buffer Idx: %d Addr: %p, pmem_fd=0x%x", i,
@@ -4660,7 +4660,7 @@ OMX_ERRORTYPE omx_vdec::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
         if (drv_ctx.ptr_inputbuffer[index].pmem_fd > 0) {
             struct vdec_setbuffer_cmd setbuffers;
             setbuffers.buffer_type = VDEC_BUFFER_TYPE_INPUT;
-            memcpy (&setbuffers.buffer,&drv_ctx.ptr_inputbuffer[index],
+            memcpy_test (&setbuffers.buffer,&drv_ctx.ptr_inputbuffer[index],
                     sizeof (vdec_bufferpayload));
             if (!secure_mode) {
                 DEBUG_PRINT_LOW("unmap the input buffer fd=%d",
@@ -4705,7 +4705,7 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 
         struct vdec_setbuffer_cmd setbuffers;
         setbuffers.buffer_type = VDEC_BUFFER_TYPE_OUTPUT;
-        memcpy (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[index],
+        memcpy_test (&setbuffers.buffer,&drv_ctx.ptr_outputbuffer[index],
                 sizeof (vdec_bufferpayload));
 
         if (!dynamic_buf_mode) {
@@ -5756,9 +5756,9 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
     if (input_use_buffer) {
         if (buffer->nFilledLen <= temp_buffer->buffer_len) {
             if (arbitrary_bytes) {
-                memcpy (temp_buffer->bufferaddr, (buffer->pBuffer + buffer->nOffset),buffer->nFilledLen);
+                memcpy_test (temp_buffer->bufferaddr, (buffer->pBuffer + buffer->nOffset),buffer->nFilledLen);
             } else {
-                memcpy (temp_buffer->bufferaddr, (m_inp_heap_ptr[nPortIndex].pBuffer + m_inp_heap_ptr[nPortIndex].nOffset),
+                memcpy_test (temp_buffer->bufferaddr, (m_inp_heap_ptr[nPortIndex].pBuffer + m_inp_heap_ptr[nPortIndex].nOffset),
                         buffer->nFilledLen);
             }
         } else {
@@ -7124,7 +7124,7 @@ int omx_vdec::async_message_process (void *context, void* message)
                     }
 
                     if (omx->output_use_buffer)
-                        memcpy ( omxhdr->pBuffer, (void *)
+                        memcpy_test ( omxhdr->pBuffer, (void *)
                                 ((unsigned long)vdec_msg->msgdata.output_frame.bufferaddr +
                                  (unsigned long)vdec_msg->msgdata.output_frame.offset),
                                 vdec_msg->msgdata.output_frame.len);
@@ -7375,7 +7375,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
         look_ahead_nal = false;
         if ((pdest_frame->nAllocLen - pdest_frame->nFilledLen) >=
                 h264_scratch.nFilledLen) {
-            memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+            memcpy_test ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
                     h264_scratch.pBuffer,h264_scratch.nFilledLen);
             pdest_frame->nFilledLen += h264_scratch.nFilledLen;
             DEBUG_PRINT_LOW("Copy the previous NAL (h264 scratch) into Dest frame");
@@ -7461,7 +7461,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                         h264_scratch.nFilledLen) {
                     DEBUG_PRINT_LOW("Not a NewFrame Copy into Dest len %lu",
                             h264_scratch.nFilledLen);
-                    memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                    memcpy_test ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
                             h264_scratch.pBuffer,h264_scratch.nFilledLen);
                     pdest_frame->nFilledLen += h264_scratch.nFilledLen;
                     if (m_frame_parser.mutils->nalu_type == NALU_TYPE_EOSEQ)
@@ -7483,7 +7483,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                     look_ahead_nal = false;
                     if ( (pdest_frame->nAllocLen - pdest_frame->nFilledLen) >=
                             h264_scratch.nFilledLen) {
-                        memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                        memcpy_test ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
                                 h264_scratch.pBuffer,h264_scratch.nFilledLen);
                         pdest_frame->nFilledLen += h264_scratch.nFilledLen;
                         h264_scratch.nFilledLen = 0;
@@ -7534,7 +7534,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                     if(pdest_frame->nFilledLen == 0) {
                         /* No residual frame from before, send whatever
                          * we have left */
-                        memcpy((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                        memcpy_test((pdest_frame->pBuffer + pdest_frame->nFilledLen),
                                 h264_scratch.pBuffer, h264_scratch.nFilledLen);
                         pdest_frame->nFilledLen += h264_scratch.nFilledLen;
                         h264_scratch.nFilledLen = 0;
@@ -7545,7 +7545,7 @@ OMX_ERRORTYPE omx_vdec::push_input_h264 (OMX_HANDLETYPE hComp)
                             /* Have a residual frame, but we know that the
                              * AU in this frame is belonging to whatever
                              * frame we had left over.  So append it */
-                             memcpy ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
+                             memcpy_test ((pdest_frame->pBuffer + pdest_frame->nFilledLen),
                                      h264_scratch.pBuffer,h264_scratch.nFilledLen);
                              pdest_frame->nFilledLen += h264_scratch.nFilledLen;
                              h264_scratch.nFilledLen = 0;
@@ -7610,7 +7610,7 @@ OMX_ERRORTYPE copy_buffer(OMX_BUFFERHEADERTYPE* pDst, OMX_BUFFERHEADERTYPE* pSrc
 {
     OMX_ERRORTYPE rc = OMX_ErrorNone;
     if ((pDst->nAllocLen - pDst->nFilledLen) >= pSrc->nFilledLen) {
-        memcpy((pDst->pBuffer + pDst->nFilledLen), pSrc->pBuffer, pSrc->nFilledLen);
+        memcpy_test((pDst->pBuffer + pDst->nFilledLen), pSrc->pBuffer, pSrc->nFilledLen);
         if (pDst->nTimeStamp == LLONG_MAX) {
             pDst->nTimeStamp = pSrc->nTimeStamp;
             DEBUG_PRINT_LOW("Assign Dst nTimeStamp = %lld", pDst->nTimeStamp);
@@ -7806,7 +7806,7 @@ OMX_ERRORTYPE omx_vdec::push_input_vc1(OMX_HANDLETYPE hComp)
                 DEBUG_PRINT_ERROR("Destination buffer full");
                 return OMX_ErrorBadParameter;
             } else {
-                memcpy(pdest, m_vendor_config.pData, m_vendor_config.nDataSize);
+                memcpy_test(pdest, m_vendor_config.pData, m_vendor_config.nDataSize);
                 pdest_frame->nFilledLen += m_vendor_config.nDataSize;
             }
         }
@@ -8805,6 +8805,7 @@ unrecognized_extradata:
 OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U32 requested_extradata,
         bool is_internal, bool enable)
 {
+	return OMX_ErrorNone;
     OMX_ERRORTYPE ret = OMX_ErrorNone;
     struct v4l2_control control;
     if (m_state != OMX_StateLoaded) {
@@ -9237,9 +9238,9 @@ void omx_vdec::append_framepack_extradata(OMX_OTHER_EXTRADATATYPE *extra,
     framepack->nSize = sizeof(OMX_QCOM_FRAME_PACK_ARRANGEMENT);
     framepack->nVersion.nVersion = OMX_SPEC_VERSION;
     framepack->nPortIndex = OMX_CORE_OUTPUT_PORT_INDEX;
-    memcpy(&framepack->id, s3d_frame_packing_payload,
+    memcpy_test(&framepack->id, s3d_frame_packing_payload,
         sizeof(struct msm_vidc_s3d_frame_packing_payload));
-    memcpy(&m_frame_pack_arrangement, framepack,
+    memcpy_test(&m_frame_pack_arrangement, framepack,
         sizeof(OMX_QCOM_FRAME_PACK_ARRANGEMENT));
     print_debug_extradata(extra);
 }
@@ -9425,8 +9426,8 @@ OMX_ERRORTYPE omx_vdec::handle_demux_data(OMX_BUFFERHEADERTYPE *p_buf_hdr)
             desc_data |= (start_addr & 7) << 21;
             desc_data |= suffix_byte << 24;
 
-            memcpy(p_demux_data, &desc_data, sizeof(OMX_U32));
-            memcpy(p_demux_data + 4, &nal_size, sizeof(OMX_U32));
+            memcpy_test(p_demux_data, &desc_data, sizeof(OMX_U32));
+            memcpy_test(p_demux_data + 4, &nal_size, sizeof(OMX_U32));
             memset(p_demux_data + 8, 0, sizeof(OMX_U32));
             memset(p_demux_data + 12, 0, sizeof(OMX_U32));
 
@@ -9436,7 +9437,7 @@ OMX_ERRORTYPE omx_vdec::handle_demux_data(OMX_BUFFERHEADERTYPE *p_buf_hdr)
             DEBUG_PRINT_LOW("VC1 terminator entry");
             desc_data = 0;
             desc_data = 0x82 << 24;
-            memcpy(p_demux_data, &desc_data, sizeof(OMX_U32));
+            memcpy_test(p_demux_data, &desc_data, sizeof(OMX_U32));
             memset(p_demux_data + 4, 0, sizeof(OMX_U32));
             memset(p_demux_data + 8, 0, sizeof(OMX_U32));
             memset(p_demux_data + 12, 0, sizeof(OMX_U32));

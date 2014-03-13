@@ -44,7 +44,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "frameparser.h"
 #include "vidc_debug.h"
-
+#include "omx_vdec.h"
 #ifdef _ANDROID_
 extern "C" {
 #include<utils/Log.h>
@@ -182,12 +182,12 @@ int frame_parse::parse_sc_frame ( OMX_BUFFERHEADERTYPE *source,
         dest->nTimeStamp = source->nTimeStamp;
 
         if (start_code == H263_start_code) {
-            memcpy (pdest,start_code,2);
+            memcpy_test (pdest,start_code,2);
             pdest[2] = last_byte_h263;
             dest->nFilledLen += 3;
             pdest += 3;
         } else {
-            memcpy (pdest,start_code,4);
+            memcpy_test (pdest,start_code,4);
 
             if (start_code == VC1_AP_start_code
                     || start_code == MPEG4_start_code
@@ -228,19 +228,19 @@ int frame_parse::parse_sc_frame ( OMX_BUFFERHEADERTYPE *source,
                     psource++;
                 } else if ((start_code [1] == start_code [0]) && (start_code [2]  == start_code [1])) {
                     parse_state = A2;
-                    memcpy (pdest,start_code,1);
+                    memcpy_test (pdest,start_code,1);
                     pdest++;
                     dest->nFilledLen++;
                     dest_len--;
                 } else if (start_code [2] == start_code [0]) {
                     parse_state = A1;
-                    memcpy (pdest,start_code,2);
+                    memcpy_test (pdest,start_code,2);
                     pdest += 2;
                     dest->nFilledLen += 2;
                     dest_len -= 2;
                 } else {
                     parse_state = A0;
-                    memcpy (pdest,start_code,3);
+                    memcpy_test (pdest,start_code,3);
                     pdest += 3;
                     dest->nFilledLen +=3;
                     dest_len -= 3;
@@ -275,13 +275,13 @@ int frame_parse::parse_sc_frame ( OMX_BUFFERHEADERTYPE *source,
                     psource++;
                 } else if (start_code [1] == start_code [0]) {
                     parse_state = A1;
-                    memcpy (pdest,start_code,1);
+                    memcpy_test (pdest,start_code,1);
                     dest->nFilledLen +=1;
                     dest_len--;
                     pdest++;
                 } else {
                     parse_state = A0;
-                    memcpy (pdest,start_code,2);
+                    memcpy_test (pdest,start_code,2);
                     dest->nFilledLen +=2;
                     dest_len -= 2;
                     pdest += 2;
@@ -297,7 +297,7 @@ int frame_parse::parse_sc_frame ( OMX_BUFFERHEADERTYPE *source,
                     source->nOffset++;
                     psource++;
                 } else {
-                    memcpy (pdest,start_code,1);
+                    memcpy_test (pdest,start_code,1);
                     dest->nFilledLen +=1;
                     pdest++;
                     dest_len--;
@@ -463,7 +463,7 @@ int frame_parse::parse_sc_frame ( OMX_BUFFERHEADERTYPE *source,
     }
 
     if (parsed_length > bytes_to_skip) {
-        memcpy (pdest, psource, (parsed_length-bytes_to_skip));
+        memcpy_test (pdest, psource, (parsed_length-bytes_to_skip));
         dest->nFilledLen += (parsed_length-bytes_to_skip);
     }
 
@@ -532,7 +532,7 @@ int frame_parse::parse_h264_nallength (OMX_BUFFERHEADERTYPE *source,
             if (accum_length == nal_length) {
                 accum_length = 0;
                 state_nal = NAL_PARSING;
-                memcpy (pdest,H264_start_code,4);
+                memcpy_test (pdest,H264_start_code,4);
                 dest->nFilledLen += 4;
                 break;
             }
@@ -552,13 +552,13 @@ int frame_parse::parse_h264_nallength (OMX_BUFFERHEADERTYPE *source,
     /*Already in Parsing state go ahead and copy*/
     if (state_nal == NAL_PARSING && temp_len > 0) {
         if (temp_len < bytes_tobeparsed) {
-            memcpy (pdest,psource,temp_len);
+            memcpy_test (pdest,psource,temp_len);
             dest->nFilledLen += temp_len;
             source->nOffset += temp_len;
             source->nFilledLen -= temp_len;
             bytes_tobeparsed -= temp_len;
         } else {
-            memcpy (pdest,psource,bytes_tobeparsed);
+            memcpy_test (pdest,psource,bytes_tobeparsed);
             temp_len -= bytes_tobeparsed;
             dest->nFilledLen += bytes_tobeparsed;
             source->nOffset += bytes_tobeparsed;
