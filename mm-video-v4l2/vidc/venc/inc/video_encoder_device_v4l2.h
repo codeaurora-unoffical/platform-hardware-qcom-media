@@ -77,8 +77,15 @@ struct msm_venc_profilelevel {
 
 struct msm_venc_sessionqp {
     unsigned long    iframeqp;
-    unsigned long    pframqp;
-    unsigned long    bframqp;
+    unsigned long    pframeqp;
+    unsigned long    bframeqp;
+};
+
+struct msm_venc_initqp {
+    unsigned long    iframeqp;
+    unsigned long    pframeqp;
+    unsigned long    bframeqp;
+    unsigned long    enableinitqp;
 };
 
 struct msm_venc_qprange {
@@ -292,6 +299,7 @@ class venc_dev
         int venc_set_format(int);
         bool deinterlace_enabled;
     private:
+        OMX_U32                             m_codec;
         struct msm_venc_basecfg             m_sVenc_cfg;
         struct msm_venc_ratectrlcfg         rate_ctrl;
         struct msm_venc_targetbitrate       bitrate;
@@ -303,6 +311,7 @@ class venc_dev
         struct msm_venc_allocatorproperty   m_sInput_buff_property;
         struct msm_venc_allocatorproperty   m_sOutput_buff_property;
         struct msm_venc_sessionqp           session_qp;
+        struct msm_venc_initqp              init_qp;
         struct msm_venc_qprange             session_qp_range;
         struct msm_venc_qprange             session_qp_values;
         struct msm_venc_multiclicecfg       multislice;
@@ -345,6 +354,7 @@ class venc_dev
         bool venc_set_ltrmode(OMX_U32 enable, OMX_U32 count);
         bool venc_set_useltr();
         bool venc_set_markltr();
+	bool venc_enable_initial_qp(QOMX_EXTNINDEX_VIDEO_INITIALQP* initqp);
         bool venc_set_inband_video_header(OMX_BOOL enable);
         bool venc_set_au_delimiter(OMX_BOOL enable);
         bool venc_set_hier_layers(QOMX_VIDEO_HIERARCHICALCODINGTYPE type, OMX_U32 num_layers);
