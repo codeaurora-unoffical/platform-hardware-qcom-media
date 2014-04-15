@@ -87,7 +87,6 @@ char output_extradata_filename [] = "/data/misc/extradata";
 #endif
 
 #define DEFAULT_FPS 30
-#define MAX_INPUT_ERROR DEFAULT_FPS
 #define MAX_SUPPORTED_FPS 120
 #define DEFAULT_WIDTH_ALIGNMENT 128
 #define DEFAULT_HEIGHT_ALIGNMENT 32
@@ -505,7 +504,6 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     m_app_data(NULL),
     m_inp_mem_ptr(NULL),
     m_out_mem_ptr(NULL),
-    m_inp_err_count(0),
     input_flush_progress (false),
     output_flush_progress (false),
     input_use_buffer (false),
@@ -975,21 +973,15 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                         pThis->omx_report_error ();
                     } else {
                         if (p2 == VDEC_S_INPUT_BITSTREAM_ERR && p1) {
-                            pThis->m_inp_err_count++;
                             pThis->time_stamp_dts.remove_time_stamp(
                                     ((OMX_BUFFERHEADERTYPE *)(intptr_t)p1)->nTimeStamp,
                                     (pThis->drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
                                     ?true:false);
-                        } else {
-                            pThis->m_inp_err_count = 0;
                         }
+
                         if ( pThis->empty_buffer_done(&pThis->m_cmp,
                                     (OMX_BUFFERHEADERTYPE *)(intptr_t)p1) != OMX_ErrorNone) {
                             DEBUG_PRINT_ERROR("empty_buffer_done failure");
-                            pThis->omx_report_error ();
-                        }
-                        if (pThis->m_inp_err_count >= MAX_INPUT_ERROR) {
-                            DEBUG_PRINT_ERROR("Input bitstream error for consecutive %d frames.", MAX_INPUT_ERROR);
                             pThis->omx_report_error ();
                         }
                     }
@@ -2820,42 +2812,25 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                     }
                                 } else if (1 == portFmt->nPortIndex) {
                                     portFmt->eCompressionFormat =  OMX_VIDEO_CodingUnused;
-                                    //On Android, we default to standard YUV formats for non-surface use-cases
-                                    //where apps prefer known color formats.
-                                    OMX_COLOR_FORMATTYPE formatsNonSurfaceMode[] = {
-                                        [0] = OMX_COLOR_FormatYUV420SemiPlanar,
-                                        [1] = OMX_COLOR_FormatYUV420Planar,
-                                        [2] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m,
-                                        [3] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView,
-                                    };
-                                    //for surface mode (normal playback), advertise native/accelerated formats first
-                                    OMX_COLOR_FORMATTYPE formatsDefault[] = {
-                                        [0] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m,
-                                        [1] = OMX_COLOR_FormatYUV420Planar,
-                                        [2] = OMX_COLOR_FormatYUV420SemiPlanar,
-                                        [3] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView,
-                                    };
-#if _ANDROID_
-                                    //Distinguish non-surface mode from normal playback use-case based on
-                                    //usage hinted via "OMX.google.android.index.useAndroidNativeBuffer2"
-                                    OMX_COLOR_FORMATTYPE *colorFormats =
-                                            m_enable_android_native_buffers ? formatsDefault : formatsNonSurfaceMode;
-                                    OMX_U32 maxIndex =
-                                            m_enable_android_native_buffers ? sizeof(formatsDefault) : sizeof(formatsNonSurfaceMode);
-                                    maxIndex /= sizeof(OMX_COLOR_FORMATTYPE);
-#else
-                                    OMX_COLOR_FORMATTYPE *colorFormats = formatsDefault;
-                                    OMX_U32 maxIndex = sizeof(formatsDefault) / sizeof(OMX_COLOR_FORMATTYPE);
-#endif
 
-                                    if (portFmt->nIndex < maxIndex) {
-                                        portFmt->eColorFormat = colorFormats[portFmt->nIndex];
-                                    } else {
+                                    // Distinguish non-surface mode from normal playback use-case based on
+                                    // usage hinted via "OMX.google.android.index.useAndroidNativeBuffer2"
+                                    // For non-android, use the default list
+                                    bool useNonSurfaceMode = false;
+#if _ANDROID_
+                                    useNonSurfaceMode = (m_enable_android_native_buffers == OMX_FALSE);
+#endif
+                                    portFmt->eColorFormat = useNonSurfaceMode ?
+                                        getPreferredColorFormatNonSurfaceMode(portFmt->nIndex) :
+                                        getPreferredColorFormatDefaultMode(portFmt->nIndex);
+
+                                    if (portFmt->eColorFormat == OMX_COLOR_FormatMax ) {
                                         eRet = OMX_ErrorNoMore;
                                         DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoPortFormat:"\
                                                 " NoMore Color formats");
                                     }
                                     DEBUG_PRINT_HIGH("returning color-format: 0x%x", portFmt->eColorFormat);
+                                    ALOGI("returning color-format: 0x%x", portFmt->eColorFormat);
                                 } else {
                                     DEBUG_PRINT_ERROR("get_parameter: Bad port index %d",
                                             (int)portFmt->nPortIndex);
@@ -3628,6 +3603,11 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                            EnableAndroidNativeBuffersParams* enableNativeBuffers = (EnableAndroidNativeBuffersParams *) paramData;
                                            if (enableNativeBuffers) {
                                                m_enable_android_native_buffers = enableNativeBuffers->enable;
+                                               // Use the most-preferred-native-color-format as surface-mode is hinted here
+                                               if(!client_buffers.set_color_format(getPreferredColorFormatDefaultMode(0))) {
+                                                   DEBUG_PRINT_ERROR("Failed to set native color format!");
+                                                   eRet = OMX_ErrorUnsupportedSetting;
+                                               }
                                            }
                                        }
                                        break;
@@ -7271,7 +7251,9 @@ OMX_ERRORTYPE omx_vdec::empty_this_buffer_proxy_arbitrary (
         }
     }
 
-
+    if (codec_config_flag && !(buffer->nFlags & OMX_BUFFERFLAG_CODECCONFIG)) {
+        codec_config_flag = false;
+    }
     return OMX_ErrorNone;
 }
 
