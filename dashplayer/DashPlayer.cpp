@@ -521,10 +521,17 @@ void DashPlayer::onMessageReceived(const sp<AMessage> &msg) {
                     {
                       // reply back to dashcodec if there is an error
                       ALOGE("FeedMoreTSData error on track %d ",track);
-                      sp<AMessage> reply;
-                      CHECK(codecRequest->findMessage("reply", &reply));
-                      reply->setInt32("err", UNKNOWN_ERROR);
-                      reply->post();
+                      if(track == kText)
+                      {
+                        sendTextPacket(NULL, (status_t)UNKNOWN_ERROR);
+                      }
+                      else
+                      {
+                        sp<AMessage> reply;
+                        CHECK(codecRequest->findMessage("reply", &reply));
+                        reply->setInt32("err", UNKNOWN_ERROR);
+                        reply->post();
+                      }
                     }
                 }
 
