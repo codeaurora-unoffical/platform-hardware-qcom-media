@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014444, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  *  File: QCMediaPlayer.java
  *  Description: Snapdragon SDK for Android support class.
