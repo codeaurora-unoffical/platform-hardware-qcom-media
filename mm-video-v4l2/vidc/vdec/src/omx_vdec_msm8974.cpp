@@ -87,7 +87,6 @@ char output_extradata_filename [] = "/data/misc/extradata";
 #endif
 
 #define DEFAULT_FPS 30
-#define MAX_INPUT_ERROR DEFAULT_FPS
 #define MAX_SUPPORTED_FPS 120
 #define DEFAULT_WIDTH_ALIGNMENT 128
 #define DEFAULT_HEIGHT_ALIGNMENT 32
@@ -498,7 +497,6 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     m_app_data(NULL),
     m_inp_mem_ptr(NULL),
     m_out_mem_ptr(NULL),
-    m_inp_err_count(0),
     input_flush_progress (false),
     output_flush_progress (false),
     input_use_buffer (false),
@@ -957,21 +955,15 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                         pThis->omx_report_error ();
                     } else {
                         if (p2 == VDEC_S_INPUT_BITSTREAM_ERR && p1) {
-                            pThis->m_inp_err_count++;
                             pThis->time_stamp_dts.remove_time_stamp(
                                     ((OMX_BUFFERHEADERTYPE *)p1)->nTimeStamp,
                                     (pThis->drv_ctx.interlace != VDEC_InterlaceFrameProgressive)
                                     ?true:false);
-                        } else {
-                            pThis->m_inp_err_count = 0;
                         }
+
                         if ( pThis->empty_buffer_done(&pThis->m_cmp,
                                     (OMX_BUFFERHEADERTYPE *)p1) != OMX_ErrorNone) {
                             DEBUG_PRINT_ERROR("empty_buffer_done failure");
-                            pThis->omx_report_error ();
-                        }
-                        if (pThis->m_inp_err_count >= MAX_INPUT_ERROR) {
-                            DEBUG_PRINT_ERROR("Input bitstream error for consecutive %d frames.", MAX_INPUT_ERROR);
                             pThis->omx_report_error ();
                         }
                     }
@@ -6507,19 +6499,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
             buffer, buffer->pBuffer);
     pending_output_buffers --;
 
-    if (dynamic_buf_mode) {
-        unsigned int nPortIndex = 0;
-        nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)client_buffers.get_il_buf_hdr());
-
-        if (!secure_mode) {
-            munmap(drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr,
-                            drv_ctx.ptr_outputbuffer[nPortIndex].mmaped_size);
-        }
-
-        //Clear graphic buffer handles in dynamic mode
-        native_buffer[nPortIndex].privatehandle = NULL;
-        native_buffer[nPortIndex].nativehandle = NULL;
-    }
     if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
         DEBUG_PRINT_HIGH("Output EOS has been reached");
         if (!output_flush_progress)
@@ -6538,8 +6517,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
         }
     }
 
-    DEBUG_PRINT_LOW("In fill Buffer done call address %p ",buffer);
-    log_output_buffers(buffer);
 
     if (!output_flush_progress && (buffer->nFilledLen > 0)) {
         DEBUG_PRINT_LOW("Processing extradata");
@@ -6676,6 +6653,20 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
         }
 
         if (il_buffer) {
+            log_output_buffers(il_buffer);
+            if (dynamic_buf_mode) {
+                unsigned int nPortIndex = 0;
+                nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)client_buffers.get_il_buf_hdr());
+
+                if (!secure_mode) {
+                    munmap(drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr,
+                            drv_ctx.ptr_outputbuffer[nPortIndex].mmaped_size);
+                }
+
+                //Clear graphic buffer handles in dynamic mode
+                native_buffer[nPortIndex].privatehandle = NULL;
+                native_buffer[nPortIndex].nativehandle = NULL;
+            }
             m_cb.FillBufferDone (hComp,m_app_data,il_buffer);
         } else {
             DEBUG_PRINT_ERROR("Invalid buffer address from get_il_buf_hdr");
@@ -8792,6 +8783,9 @@ void omx_vdec::append_frame_info_extradata(OMX_OTHER_EXTRADATATYPE *extra,
         if (m_disp_hor_size && m_disp_vert_size) {
             frame_info->displayAspectRatio.displayHorizontalSize = m_disp_hor_size;
             frame_info->displayAspectRatio.displayVerticalSize = m_disp_vert_size;
+        } else {
+            frame_info->displayAspectRatio.displayHorizontalSize = 0;
+            frame_info->displayAspectRatio.displayVerticalSize = 0;
         }
     }
 
