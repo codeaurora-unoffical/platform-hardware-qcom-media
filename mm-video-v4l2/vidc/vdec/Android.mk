@@ -91,7 +91,7 @@ libOmxVdec-def += -DMAX_RES_1080P_EBI
 libOmxVdec-def += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
 libOmxVdec-def += -D_MSM8974_
 endif
-ifeq ($(TARGET_BOARD_PLATFORM),plutonium)
+ifeq ($(TARGET_BOARD_PLATFORM),msm8994)
 libOmxVdec-def += -DMAX_RES_1080P
 libOmxVdec-def += -DMAX_RES_1080P_EBI
 libOmxVdec-def += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
@@ -123,13 +123,12 @@ libmm-vdec-inc          += $(OMX_VIDEO_PATH)/vidc/common/inc
 libmm-vdec-inc          += hardware/qcom/media/mm-core/inc
 #DRM include - Interface which loads the DRM library
 libmm-vdec-inc	        += $(OMX_VIDEO_PATH)/DivxDrmDecrypt/inc
-libmm-vdec-inc          += hardware/qcom/display/libgralloc
+libmm-vdec-inc          += $(TARGET_OUT_HEADERS)/qcom/display
+libmm-vdec-inc          += $(TARGET_OUT_HEADERS)/adreno
 libmm-vdec-inc          += frameworks/native/include/media/openmax
 libmm-vdec-inc          += frameworks/native/include/media/hardware
 libmm-vdec-inc          += $(vdec-inc)
-libmm-vdec-inc          += hardware/qcom/display/libqdutils
 libmm-vdec-inc      += hardware/qcom/media/libc2dcolorconvert
-libmm-vdec-inc      += hardware/qcom/display/libcopybit
 libmm-vdec-inc      += frameworks/av/include/media/stagefright
 libmm-vdec-inc      += $(TARGET_OUT_HEADERS)/mm-video/SwVdec
 
@@ -160,11 +159,10 @@ LOCAL_SRC_FILES         += src/h264_utils.cpp
 LOCAL_SRC_FILES         += src/ts_parser.cpp
 LOCAL_SRC_FILES         += src/mp4_utils.cpp
 LOCAL_SRC_FILES         += src/hevc_utils.cpp
-ifneq (,$(filter msm8974 msm8610 msm8226 apq8084 mpq8092 msm_bronze msm8916 plutonium,$(TARGET_BOARD_PLATFORM)))
+ifneq (,$(filter msm8974 msm8610 msm8226 apq8084 mpq8092 msm_bronze msm8916 msm8994,$(TARGET_BOARD_PLATFORM)))
 LOCAL_SRC_FILES         += src/omx_vdec_msm8974.cpp
 else
 LOCAL_SHARED_LIBRARIES  += libhardware
-libmm-vdec-inc          += hardware/qcom/display/libhwcomposer
 LOCAL_SRC_FILES         += src/power_module.cpp
 LOCAL_SRC_FILES         += src/omx_vdec.cpp
 endif
@@ -186,7 +184,7 @@ LOCAL_PATH:= $(ROOT_DIR)
 # libOmxVdecHevc library is not built for OSS builds as QCPATH is null in OSS builds.
 
 ifneq "$(wildcard $(QCPATH) )" ""
-ifneq (,$(filter msm8974 msm8610 msm8226 msm_bronze msm8916 plutonium,$(TARGET_BOARD_PLATFORM)))
+ifneq (,$(filter msm8974 msm8610 msm8226 msm_bronze msm8916 msm8994,$(TARGET_BOARD_PLATFORM)))
 
 LOCAL_MODULE                    := libOmxVdecHevc
 LOCAL_ADDITIONAL_DEPENDENCIES   := libOmxVenc

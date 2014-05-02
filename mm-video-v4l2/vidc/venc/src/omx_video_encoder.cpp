@@ -149,6 +149,11 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
         codec_type = OMX_VIDEO_CodingVPX;
     }
 #endif
+    else if (!strncmp((char *)m_nkind, "OMX.qcom.video.encoder.hevc",    \
+                OMX_MAX_STRINGNAME_SIZE)) {
+        strlcpy((char *)m_cRole, "video_encoder.hevc", OMX_MAX_STRINGNAME_SIZE);
+        codec_type = OMX_VIDEO_CodingHEVC;
+    }
     else {
         DEBUG_PRINT_ERROR("ERROR: Unknown Component");
         eRet = OMX_ErrorInvalidComponentName;
@@ -860,6 +865,14 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     DEBUG_PRINT_LOW("VP8 profile = %d, level = %d", m_sParamVP8.eProfile,
                             m_sParamVP8.eLevel);
                 }
+                else if (!strncmp((char*)m_nkind, "OMX.qcom.video.encoder.hevc",\
+                            OMX_MAX_STRINGNAME_SIZE)) {
+                    m_sParamHEVC.eProfile = (OMX_VIDEO_HEVCPROFILETYPE)m_sParamProfileLevel.eProfile;
+                    m_sParamHEVC.eLevel = (OMX_VIDEO_HEVCLEVELTYPE)m_sParamProfileLevel.eLevel;
+                    DEBUG_PRINT_LOW("HEVC profile = %d, level = %d", m_sParamHEVC.eProfile,
+                            m_sParamHEVC.eLevel);
+                }
+
                 break;
             }
         case OMX_IndexParamStandardComponentRole:
@@ -916,6 +929,15 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     }
                 }
 #endif
+                else if (!strncmp((char*)m_nkind, "OMX.qcom.video.encoder.hevc",OMX_MAX_STRINGNAME_SIZE)) {
+                    if (!strncmp((const char*)comp_role->cRole,"video_encoder.hevc",OMX_MAX_STRINGNAME_SIZE)) {
+                        strlcpy((char*)m_cRole,"video_encoder.hevc",OMX_MAX_STRINGNAME_SIZE);
+                    } else {
+                        DEBUG_PRINT_ERROR("ERROR: Setparameter: unknown Index %s", comp_role->cRole);
+                        eRet = OMX_ErrorUnsupportedSetting;
+                    }
+                }
+
                 else {
                     DEBUG_PRINT_ERROR("ERROR: Setparameter: unknown param %s", m_nkind);
                     eRet = OMX_ErrorInvalidComponentName;
@@ -1392,6 +1414,14 @@ bool omx_venc::update_profile_level()
         DEBUG_PRINT_LOW("VP8 profile = %d, level = %d", m_sParamVP8.eProfile,
                 m_sParamVP8.eLevel);
     }
+    else if (!strncmp((char *)m_nkind, "OMX.qcom.video.encoder.hevc",\
+                OMX_MAX_STRINGNAME_SIZE)) {
+        m_sParamHEVC.eProfile = (OMX_VIDEO_HEVCPROFILETYPE)eProfile;
+        m_sParamHEVC.eLevel = (OMX_VIDEO_HEVCLEVELTYPE)eLevel;
+        DEBUG_PRINT_LOW("HEVC profile = %d, level = %d", m_sParamHEVC.eProfile,
+                m_sParamHEVC.eLevel);
+    }
+
     return true;
 }
 /* ======================================================================
@@ -1789,7 +1819,10 @@ bool omx_venc::dev_free_buf(void *buf_addr,unsigned port)
 
 bool omx_venc::dev_empty_buf(void *buffer, void *pmem_data_buf,unsigned index,unsigned fd)
 {
-    return  handle->venc_empty_buf(buffer, pmem_data_buf,index,fd);
+    bool bret = false;
+    bret = handle->venc_empty_buf(buffer, pmem_data_buf,index,fd);
+    hw_overload = handle->hw_overload;
+    return bret;
 }
 
 bool omx_venc::dev_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,unsigned fd)
@@ -1929,7 +1962,10 @@ int omx_venc::async_message_process (void *context, void* message)
     if (m_sVenc_msg->statuscode != VEN_S_SUCCESS) {
         DEBUG_PRINT_ERROR("ERROR: async_msg_process() - Error statuscode = %lu",
                 m_sVenc_msg->statuscode);
-        omx->omx_report_error();
+        if(m_sVenc_msg->msgcode == VEN_MSG_HW_OVERLOAD) {
+            omx->omx_report_hw_overload();
+        } else
+            omx->omx_report_error();
     }
 
     DEBUG_PRINT_LOW("omx_venc::async_message_process- msgcode = %lu",

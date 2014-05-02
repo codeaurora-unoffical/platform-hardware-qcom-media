@@ -240,7 +240,8 @@ omx_video::omx_video():
     m_flags(0),
     m_etb_count(0),
     m_fbd_count(0),
-    m_event_port_settings_sent(false)
+    m_event_port_settings_sent(false),
+    hw_overload(false)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -405,12 +406,17 @@ void omx_video::process_event_cb(void *ctxt, unsigned char id)
                         pThis->omx_report_error ();
                     }
                     break;
-                case OMX_COMPONENT_GENERATE_ETB:
-                    DEBUG_PRINT_LOW("OMX_COMPONENT_GENERATE_ETB");
-                    if (pThis->empty_this_buffer_proxy((OMX_HANDLETYPE)p1,\
-                                (OMX_BUFFERHEADERTYPE *)p2) != OMX_ErrorNone) {
-                        DEBUG_PRINT_ERROR("ERROR: ETBProxy() failed!");
-                        pThis->omx_report_error ();
+                case OMX_COMPONENT_GENERATE_ETB: {
+                        OMX_ERRORTYPE iret;
+                        DEBUG_PRINT_LOW("OMX_COMPONENT_GENERATE_ETB");
+                        iret = pThis->empty_this_buffer_proxy((OMX_HANDLETYPE)p1, (OMX_BUFFERHEADERTYPE *)p2);
+                        if (iret == OMX_ErrorInsufficientResources) {
+                            DEBUG_PRINT_ERROR("empty_this_buffer_proxy failure due to HW overload");
+                            pThis->omx_report_hw_overload ();
+                        } else if (iret != OMX_ErrorNone) {
+                            DEBUG_PRINT_ERROR("empty_this_buffer_proxy failure");
+                            pThis->omx_report_error ();
+                        }
                     }
                     break;
 
@@ -1552,6 +1558,13 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 OMX_VIDEO_PARAM_VP8TYPE* pParam = (OMX_VIDEO_PARAM_VP8TYPE*)paramData;
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoVp8");
                 memcpy(pParam, &m_sParamVP8, sizeof(m_sParamVP8));
+                break;
+            }
+        case (OMX_INDEXTYPE)OMX_IndexParamVideoHevc:
+            {
+                OMX_VIDEO_PARAM_HEVCTYPE* pParam = (OMX_VIDEO_PARAM_HEVCTYPE*)paramData;
+                DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoHevc");
+                memcpy(pParam, &m_sParamHEVC, sizeof(m_sParamHEVC));
                 break;
             }
         case OMX_IndexParamVideoProfileLevelQuerySupported:
@@ -3457,6 +3470,9 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         post_event ((unsigned long)buffer,0,OMX_COMPONENT_GENERATE_EBD);
         /*Generate an async error and move to invalid state*/
         pending_input_buffers--;
+        if (hw_overload) {
+            return OMX_ErrorInsufficientResources;
+        }
         return OMX_ErrorBadParameter;
     }
     return ret;
@@ -3702,6 +3718,15 @@ OMX_ERRORTYPE  omx_video::component_role_enum(OMX_IN OMX_HANDLETYPE hComp,
         }
     }
 #endif
+    else if (!strncmp((char*)m_nkind, "OMX.qcom.video.encoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
+        if ((0 == index) && role) {
+            strlcpy((char *)role, "video_encoder.hevc", OMX_MAX_STRINGNAME_SIZE);
+            DEBUG_PRINT_LOW("component_role_enum: role %s", role);
+        } else {
+            DEBUG_PRINT_ERROR("ERROR: No more roles");
+            eRet = OMX_ErrorNoMore;
+        }
+    }
     else {
         DEBUG_PRINT_ERROR("ERROR: Querying Role on Unknown Component");
         eRet = OMX_ErrorInvalidComponentName;

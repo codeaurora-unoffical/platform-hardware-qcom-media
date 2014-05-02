@@ -516,8 +516,19 @@ class omx_video: public qc_omx_component
         inline void omx_report_error () {
             if (m_pCallbacks.EventHandler && !m_error_propogated) {
                 m_error_propogated = true;
+                DEBUG_PRINT_ERROR("ERROR: send OMX_ErrorHardware to Client");
                 m_pCallbacks.EventHandler(&m_cmp,m_app_data,
                         OMX_EventError,OMX_ErrorHardware,0,NULL);
+            }
+        }
+
+        inline void omx_report_hw_overload ()
+        {
+            if (m_pCallbacks.EventHandler && !m_error_propogated) {
+                m_error_propogated = true;
+                DEBUG_PRINT_ERROR("ERROR: send OMX_ErrorInsufficientResources to Client");
+                m_pCallbacks.EventHandler(&m_cmp, m_app_data,
+                        OMX_EventError, OMX_ErrorInsufficientResources, 0, NULL);
             }
         }
 
@@ -569,6 +580,7 @@ class omx_video: public qc_omx_component
         OMX_VIDEO_PARAM_H263TYPE m_sParamH263;
         OMX_VIDEO_PARAM_AVCTYPE m_sParamAVC;
         OMX_VIDEO_PARAM_VP8TYPE m_sParamVP8;
+        OMX_VIDEO_PARAM_HEVCTYPE m_sParamHEVC;
         OMX_PORT_PARAM_TYPE m_sPortParam_img;
         OMX_PORT_PARAM_TYPE m_sPortParam_audio;
         OMX_VIDEO_CONFIG_BITRATETYPE m_sConfigBitrate;
@@ -630,6 +642,7 @@ class omx_video: public qc_omx_component
         bool m_event_port_settings_sent;
         OMX_U8                m_cRole[OMX_MAX_STRINGNAME_SIZE];
         extra_data_handler extra_data_handle;
+        bool hw_overload;
 
 };
 
