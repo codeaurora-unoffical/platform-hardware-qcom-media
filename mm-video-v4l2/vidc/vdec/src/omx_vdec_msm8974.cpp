@@ -802,7 +802,7 @@ omx_vdec::~omx_vdec()
         DEBUG_PRINT_HIGH("--> TOTAL PROCESSING TIME");
         dec_time.end();
     }
-    DEBUG_PRINT_HIGH("Exit OMX vdec Destructor");
+    DEBUG_PRINT_INFO("Exit OMX vdec Destructor: fd=%d",drv_ctx.video_driver_fd);
 }
 
 int release_buffers(omx_vdec* obj, enum vdec_buffer buffer_type)
@@ -1522,8 +1522,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
     }
     drv_ctx.video_driver_fd = open(device_name, O_RDWR);
 
-    DEBUG_PRINT_HIGH("omx_vdec::component_init(): Open returned fd %d",
-			drv_ctx.video_driver_fd);
+    DEBUG_PRINT_INFO("component_init: %s : fd=%d", role, drv_ctx.video_driver_fd);
 
     if (drv_ctx.video_driver_fd == 0) {
         DEBUG_PRINT_ERROR("omx_vdec_msm8974 :: Got fd as 0 for msm_vidc_dec, Opening again");
@@ -1710,7 +1709,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
             DEBUG_PRINT_ERROR("Failed to query capabilities");
             /*TODO: How to handle this case */
         } else {
-            DEBUG_PRINT_HIGH("Capabilities: driver_name = %s, card = %s, bus_info = %s,"
+            DEBUG_PRINT_INFO("Capabilities: driver_name = %s, card = %s, bus_info = %s,"
                     " version = %d, capabilities = %x", cap.driver, cap.card,
                     cap.bus_info, cap.version, cap.capabilities);
         }
@@ -1914,7 +1913,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
     if (eRet != OMX_ErrorNone) {
         DEBUG_PRINT_ERROR("Component Init Failed");
     } else {
-        DEBUG_PRINT_HIGH("omx_vdec::component_init() success");
+        DEBUG_PRINT_INFO("omx_vdec::component_init() success : fd=%d",
+                drv_ctx.video_driver_fd);
     }
     //memset(&h264_mv_buff,0,sizeof(struct h264_mv_buffer));
     return eRet;
@@ -2852,7 +2852,6 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                                 " NoMore Color formats");
                                     }
                                     DEBUG_PRINT_HIGH("returning color-format: 0x%x", portFmt->eColorFormat);
-                                    ALOGI("returning color-format: 0x%x", portFmt->eColorFormat);
                                 } else {
                                     DEBUG_PRINT_ERROR("get_parameter: Bad port index %d",
                                             (int)portFmt->nPortIndex);
@@ -3650,6 +3649,8 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                            EnableAndroidNativeBuffersParams* enableNativeBuffers = (EnableAndroidNativeBuffersParams *) paramData;
                                            if (enableNativeBuffers) {
                                                m_enable_android_native_buffers = enableNativeBuffers->enable;
+                                           }
+                                           if (m_enable_android_native_buffers) {
                                                // Use the most-preferred-native-color-format as surface-mode is hinted here
                                                if(!client_buffers.set_color_format(getPreferredColorFormatDefaultMode(0))) {
                                                    DEBUG_PRINT_ERROR("Failed to set native color format!");
@@ -6297,7 +6298,7 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     if (outputExtradataFile)
         fclose (outputExtradataFile);
 #endif
-    DEBUG_PRINT_HIGH("omx_vdec::component_deinit() complete");
+    DEBUG_PRINT_INFO("omx_vdec::component_deinit() complete");
     return OMX_ErrorNone;
 }
 
@@ -8633,7 +8634,7 @@ void omx_vdec::set_frame_rate(OMX_S64 act_timestamp)
             && llabs(act_timestamp - prev_ts) > 2000) {
         new_frame_interval = client_set_fps ? frm_int :
             llabs(act_timestamp - prev_ts);
-        if (new_frame_interval < frm_int || frm_int == 0) {
+        if (new_frame_interval != frm_int || frm_int == 0) {
             frm_int = new_frame_interval;
             if (frm_int) {
                 drv_ctx.frame_rate.fps_numerator = 1e6;
@@ -9912,7 +9913,7 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::allocate_buffers_color_conve
     m_out_mem_ptr_client[i].pBuffer = pmem_baseaddress[i];
     m_out_mem_ptr_client[i].pAppPrivate = appData;
     *bufferHdr = &m_out_mem_ptr_client[i];
-    DEBUG_PRINT_ERROR("IL client buffer header %p", *bufferHdr);
+    DEBUG_PRINT_HIGH("IL client buffer header %p", *bufferHdr);
     allocated_count++;
     return eRet;
 }
