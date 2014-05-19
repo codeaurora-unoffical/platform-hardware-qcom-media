@@ -43,6 +43,10 @@
 #include <cutils/properties.h>
 #include "avc_utils.h"
 
+#ifdef BFAMILY_TARGET /* Venus macros and dynamic mode support present only for B-family targets.*/
+#include <media/msm_media_info.h>
+#endif
+
 //Smmoth streaming settings
 //Max resolution 1080p
 #define MAX_WIDTH 1920;
@@ -279,6 +283,7 @@ struct DashCodec::OutputPortSettingsChangedState : public DashCodec::BaseState {
 protected:
     virtual PortMode getPortMode(OMX_U32 portIndex);
     virtual bool onMessageReceived(const sp<AMessage> &msg);
+    virtual void enableOutputPort(OMX_U32 data1, OMX_U32 data2);
     virtual void stateEntered();
 
     virtual bool onOMXEvent(OMX_EVENTTYPE event, OMX_U32 data1, OMX_U32 data2);
@@ -385,6 +390,8 @@ DashCodec::DashCodec()
       mDequeueCounter(0),
       mStoreMetaDataInOutputBuffers(false),
       mMetaDataBuffersToSubmit(0),
+      mCurrentWidth(0),
+      mCurrentHeight(0),
       mAdaptivePlayback(false) {
     mUninitializedState = new UninitializedState(this);
     mLoadedState = new LoadedState(this);
@@ -1141,6 +1148,12 @@ status_t DashCodec::configureCodec(
             ALOGV("[%s] storeMetaDataInBuffers succeeded", mComponentName.c_str());
             mStoreMetaDataInOutputBuffers = true;
         }
+
+        int32_t push;
+        if (msg->findInt32("push-blank-buffers-on-shutdown", &push)
+                && push != 0) {
+            mFlags |= kFlagPushBlankBuffersToNativeWindowOnShutdown;
+        }
       }
     if (!strncasecmp(mime, "video/", 6)) {
         if (encoder) {
@@ -1157,6 +1170,24 @@ status_t DashCodec::configureCodec(
                     height = MAX_HEIGHT;
                 }
                 err = setupVideoDecoder(mime, width, height);
+
+                //Enable component support to extract SEI extradata if present in AVC stream
+                QOMX_ENABLETYPE extra_data;
+                extra_data.bEnable = OMX_TRUE;
+
+                status_t errVal = mOMX->setParameter(
+                        mNode, (OMX_INDEXTYPE)OMX_QcomIndexEnableExtnUserData,
+                        (OMX_PTR)&extra_data, sizeof(extra_data));
+
+                if (errVal != OK) {
+                        ALOGE("[%s] setting OMX_QcomIndexEnableExtnUserData failed: %d",
+                                mComponentName.c_str(), err);
+                    }
+                else
+                {
+                  ALOGE("[%s] setting OMX_QcomIndexEnableExtnUserData success",
+                                mComponentName.c_str());
+                }
             }
         }
     } else if (!strcasecmp(mime, MEDIA_MIMETYPE_AUDIO_AAC)) {
@@ -2420,7 +2451,15 @@ void DashCodec::sendFormatChange() {
             notify->setInt32("stride", videoDef->nStride);
             notify->setInt32("slice-height", videoDef->nSliceHeight);
             notify->setInt32("color-format", videoDef->eColorFormat);
-            ALOGE("sendformatchange: %d %d", videoDef->nFrameWidth, videoDef->nFrameHeight);
+            ALOGV("sendformatchange: %lu %lu", videoDef->nFrameWidth, videoDef->nFrameHeight);
+
+            //If dynamic buffering mode cache the latest width and height. Will be used for VENUS macors to calculate filledLen in fbd's.
+            if(mStoreMetaDataInOutputBuffers)
+            {
+              mCurrentWidth = videoDef->nFrameWidth;
+              mCurrentHeight = videoDef->nFrameHeight;
+            }
+
             OMX_CONFIG_RECTTYPE* rect;
             bool hasValidCrop = true;
             if (useCachedConfig) {
@@ -2532,7 +2571,7 @@ void DashCodec::signalError(OMX_ERRORTYPE error, status_t internalError) {
     notify->post();
 }
 
-status_t DashCodec::pushBlankBuffersToNativeWindow() {
+status_t DashCodec::PushBlankBuffersToNativeWindow(sp<ANativeWindow> nativeWindow) {
     status_t err = NO_ERROR;
     ANativeWindowBuffer* anb = NULL;
     int numBufs = 0;
@@ -2541,7 +2580,7 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
     // We need to reconnect to the ANativeWindow as a CPU client to ensure that
     // no frames get dropped by SurfaceFlinger assuming that these are video
     // frames.
-    err = native_window_api_disconnect(mNativeWindow.get(),
+    err = native_window_api_disconnect(nativeWindow.get(),
             NATIVE_WINDOW_API_MEDIA);
     if (err != NO_ERROR) {
         ALOGE("error pushing blank frames: api_disconnect failed: %s (%d)",
@@ -2549,7 +2588,7 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
         return err;
     }
 
-    err = native_window_api_connect(mNativeWindow.get(),
+    err = native_window_api_connect(nativeWindow.get(),
             NATIVE_WINDOW_API_CPU);
     if (err != NO_ERROR) {
         ALOGE("error pushing blank frames: api_connect failed: %s (%d)",
@@ -2557,7 +2596,7 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
         return err;
     }
 
-    err = native_window_set_buffers_geometry(mNativeWindow.get(), 1, 1,
+    err = native_window_set_buffers_geometry(nativeWindow.get(), 1, 1,
             HAL_PIXEL_FORMAT_RGBX_8888);
     if (err != NO_ERROR) {
         ALOGE("error pushing blank frames: set_buffers_geometry failed: %s (%d)",
@@ -2565,7 +2604,15 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
         goto error;
     }
 
-    err = native_window_set_usage(mNativeWindow.get(),
+    err = native_window_set_scaling_mode(nativeWindow.get(),
+                NATIVE_WINDOW_SCALING_MODE_SCALE_TO_WINDOW);
+    if (err != NO_ERROR) {
+        ALOGE("error pushing blank_frames: set_scaling_mode failed: %s (%d)",
+              strerror(-err), -err);
+        goto error;
+    }
+
+    err = native_window_set_usage(nativeWindow.get(),
             GRALLOC_USAGE_SW_WRITE_OFTEN);
     if (err != NO_ERROR) {
         ALOGE("error pushing blank frames: set_usage failed: %s (%d)",
@@ -2573,7 +2620,7 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
         goto error;
     }
 
-    err = mNativeWindow->query(mNativeWindow.get(),
+    err = nativeWindow->query(nativeWindow.get(),
             NATIVE_WINDOW_MIN_UNDEQUEUED_BUFFERS, &minUndequeuedBufs);
     if (err != NO_ERROR) {
         ALOGE("error pushing blank frames: MIN_UNDEQUEUED_BUFFERS query "
@@ -2582,7 +2629,7 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
     }
 
     numBufs = minUndequeuedBufs + 1;
-    err = native_window_set_buffer_count(mNativeWindow.get(), numBufs);
+    err = native_window_set_buffer_count(nativeWindow.get(), numBufs);
     if (err != NO_ERROR) {
         ALOGE("error pushing blank frames: set_buffer_count failed: %s (%d)",
                 strerror(-err), -err);
@@ -2595,7 +2642,7 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
     // guaranteed NOT to be currently displayed.
     for (int i = 0; i < numBufs + 1; i++) {
         int fenceFd = -1;
-        err = native_window_dequeue_buffer_and_wait(mNativeWindow.get(), &anb);
+        err = native_window_dequeue_buffer_and_wait(nativeWindow.get(), &anb);
         if (err != NO_ERROR) {
             ALOGE("error pushing blank frames: dequeueBuffer failed: %s (%d)",
                     strerror(-err), -err);
@@ -2622,7 +2669,7 @@ status_t DashCodec::pushBlankBuffersToNativeWindow() {
             goto error;
         }
 
-        err = mNativeWindow->queueBuffer(mNativeWindow.get(),
+        err = nativeWindow->queueBuffer(nativeWindow.get(),
                 buf->getNativeBuffer(), -1);
         if (err != NO_ERROR) {
             ALOGE("error pushing blank frames: queueBuffer failed: %s (%d)",
@@ -2638,18 +2685,18 @@ error:
     if (err != NO_ERROR) {
         // Clean up after an error.
         if (anb != NULL) {
-            mNativeWindow->cancelBuffer(mNativeWindow.get(), anb, -1);
+            nativeWindow->cancelBuffer(nativeWindow.get(), anb, -1);
         }
 
-        native_window_api_disconnect(mNativeWindow.get(),
+        native_window_api_disconnect(nativeWindow.get(),
                 NATIVE_WINDOW_API_CPU);
-        native_window_api_connect(mNativeWindow.get(),
+        native_window_api_connect(nativeWindow.get(),
                 NATIVE_WINDOW_API_MEDIA);
 
         return err;
     } else {
         // Clean up after success.
-        err = native_window_api_disconnect(mNativeWindow.get(),
+        err = native_window_api_disconnect(nativeWindow.get(),
                 NATIVE_WINDOW_API_CPU);
         if (err != NO_ERROR) {
             ALOGE("error pushing blank frames: api_disconnect failed: %s (%d)",
@@ -2657,7 +2704,7 @@ error:
             return err;
         }
 
-        err = native_window_api_connect(mNativeWindow.get(),
+        err = native_window_api_connect(nativeWindow.get(),
                 NATIVE_WINDOW_API_MEDIA);
         if (err != NO_ERROR) {
             ALOGE("error pushing blank frames: api_connect failed: %s (%d)",
@@ -3214,6 +3261,55 @@ bool DashCodec::BaseState::onOMXFillBufferDone(
             notify->setPointer("buffer-id", info->mBufferID);
             notify->setBuffer("buffer", info->mData);
             notify->setInt32("flags", flags);
+
+            if (flags & OMX_BUFFERFLAG_EXTRADATA)
+            {
+              OMX_U8* bufferHandle = NULL;
+              int64_t nFilledLen = 0;
+              int64_t nAllocLen = 0;
+              int64_t nStartOffset = 0;
+
+              OMX_BUFFERHEADERTYPE *pBufHdr = (OMX_BUFFERHEADERTYPE *)bufferID;
+
+              nStartOffset = pBufHdr->nOffset;
+
+              if(mCodec->mStoreMetaDataInOutputBuffers)
+              {
+                VideoDecoderOutputMetaData *metaData =
+                              reinterpret_cast<VideoDecoderOutputMetaData *>(
+                              pBufHdr->pBuffer);
+
+                bufferHandle = const_cast<OMX_U8*>(
+                           reinterpret_cast<const OMX_U8*>(metaData->pHandle));
+
+#ifdef BFAMILY_TARGET /* Venus macros and dynamic mode support present only for B-family targets.*/
+                nFilledLen = (VENUS_Y_STRIDE(COLOR_FMT_NV12, mCodec->mCurrentWidth)
+                              * VENUS_Y_SCANLINES(COLOR_FMT_NV12, mCodec->mCurrentHeight))
+                                    +  (VENUS_UV_STRIDE(COLOR_FMT_NV12, mCodec->mCurrentWidth)
+                                        * VENUS_UV_SCANLINES(COLOR_FMT_NV12, mCodec->mCurrentHeight));
+
+                nAllocLen = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, mCodec->mCurrentWidth, mCodec->mCurrentHeight);
+#endif
+              }
+              else
+              {
+                bufferHandle = const_cast<OMX_U8*>(
+                           reinterpret_cast<const OMX_U8*>(pBufHdr->pBuffer));
+
+                nFilledLen = pBufHdr->nFilledLen;
+                nAllocLen = pBufHdr->nAllocLen;
+              }
+
+              ALOGV("[%s] Extradata present in decoded buffer."
+                  "gralloc handle = %p, filled length = %llu, allocated length = %llu, start offset = %llu",
+                  mCodec->mComponentName.c_str(), bufferHandle, nFilledLen, nAllocLen, nStartOffset);
+
+              notify->setPointer("gralloc-handle", bufferHandle);
+              notify->setInt64("filled-length", nFilledLen);
+              notify->setInt64("alloc-length", nAllocLen);
+              notify->setInt64("start-offset", nStartOffset);
+            }
+
             sp<AMessage> reply =
                 new AMessage(kWhatOutputBufferDrained, mCodec->id());
 
@@ -3472,6 +3568,7 @@ bool DashCodec::UninitializedState::onAllocateComponent(const sp<AMessage> &msg)
 
     if (componentName.endsWith(".secure")) {
         mCodec->mFlags |= kFlagIsSecure;
+        mCodec->mFlags |= kFlagPushBlankBuffersToNativeWindowOnShutdown;
     }
 
     mCodec->mQuirks = quirks;
@@ -3985,13 +4082,74 @@ bool DashCodec::OutputPortSettingsChangedState::onMessageReceived(
             handled = true;
             break;
         }
+        case kWhatWaitForPortEnable:
+        {
+            int32_t d1;
+            int32_t d2;
+            CHECK(msg->findInt32("data1", &d1));
+            CHECK(msg->findInt32("data2", &d2));
 
+            enableOutputPort((OMX_U32)d1, (OMX_U32)d2);
+
+            handled = true;
+            break;
+        }
         default:
             handled = BaseState::onMessageReceived(msg);
             break;
     }
 
     return handled;
+}
+
+void DashCodec::OutputPortSettingsChangedState::enableOutputPort(OMX_U32 data1, OMX_U32 data2) {
+     if (data1 == (OMX_U32)OMX_CommandPortDisable) {
+          CHECK_EQ(data2, (OMX_U32)kPortIndexOutput);
+
+          ALOGV("[%s] Output port now disabled.",
+                      mCodec->mComponentName.c_str());
+          // All buffers should get freed before sending re-enabling outport after
+	  // portsetting change. OUT Buffers OWNED_BY_DOWNSTREAM, gets  freed
+	  // only when renderer sends buffer for rendering.
+	  // Due to timing issue, buffers OWNED_BY_DOWNSTREAM dosent get freed
+	  // before exectution reaches here. hence wait for all such buffers
+	  // to get free and then proceed for enabling outport.
+          if(!mCodec->mBuffers[kPortIndexOutput].isEmpty())
+          {
+             ALOGE(" Wait for outport Queue to be empty before re-enable port ");
+             sp<AMessage> msg = new AMessage(kWhatWaitForPortEnable, mCodec->id());
+             msg->setInt32("data1", data1);
+             msg->setInt32("data2", data2);
+             msg->post(10000ll); // poll again after 10 ms
+             return;
+          }
+
+          mCodec->mDealer[kPortIndexOutput].clear();
+
+          CHECK_EQ(mCodec->mOMX->sendCommand(
+                   mCodec->mNode, OMX_CommandPortEnable, kPortIndexOutput),
+                   (status_t)OK);
+
+          status_t err;
+          if ((err = mCodec->allocateBuffersOnPort(kPortIndexOutput)) != OK) {
+            ALOGE("Failed to allocate output port buffers after "
+                  "port reconfiguration (error 0x%08x)",
+                   err);
+
+            mCodec->signalError(OMX_ErrorUndefined, err);
+
+            // This is technically not correct, but appears to be
+            // the only way to free the component instance.
+            // Controlled transitioning from excecuting->idle
+            // and idle->loaded seem impossible probably because
+            // the output port never finishes re-enabling.
+            mCodec->mShutdownInProgress = true;
+            mCodec->mKeepComponentAllocated = false;
+            mCodec->changeState(mCodec->mLoadedState);
+        }
+    }
+
+    return;
 }
 
 void DashCodec::OutputPortSettingsChangedState::stateEntered() {
@@ -4005,37 +4163,7 @@ bool DashCodec::OutputPortSettingsChangedState::onOMXEvent(
         case OMX_EventCmdComplete:
         {
             if (data1 == (OMX_U32)OMX_CommandPortDisable) {
-                CHECK_EQ(data2, (OMX_U32)kPortIndexOutput);
-
-                ALOGV("[%s] Output port now disabled.",
-                        mCodec->mComponentName.c_str());
-
-                CHECK(mCodec->mBuffers[kPortIndexOutput].isEmpty());
-                mCodec->mDealer[kPortIndexOutput].clear();
-
-                CHECK_EQ(mCodec->mOMX->sendCommand(
-                            mCodec->mNode, OMX_CommandPortEnable, kPortIndexOutput),
-                         (status_t)OK);
-
-                status_t err;
-                if ((err = mCodec->allocateBuffersOnPort(
-                                kPortIndexOutput)) != OK) {
-                    ALOGE("Failed to allocate output port buffers after "
-                         "port reconfiguration (error 0x%08x)",
-                         err);
-
-                    mCodec->signalError(OMX_ErrorUndefined, err);
-
-                    // This is technically not correct, but appears to be
-                    // the only way to free the component instance.
-                    // Controlled transitioning from excecuting->idle
-                    // and idle->loaded seem impossible probably because
-                    // the output port never finishes re-enabling.
-                    mCodec->mShutdownInProgress = true;
-                    mCodec->mKeepComponentAllocated = false;
-                    mCodec->changeState(mCodec->mLoadedState);
-                }
-
+                enableOutputPort(data1, data2);
                 return true;
             } else if (data1 == (OMX_U32)OMX_CommandPortEnable) {
                 CHECK_EQ(data2, (OMX_U32)kPortIndexOutput);
@@ -4132,12 +4260,13 @@ void DashCodec::ExecutingToIdleState::changeStateIfWeOwnAllBuffers() {
         CHECK_EQ(mCodec->freeBuffersOnPort(kPortIndexInput), (status_t)OK);
         CHECK_EQ(mCodec->freeBuffersOnPort(kPortIndexOutput), (status_t)OK);
 
-        if (mCodec->mFlags & kFlagIsSecure && mCodec->mNativeWindow != NULL) {
+        if (mCodec->mFlags & kFlagPushBlankBuffersToNativeWindowOnShutdown
+               && mCodec->mNativeWindow != NULL) {
             // We push enough 1x1 blank buffers to ensure that one of
             // them has made it to the display.  This allows the OMX
             // component teardown to zero out any protected buffers
             // without the risk of scanning out one of those buffers.
-            mCodec->pushBlankBuffersToNativeWindow();
+            PushBlankBuffersToNativeWindow(mCodec->mNativeWindow);
         }
 
         mCodec->changeState(mCodec->mIdleToLoadedState);
