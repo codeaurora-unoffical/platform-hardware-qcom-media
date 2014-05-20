@@ -208,7 +208,7 @@ class VideoHeap : public MemoryHeapBase
 #define OMX_BITSINFO_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
             sizeof(OMX_QCOM_EXTRADATA_BITS_INFO) + 3)&(~3))
 #define OMX_USERDATA_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
-            ((8*1024) + 3))&(~3)) /* 8 KB is the size that driver/FW considers as worst case size for userdata */
+            + 3)&(~3))
 
 //  Define next macro with required values to enable default extradata,
 //    VDEC_EXTRADATA_MB_ERROR_MAP
@@ -943,6 +943,7 @@ class omx_vdec: public qc_omx_component
         OMX_U32 m_smoothstreaming_width;
         OMX_U32 m_smoothstreaming_height;
         OMX_ERRORTYPE enable_smoothstreaming();
+        OMX_ERRORTYPE enable_adaptive_playback(unsigned long width, unsigned long height);
 
         unsigned int m_fill_output_msg;
         bool client_set_fps;

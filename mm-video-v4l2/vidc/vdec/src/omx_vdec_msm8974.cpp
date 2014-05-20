@@ -3741,39 +3741,8 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                              maxSmoothStreamingWidth, maxSmoothStreamingHeight);
                     eRet = OMX_ErrorBadParameter;
                 } else {
-                    eRet = enable_smoothstreaming();
-                    if (eRet != OMX_ErrorNone) {
-                         DEBUG_PRINT_ERROR("Failed to enable Adaptive Playback on driver.");
-                         eRet = OMX_ErrorHardware;
-                     } else  {
-                         DEBUG_PRINT_HIGH("Enabling Adaptive playback for %d x %d",
-                                 pParams->nMaxFrameWidth,
-                                 pParams->nMaxFrameHeight);
-                         m_smoothstreaming_mode = true;
-                         m_smoothstreaming_width = pParams->nMaxFrameWidth;
-                         m_smoothstreaming_height = pParams->nMaxFrameHeight;
-                     }
-                     if(is_q6_platform) {
-                         struct v4l2_format fmt;
-                         update_resolution(m_smoothstreaming_width, m_smoothstreaming_height,
-                                                      m_smoothstreaming_width, m_smoothstreaming_height);
-                         eRet = is_video_session_supported();
-                         if (eRet)
-                             break;
-                         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-                         fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
-                         fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
-                         fmt.fmt.pix_mp.pixelformat = output_capability;
-                         DEBUG_PRINT_LOW("fmt.fmt.pix_mp.height = %d , fmt.fmt.pix_mp.width = %d",
-                                                         fmt.fmt.pix_mp.height,fmt.fmt.pix_mp.width);
-                         ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
-                         if (ret) {
-                             DEBUG_PRINT_ERROR("Set Resolution failed");
-                             eRet = OMX_ErrorUnsupportedSetting;
-                         } else
-                             eRet = get_buffer_req(&drv_ctx.op_buf);
-                     }
-                 }
+                    eRet = enable_adaptive_playback(pParams->nMaxFrameWidth, pParams->nMaxFrameHeight);
+                }
             } else {
                 DEBUG_PRINT_ERROR(
                         "Prepare for adaptive playback supported only on output port");
@@ -4350,6 +4319,8 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                         drv_ctx.op_buf.buffer_size, (OMX_U32)handle->size);
                 return OMX_ErrorBadParameter;
             }
+
+            drv_ctx.op_buf.buffer_size = handle->size;
 
             if (!m_use_android_native_buffers) {
                 if (!secure_mode) {
@@ -5970,7 +5941,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         //this with a more sane size so that we don't compensate in rest of code
         //We'll restore this size later on, so that it's transparent to client
         buffer->nFilledLen = 0;
-        buffer->nAllocLen = drv_ctx.op_buf.buffer_size;
+        buffer->nAllocLen = handle->size;
     }
 
 
@@ -8097,6 +8068,7 @@ OMX_ERRORTYPE omx_vdec::get_buffer_req(vdec_allocatorproperty *buffer_prop)
 {
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
     struct v4l2_requestbuffers bufreq;
+    unsigned int final_extra_data_size = 0;
     unsigned int buf_size = 0, extra_data_size = 0, client_extra_data_size = 0;
     struct v4l2_format fmt;
     int ret = 0;
@@ -8164,45 +8136,12 @@ OMX_ERRORTYPE omx_vdec::get_buffer_req(vdec_allocatorproperty *buffer_prop)
             DEBUG_PRINT_ERROR("Extradata index is more than allowed: %d", extra_idx);
             return OMX_ErrorBadParameter;
         }
-        if (client_extradata & OMX_FRAMEINFO_EXTRADATA) {
-            DEBUG_PRINT_HIGH("Frame info extra data enabled!");
-            client_extra_data_size += OMX_FRAMEINFO_EXTRADATA_SIZE;
-        }
-        if (client_extradata & OMX_INTERLACE_EXTRADATA) {
-            client_extra_data_size += OMX_INTERLACE_EXTRADATA_SIZE;
-        }
-        if (client_extradata & OMX_PORTDEF_EXTRADATA) {
-            client_extra_data_size += OMX_PORTDEF_EXTRADATA_SIZE;
-            DEBUG_PRINT_HIGH("Smooth streaming enabled extra_data_size=%d",
-                    client_extra_data_size);
-        }
-        if ((client_extradata & OMX_FRAMEDIMENSION_EXTRADATA)) {
-            client_extra_data_size += OMX_FRAMEDIMENSION_EXTRADATA_SIZE;
-            DEBUG_PRINT_HIGH("Frame dimension enabled extra_data_size = %d\n",
-                    client_extra_data_size);
-        }
-        if (client_extradata & OMX_FRAMEPACK_EXTRADATA) {
-            client_extra_data_size += OMX_FRAMEPACK_EXTRADATA_SIZE;
-            DEBUG_PRINT_HIGH("framepack extradata enabled");
-        }
-        if (client_extradata & OMX_QP_EXTRADATA) {
-            client_extra_data_size += OMX_QP_EXTRADATA_SIZE;
-            DEBUG_PRINT_HIGH("QP extradata enabled");
-        }
-        if (client_extradata & OMX_BITSINFO_EXTRADATA) {
-            client_extra_data_size += OMX_BITSINFO_EXTRADATA_SIZE;
-            DEBUG_PRINT_HIGH("Input bits info extradata enabled");
-        }
-        if (client_extradata & OMX_EXTNUSER_EXTRADATA) {
-            client_extra_data_size += OMX_USERDATA_EXTRADATA_SIZE;
-            DEBUG_PRINT_HIGH("Userdata extradata enabled");
-        }
 
-        if (client_extra_data_size) {
-            client_extra_data_size += sizeof(OMX_OTHER_EXTRADATATYPE); //Space for terminator
-            buf_size = ((buf_size + 3)&(~3)); //Align extradata start address to 64Bit
-        }
-        drv_ctx.extradata_info.size = buffer_prop->actualcount * extra_data_size;
+        /* The output buffer already contains 9K of space (see VENUS_BUFFER_SIZE())
+         * for extradata.  That might be more than enough */
+        final_extra_data_size = extra_data_size > 9*1024 ? extra_data_size : 9*1024;
+
+        drv_ctx.extradata_info.size = buffer_prop->actualcount * final_extra_data_size;
         drv_ctx.extradata_info.count = buffer_prop->actualcount;
         drv_ctx.extradata_info.buffer_size = extra_data_size;
         buf_size += client_extra_data_size;
@@ -9321,7 +9260,7 @@ void omx_vdec::append_user_extradata(OMX_OTHER_EXTRADATATYPE *extra,
     userdata_payload =
         (struct msm_vidc_stream_userdata_payload *)p_user->data;
     userdata_size = p_user->nDataSize;
-    extra->nSize = OMX_USERDATA_EXTRADATA_SIZE;
+    extra->nSize = OMX_USERDATA_EXTRADATA_SIZE + p_user->nSize;
     extra->nVersion.nVersion = OMX_SPEC_VERSION;
     extra->nPortIndex = OMX_CORE_OUTPUT_PORT_INDEX;
     extra->eType = (OMX_EXTRADATATYPE)OMX_ExtraDataMP2UserData;
@@ -10036,4 +9975,95 @@ void omx_vdec::perf_control::load_lib()
             DEBUG_PRINT_ERROR("Failed to load symbol: perf_lock_rel");
         }
     }
+}
+
+OMX_ERRORTYPE omx_vdec::enable_adaptive_playback(unsigned long nMaxFrameWidth,
+                            unsigned long nMaxFrameHeight)
+{
+
+    OMX_ERRORTYPE eRet = OMX_ErrorNone;
+    int ret = 0;
+    unsigned long min_res_buf_count = 0;
+
+    eRet = enable_smoothstreaming();
+    if (eRet != OMX_ErrorNone) {
+         DEBUG_PRINT_ERROR("Failed to enable Adaptive Playback on driver");
+         return eRet;
+     }
+
+     DEBUG_PRINT_HIGH("Enabling Adaptive playback for %lu x %lu",
+             nMaxFrameWidth,
+             nMaxFrameHeight);
+     m_smoothstreaming_mode = true;
+     m_smoothstreaming_width = nMaxFrameWidth;
+     m_smoothstreaming_height = nMaxFrameHeight;
+
+     //Get upper limit buffer count for min supported resolution
+     struct v4l2_format fmt;
+     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+     fmt.fmt.pix_mp.height = m_decoder_capability.min_height;
+     fmt.fmt.pix_mp.width = m_decoder_capability.min_width;
+     fmt.fmt.pix_mp.pixelformat = output_capability;
+
+     ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+     if (ret) {
+         DEBUG_PRINT_ERROR("Set Resolution failed for HxW = %ux%u",
+                           m_decoder_capability.min_height,
+                           m_decoder_capability.min_width);
+         return OMX_ErrorUnsupportedSetting;
+     }
+
+     eRet = get_buffer_req(&drv_ctx.op_buf);
+     if (eRet != OMX_ErrorNone) {
+         DEBUG_PRINT_ERROR("failed to get_buffer_req");
+         return eRet;
+     }
+
+     min_res_buf_count = drv_ctx.op_buf.mincount;
+     DEBUG_PRINT_LOW("enable adaptive - upper limit buffer count = %lu for HxW %ux%u",
+                     min_res_buf_count, m_decoder_capability.min_height, m_decoder_capability.min_width);
+
+     update_resolution(m_smoothstreaming_width, m_smoothstreaming_height,
+                       m_smoothstreaming_width, m_smoothstreaming_height);
+     eRet = is_video_session_supported();
+     if (eRet != OMX_ErrorNone) {
+         DEBUG_PRINT_ERROR("video session is not supported");
+         return eRet;
+     }
+
+     //Get upper limit buffer size for max smooth streaming resolution set
+     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+     fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
+     fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
+     fmt.fmt.pix_mp.pixelformat = output_capability;
+     ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+     if (ret) {
+         DEBUG_PRINT_ERROR("Set Resolution failed for adaptive playback");
+         return OMX_ErrorUnsupportedSetting;
+     }
+
+     eRet = get_buffer_req(&drv_ctx.op_buf);
+     if (eRet != OMX_ErrorNone) {
+         DEBUG_PRINT_ERROR("failed to get_buffer_req!!");
+         return eRet;
+     }
+     DEBUG_PRINT_LOW("enable adaptive - upper limit buffer size = %u",
+                     drv_ctx.op_buf.buffer_size);
+
+     drv_ctx.op_buf.mincount = min_res_buf_count;
+     drv_ctx.op_buf.actualcount = min_res_buf_count;
+     eRet = set_buffer_req(&drv_ctx.op_buf);
+     if (eRet != OMX_ErrorNone) {
+         DEBUG_PRINT_ERROR("failed to set_buffer_req");
+         return eRet;
+     }
+
+     eRet = get_buffer_req(&drv_ctx.op_buf);
+     if (eRet != OMX_ErrorNone) {
+         DEBUG_PRINT_ERROR("failed to get_buffer_req!!!");
+         return eRet;
+     }
+     DEBUG_PRINT_HIGH("adaptive playback enabled, buf count = %u bufsize = %u",
+                      drv_ctx.op_buf.mincount, drv_ctx.op_buf.buffer_size);
+     return eRet;
 }
