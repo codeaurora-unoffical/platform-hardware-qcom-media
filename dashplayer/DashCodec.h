@@ -28,6 +28,7 @@
 #include <media/stagefright/SkipCutBuffer.h>
 #include <OMX_Audio.h>
 #include <OMX_Component.h>
+#include <OMX_IVCommon.h>
 
 #define TRACK_BUFFER_TIMING     0
 
@@ -111,6 +112,7 @@ private:
         kWhatConfigureComponent      = 'conf',
         kWhatStart                   = 'star',
         kWhatRequestIDRFrame         = 'ridr',
+        kWhatWaitForPortEnable       = 'wfpe',
     };
 
     enum {
@@ -196,6 +198,9 @@ private:
     unsigned mDequeueCounter;
     bool mStoreMetaDataInOutputBuffers;
     int32_t mMetaDataBuffersToSubmit;
+
+    int32_t mCurrentWidth;
+    int32_t mCurrentHeight;
 
     status_t allocateBuffersOnPort(OMX_U32 portIndex);
     status_t freeBuffersOnPort(OMX_U32 portIndex);
