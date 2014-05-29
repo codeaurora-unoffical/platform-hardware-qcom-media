@@ -581,6 +581,7 @@ class omx_video: public qc_omx_component
         QOMX_VIDEO_CONFIG_LTRUSE_TYPE m_sConfigLTRUse;
         OMX_VIDEO_CONFIG_AVCINTRAPERIOD m_sConfigAVCIDRPeriod;
         OMX_VIDEO_CONFIG_DEINTERLACE m_sConfigDeinterlace;
+        QOMX_EXTNINDEX_VIDEO_INITIALQP m_sParamInitqp;
         OMX_U32 m_sExtraData;
         OMX_U32 m_input_msg_id;
 

@@ -81,6 +81,13 @@ struct msm_venc_sessionqp {
     unsigned long    bframqp;
 };
 
+struct msm_venc_initqp {
+    unsigned long    iframeqp;
+    unsigned long    pframeqp;
+    unsigned long    bframeqp;
+    unsigned long    enableinitqp;
+};
+
 struct msm_venc_qprange {
     unsigned long    maxqp;
     unsigned long    minqp;
@@ -273,6 +280,7 @@ class venc_dev
         struct msm_venc_allocatorproperty   m_sInput_buff_property;
         struct msm_venc_allocatorproperty   m_sOutput_buff_property;
         struct msm_venc_sessionqp           session_qp;
+        struct msm_venc_initqp              init_qp;
         struct msm_venc_multiclicecfg       multislice;
         struct msm_venc_entropycfg          entropy;
         struct msm_venc_dbcfg               dbkfilter;
@@ -303,6 +311,7 @@ class venc_dev
         bool venc_set_extradata(OMX_U32 extra_data);
         bool venc_set_idr_period(OMX_U32 nPFrames, OMX_U32 nIDRPeriod);
         bool venc_reconfig_reqbufs();
+        bool venc_enable_initial_qp(QOMX_EXTNINDEX_VIDEO_INITIALQP* initqp);
         bool venc_set_inband_video_header(OMX_BOOL enable);
         bool venc_set_au_delimiter(OMX_BOOL enable);
         bool venc_set_vpe_rotation(OMX_S32 rotation_angle);
