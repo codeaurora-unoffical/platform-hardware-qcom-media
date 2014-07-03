@@ -1421,7 +1421,7 @@ int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len)
 }
 
 int omx_vdec::log_output_buffers(OMX_BUFFERHEADERTYPE *buffer) {
-    if (m_debug.out_buffer_log && !m_debug.outfile) {
+    if (m_debug.out_buffer_log && !m_debug.outfile && buffer->nFilledLen) {
         sprintf(m_debug.outfile_name, "%s/output_%d_%d_%p.yuv",
                 m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         m_debug.outfile = fopen (m_debug.outfile_name, "ab");
@@ -1514,8 +1514,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
     arbitrary_bytes = false;
 #endif
 
-    if (!strncmp(role, "OMX.qcom.video.decoder.avc.secure",OMX_MAX_STRINGNAME_SIZE)) {
-        struct v4l2_control control;
+    if (!strncmp(role, "OMX.qcom.video.decoder.avc.secure",
+                OMX_MAX_STRINGNAME_SIZE)) {
         secure_mode = true;
         arbitrary_bytes = false;
         role = (OMX_STRING)"OMX.qcom.video.decoder.avc";
@@ -1529,6 +1529,16 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         secure_mode = true;
         arbitrary_bytes = false;
         role = (OMX_STRING)"OMX.qcom.video.decoder.hevc";
+    } else if (!strncmp(role, "OMX.qcom.video.decoder.vc1.secure",
+                OMX_MAX_STRINGNAME_SIZE)) {
+        secure_mode = true;
+        arbitrary_bytes = false;
+        role = (OMX_STRING)"OMX.qcom.video.decoder.vc1";
+    } else if (!strncmp(role, "OMX.qcom.video.decoder.wmv.secure",
+                OMX_MAX_STRINGNAME_SIZE)) {
+        secure_mode = true;
+        arbitrary_bytes = false;
+        role = (OMX_STRING)"OMX.qcom.video.decoder.wmv";
     }
 
     drv_ctx.video_driver_fd = open(device_name, O_RDWR);
@@ -4347,6 +4357,9 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         eRet = OMX_ErrorInsufficientResources;
     }
 
+    if (eRet != OMX_ErrorNone)
+       return eRet;
+
     if (dynamic_buf_mode) {
         *bufferHdr = (m_out_mem_ptr + i );
         (*bufferHdr)->pBuffer = NULL;
@@ -6131,6 +6144,10 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
 
     pending_output_buffers++;
     buffer = client_buffers.get_dr_buf_hdr(bufferAdd);
+    if (!buffer) {
+       DEBUG_PRINT_ERROR("err: client_buffer ptr invalid");
+       return OMX_ErrorBadParameter;
+    }
     ptr_respbuffer = (struct vdec_output_frameinfo*)buffer->pOutputPortPrivate;
     if (ptr_respbuffer) {
         ptr_outputbuffer =  (struct vdec_bufferpayload*)ptr_respbuffer->client_data;
@@ -8281,6 +8298,8 @@ OMX_ERRORTYPE omx_vdec::get_buffer_req(vdec_allocatorproperty *buffer_prop)
         drv_ctx.extradata_info.size = buffer_prop->actualcount * final_extra_data_size;
         drv_ctx.extradata_info.count = buffer_prop->actualcount;
         drv_ctx.extradata_info.buffer_size = final_extra_data_size;
+        if (!secure_mode)
+            buf_size += final_extra_data_size;
         buf_size = (buf_size + buffer_prop->alignment - 1)&(~(buffer_prop->alignment - 1));
         DEBUG_PRINT_LOW("GetBufReq UPDATE: ActCnt(%d) Size(%u) BufSize(%d)",
                 buffer_prop->actualcount, (unsigned int)buffer_prop->buffer_size, buf_size);
@@ -8776,6 +8795,7 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
 
     if (!secure_mode && ((OMX_U8*)p_extra > (pBuffer + p_buf_hdr->nAllocLen))) {
         p_extra = NULL;
+        DEBUG_PRINT_ERROR("Error: out of bound memory access by p_extra");
         return;
     }
     OMX_OTHER_EXTRADATATYPE *data = (struct OMX_OTHER_EXTRADATATYPE *)p_extradata;
