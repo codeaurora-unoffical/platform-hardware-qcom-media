@@ -125,7 +125,7 @@ extern "C" {
 #define EXTRADATA_IDX(__num_planes) (__num_planes  - 1)
 
 #define DEFAULT_EXTRADATA (OMX_INTERLACE_EXTRADATA)
-#define DEFAULT_CONCEAL_COLOR "32896" //0x8080, black by default
+#define DEFAULT_CONCEAL_COLOR "32784" //0x8010, black by default
 
 int debug_level = PRIO_ERROR;
 
@@ -631,6 +631,11 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
         DEBUG_PRINT_LOW("feature 120 FPS decode enabled");
         m_last_rendered_TS = 0;
     }
+
+    property_value[0] = '\0';
+    property_get("vidc.dec.debug.dyn.disabled", property_value, "0");
+    m_disable_dynamic_buf_mode = atoi(property_value);
+    DEBUG_PRINT_HIGH("vidc.dec.debug.dyn.disabled value is %d", m_disable_dynamic_buf_mode);
 
 #endif
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -3558,6 +3563,11 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             if (!metabuffer) {
                 DEBUG_PRINT_ERROR("Invalid param: %p", metabuffer);
                 eRet = OMX_ErrorBadParameter;
+                break;
+            }
+            if (m_disable_dynamic_buf_mode) {
+                DEBUG_PRINT_HIGH("Dynamic buffer mode disabled by setprop");
+                eRet = OMX_ErrorUnsupportedSetting;
                 break;
             }
             if (metabuffer->nPortIndex == OMX_CORE_OUTPUT_PORT_INDEX) {
