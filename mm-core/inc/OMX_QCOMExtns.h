@@ -460,6 +460,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
 /* Enable InitialQP index */
     QOMX_IndexParamVideoInitialQp = 0x7F000035,
+
+    /*"OMX.QCOM.index.param.video.CustomBufferSize"*/
+    OMX_QcomIndexParamVideoCustomBufferSize = 0x7F000036,
 };
 
 /**
@@ -1264,6 +1267,12 @@ typedef struct QOMX_INDEXDOWNSCALAR {
         OMX_BOOL bEnable;
 } QOMX_INDEXDOWNSCALAR;
 
+typedef struct QOMX_VIDEO_CUSTOM_BUFFERSIZE {
+        OMX_U32 nSize;
+        OMX_VERSIONTYPE nVersion;
+        OMX_U32 nPortIndex;
+        OMX_U32 nBufferSize;
+} QOMX_VIDEO_CUSTOM_BUFFERSIZE;
 
 #define OMX_QCOM_INDEX_PARAM_VIDEO_SYNCFRAMEDECODINGMODE "OMX.QCOM.index.param.video.SyncFrameDecodingMode"
 #define OMX_QCOM_INDEX_PARAM_INDEXEXTRADATA "OMX.QCOM.index.param.IndexExtraData"
