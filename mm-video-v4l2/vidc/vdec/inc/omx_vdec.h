@@ -247,6 +247,7 @@ struct video_driver_context {
     enum vdec_output_fromat output_format;
     enum vdec_interlaced_format interlace;
     enum vdec_output_order picture_order;
+    struct vdec_framesize frame_size;
     struct vdec_picsize video_resolution;
     struct vdec_allocatorproperty ip_buf;
     struct vdec_allocatorproperty op_buf;
@@ -924,7 +925,7 @@ class omx_vdec: public qc_omx_component
         int output_capability;
         bool streaming[MAX_PORT];
         OMX_CONFIG_RECTTYPE rectangle;
-        int prev_n_filled_len;
+        OMX_U32 prev_n_filled_len;
         bool is_down_scalar_enabled;
 #endif
         bool m_power_hinted;
