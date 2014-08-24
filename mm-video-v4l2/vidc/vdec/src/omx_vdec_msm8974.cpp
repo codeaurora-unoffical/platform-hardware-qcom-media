@@ -175,6 +175,8 @@ void* async_message_thread (void *input)
                     vdec_msg.msgdata.output_frame.framesize.top = plane[0].reserved[3];
                     vdec_msg.msgdata.output_frame.framesize.right = plane[0].reserved[4];
                     vdec_msg.msgdata.output_frame.framesize.bottom = plane[0].reserved[5];
+                    vdec_msg.msgdata.output_frame.picsize.frame_width = plane[0].reserved[6];
+                    vdec_msg.msgdata.output_frame.picsize.frame_height = plane[0].reserved[7];
                 }
                 if (omx->async_message_process(input,&vdec_msg) < 0) {
                     DEBUG_PRINT_HIGH("async_message_thread Exited");
@@ -561,7 +563,8 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     secure_mode(false),
     m_profile(0),
     client_set_fps(false),
-    m_last_rendered_TS(-1)
+    m_last_rendered_TS(-1),
+    m_queued_codec_config_count(0)
 {
     /* Assumption is that , to begin with , we have all the frames with decoder */
     DEBUG_PRINT_HIGH("In OMX vdec Constructor");
@@ -651,6 +654,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     pthread_mutex_init(&m_lock, NULL);
     pthread_mutex_init(&c_lock, NULL);
     sem_init(&m_cmd_lock,0,0);
+    sem_init(&m_safe_flush, 0, 0);
     streaming[CAPTURE_PORT] =
         streaming[OUTPUT_PORT] = false;
 #ifdef _ANDROID_
@@ -1203,42 +1207,25 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
 
                                         }  else if (p2 == OMX_IndexConfigCommonOutputCrop) {
                                             DEBUG_PRINT_HIGH("Rxd PORT_RECONFIG: OMX_IndexConfigCommonOutputCrop");
-                                            struct v4l2_format fmt;
 
-                                            memset(&fmt, 0, sizeof(struct v4l2_format));
-                                            fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-                                            fmt.fmt.pix_mp.pixelformat = pThis->capture_capability;
-                                            fmt.fmt.pix_mp.height = pThis->drv_ctx.video_resolution.frame_height;
-                                            fmt.fmt.pix_mp.width = pThis->drv_ctx.video_resolution.frame_width;
-                                            if (ioctl(pThis->drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt)) {
-                                                DEBUG_PRINT_ERROR("VIDIOC_G_FMT failed in port settings changed sufficient event");
-                                                break;
-                                            }
+                                            /* Check if resolution is changed in smooth streaming mode */
+                                            if (pThis->m_smoothstreaming_mode &&
+                                                (pThis->framesize.nWidth !=
+                                                    pThis->drv_ctx.video_resolution.frame_width) ||
+                                                (pThis->framesize.nHeight !=
+                                                    pThis->drv_ctx.video_resolution.frame_height)) {
 
-                                            /* Check if resolution is changed */
-                                            if ((fmt.fmt.pix_mp.width !=
-                                                    pThis->drv_ctx.video_resolution.frame_width)
-                                                || (fmt.fmt.pix_mp.height !=
-                                                    pThis->drv_ctx.video_resolution.frame_height)
-                                                || (fmt.fmt.pix_mp.plane_fmt[0].bytesperline !=
-                                                    pThis->drv_ctx.video_resolution.stride)
-                                                || (fmt.fmt.pix_mp.plane_fmt[0].reserved[0] !=
-                                                    pThis->drv_ctx.video_resolution.scan_lines)) {
-
-                                                DEBUG_PRINT_HIGH("Resolution changed from: wxh = %dx%d, sxsc = %dx%d, to: wxh = %dx%d, sxsc = %dx%d",
+                                                DEBUG_PRINT_HIGH("Resolution changed from: wxh = %dx%d to: wxh = %dx%d",
+                                                        pThis->framesize.nWidth,
+                                                        pThis->framesize.nHeight,
                                                         pThis->drv_ctx.video_resolution.frame_width,
-                                                        pThis->drv_ctx.video_resolution.frame_height,
-                                                        pThis->drv_ctx.video_resolution.stride,
-                                                        pThis->drv_ctx.video_resolution.scan_lines,
-                                                        fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
-                                                        fmt.fmt.pix_mp.plane_fmt[0].bytesperline,
-                                                        fmt.fmt.pix_mp.plane_fmt[0].reserved[0]);
+                                                        pThis->drv_ctx.video_resolution.frame_height);
 
                                                 /* Update new resolution */
-                                                pThis->update_resolution(fmt.fmt.pix_mp.width,
-                                                        fmt.fmt.pix_mp.height,
-                                                        fmt.fmt.pix_mp.plane_fmt[0].bytesperline,
-                                                        fmt.fmt.pix_mp.plane_fmt[0].reserved[0]);
+                                                pThis->framesize.nWidth =
+                                                       pThis->drv_ctx.video_resolution.frame_width;
+                                                pThis->framesize.nHeight =
+                                                       pThis->drv_ctx.video_resolution.frame_height;
 
                                                 /* Update C2D with new resolution */
                                                 if (!pThis->client_buffers.update_buffer_req()) {
@@ -1865,6 +1852,14 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
             /*TODO: How to handle this case */
             DEBUG_PRINT_ERROR("Failed to set format on capture port");
         }
+        memset(&framesize, 0, sizeof(OMX_FRAMESIZETYPE));
+        framesize.nWidth = drv_ctx.video_resolution.frame_width;
+        framesize.nHeight = drv_ctx.video_resolution.frame_height;
+
+        memset(&rectangle, 0, sizeof(OMX_CONFIG_RECTTYPE));
+        rectangle.nWidth = drv_ctx.video_resolution.frame_width;
+        rectangle.nHeight = drv_ctx.video_resolution.frame_height;
+
         DEBUG_PRINT_HIGH("Set Format was successful");
         if (secure_mode) {
             control.id = V4L2_CID_MPEG_VIDC_VIDEO_SECURE;
@@ -2047,7 +2042,20 @@ OMX_ERRORTYPE  omx_vdec::send_command(OMX_IN OMX_HANDLETYPE hComp,
         DEBUG_PRINT_ERROR("send_command(): ERROR OMX_CommandFlush "
                 "to invalid port: %lu", param1);
         return OMX_ErrorBadPortIndex;
+    } else if (cmd == OMX_CommandFlush && (param1 == OMX_CORE_INPUT_PORT_INDEX ||
+                param1 == OMX_ALL)) {
+        while (android_atomic_add(0, &m_queued_codec_config_count) > 0) {
+            struct timespec ts;
+
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_sec += 2;
+            if (sem_timedwait(&m_safe_flush, &ts)) {
+                DEBUG_PRINT_ERROR("Failed to wait for EBDs of CODEC CONFIG buffers");
+                break;
+            }
+        }
     }
+
     post_event((unsigned)cmd,(unsigned)param1,OMX_COMPONENT_GENERATE_COMMAND);
     sem_wait(&m_cmd_lock);
     DEBUG_PRINT_LOW("send_command: Command Processed");
@@ -5962,6 +5970,11 @@ if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
         DEBUG_PRINT_ERROR("Failed to qbuf Input buffer to driver");
         return OMX_ErrorHardware;
     }
+
+    if (buffer->nFlags & OMX_BUFFERFLAG_CODECCONFIG) {
+        android_atomic_inc(&m_queued_codec_config_count);
+    }
+
     if (codec_config_flag && !(buffer->nFlags & OMX_BUFFERFLAG_CODECCONFIG)) {
         codec_config_flag = false;
     }
@@ -6941,8 +6954,8 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
         OMX_U32 buf_index = buffer - m_out_mem_ptr;
         BufferDim_t dim;
         private_handle_t *private_handle = NULL;
-        dim.sliceWidth = drv_ctx.video_resolution.frame_width;
-        dim.sliceHeight = drv_ctx.video_resolution.frame_height;
+        dim.sliceWidth = framesize.nWidth;
+        dim.sliceHeight = framesize.nHeight;
         if (native_buffer[buf_index].privatehandle)
             private_handle = native_buffer[buf_index].privatehandle;
         if (private_handle) {
@@ -6968,6 +6981,18 @@ OMX_ERRORTYPE omx_vdec::empty_buffer_done(OMX_HANDLETYPE         hComp,
     DEBUG_PRINT_LOW("empty_buffer_done: bufhdr = %p, bufhdr->pBuffer = %p",
             buffer, buffer->pBuffer);
     pending_input_buffers--;
+    if (buffer->nFlags & OMX_BUFFERFLAG_CODECCONFIG) {
+        int pending_flush_waiters;
+
+        while (pending_flush_waiters = INT_MAX,
+                sem_getvalue(&m_safe_flush, &pending_flush_waiters),
+                /* 0 == there /are/ waiters depending on POSIX implementation */
+                pending_flush_waiters <= 0 ) {
+            sem_post(&m_safe_flush);
+        }
+
+        android_atomic_and(0, &m_queued_codec_config_count); /* no clearer way to set to 0 */
+    }
 
     if (arbitrary_bytes) {
         if (pdest_frame == NULL && input_flush_progress == false) {
@@ -7163,17 +7188,26 @@ int omx_vdec::async_message_process (void *context, void* message)
                         || (omx->drv_ctx.frame_size.left != vdec_msg->msgdata.output_frame.framesize.left)
                         || (omx->drv_ctx.frame_size.top != vdec_msg->msgdata.output_frame.framesize.top)
                         || (omx->drv_ctx.frame_size.right != vdec_msg->msgdata.output_frame.framesize.right)
-                        || (omx->drv_ctx.frame_size.bottom != vdec_msg->msgdata.output_frame.framesize.bottom))) {
+                        || (omx->drv_ctx.frame_size.bottom != vdec_msg->msgdata.output_frame.framesize.bottom)
+                        || (omx->drv_ctx.video_resolution.frame_width != vdec_msg->msgdata.output_frame.picsize.frame_width)
+                        || (omx->drv_ctx.video_resolution.frame_height != vdec_msg->msgdata.output_frame.picsize.frame_height) )) {
 
-                        DEBUG_PRINT_HIGH("Paramters Changed From: Len: %u, L: %u, T: %u, R: %u, B: %u --> Len: %u, L: %u, T: %u, R: %u, B: %u",
-                                omx->prev_n_filled_len, omx->drv_ctx.frame_size.left,
-                                omx->drv_ctx.frame_size.top, omx->drv_ctx.frame_size.right,
-                                omx->drv_ctx.frame_size.bottom, omxhdr->nFilledLen,
+                        DEBUG_PRINT_HIGH("Paramters Changed From: Len: %u, WxH: %dx%d, L: %u, T: %u, R: %u, B: %u --> Len: %u, WxH: %dx%d, L: %u, T: %u, R: %u, B: %u",
+                                omx->prev_n_filled_len,
+                                omx->drv_ctx.video_resolution.frame_width,
+                                omx->drv_ctx.video_resolution.frame_height,
+                                omx->drv_ctx.frame_size.left, omx->drv_ctx.frame_size.top,
+                                omx->drv_ctx.frame_size.right, omx->drv_ctx.frame_size.bottom,
+                                omxhdr->nFilledLen, vdec_msg->msgdata.output_frame.picsize.frame_width,
+                                vdec_msg->msgdata.output_frame.picsize.frame_height,
                                 vdec_msg->msgdata.output_frame.framesize.left,
                                 vdec_msg->msgdata.output_frame.framesize.top,
                                 vdec_msg->msgdata.output_frame.framesize.right,
                                 vdec_msg->msgdata.output_frame.framesize.bottom);
 
+                        memcpy(&omx->drv_ctx.video_resolution,
+                                &vdec_msg->msgdata.output_frame.picsize,
+                                sizeof(struct vdec_picsize));
                         memcpy(&omx->drv_ctx.frame_size,
                                 &vdec_msg->msgdata.output_frame.framesize,
                                 sizeof(struct vdec_framesize));
