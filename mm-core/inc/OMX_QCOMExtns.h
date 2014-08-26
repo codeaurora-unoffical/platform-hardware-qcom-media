@@ -460,6 +460,8 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /* Enable InitialQP index */
     QOMX_IndexParamVideoInitialQp = 0x7F00003D,
+
+    OMX_QcomIndexParamVideoProcessNotCodedVOP = 0x7F00003E,
 };
 
 /**
