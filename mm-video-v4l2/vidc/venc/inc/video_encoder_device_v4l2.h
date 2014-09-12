@@ -38,11 +38,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "omx_video_base.h"
 #include "omx_video_encoder.h"
 #include <linux/videodev2.h>
-#include <linux/fb.h>
 #include <poll.h>
+#ifdef _ANDROID_
+#include <linux/fb.h>
 #include <gui/ISurfaceComposer.h>
 #include <gui/SurfaceComposerClient.h>
 #include <ui/DisplayInfo.h>
+#endif
 
 #define TIMEOUT 5*60*1000
 
@@ -236,9 +238,7 @@ class venc_dev
         unsigned venc_pause(void);
         unsigned venc_start(void);
         unsigned venc_flush(unsigned);
-#ifdef _ANDROID_ICS_
         bool venc_set_meta_mode(bool);
-#endif
         unsigned venc_resume(void);
         unsigned venc_start_done(void);
         unsigned venc_stop_done(void);
@@ -358,7 +358,7 @@ class venc_dev
         bool venc_set_ltrmode(OMX_U32 enable, OMX_U32 count);
         bool venc_set_useltr();
         bool venc_set_markltr();
-	bool venc_enable_initial_qp(QOMX_EXTNINDEX_VIDEO_INITIALQP* initqp);
+        bool venc_enable_initial_qp(QOMX_EXTNINDEX_VIDEO_INITIALQP* initqp);
         bool venc_set_inband_video_header(OMX_BOOL enable);
         bool venc_set_au_delimiter(OMX_BOOL enable);
         bool venc_set_hier_layers(QOMX_VIDEO_HIERARCHICALCODINGTYPE type, OMX_U32 num_layers);
@@ -392,7 +392,9 @@ class venc_dev
         int color_format;
         bool is_searchrange_set;
         bool enable_mv_narrow_searchrange;
+#ifdef _ANDROID_
         DisplayInfo display_info;
+#endif
 };
 
 enum instance_state {

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -29,16 +29,20 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __VIDC_DEBUG_H__
 #define __VIDC_DEBUG_H__
 
-#ifdef _ANDROID_
-#include <cstdio>
-
 enum {
    PRIO_ERROR=0x1,
    PRIO_HIGH=0x2,
    PRIO_LOW=0x4
 };
 
+#ifdef _ANDROID_
+
 extern int debug_level;
+
+#include <cstdio>
+extern "C" {
+#include <utils/Log.h>
+}
 
 #undef DEBUG_PRINT_ERROR
 #define DEBUG_PRINT_ERROR(fmt, args...) \

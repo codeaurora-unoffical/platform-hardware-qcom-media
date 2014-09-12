@@ -34,17 +34,16 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "video_encoder_device_v4l2.h"
 #include "omx_video_encoder.h"
 #include <linux/android_pmem.h>
-#include <media/msm_vidc.h>
 #ifdef USE_ION
 #include <linux/msm_ion.h>
 #endif
 #include <media/msm_media_info.h>
-#include <cutils/properties.h>
-#include <media/hardware/HardwareAPI.h>
-
+#include <media/msm_vidc.h>
+#include <errno.h>
 #ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
 #include <gralloc_priv.h>
+#include <cutils/properties.h>
 #endif
 
 #define ALIGN(x, to_align) ((((unsigned) x) + (to_align - 1)) & ~(to_align - 1))
@@ -168,7 +167,14 @@ static const unsigned int h263_profile_level_table[][5]= {
 #define Log2(number, power)  { OMX_U32 temp = number; power = 0; while( (0 == (temp & 0x1)) &&  power < 16) { temp >>=0x1; power++; } }
 #define Q16ToFraction(q,num,den) { OMX_U32 power; Log2(q,power);  num = q >> power; den = 0x1 << (16 - power); }
 
-#define BUFFER_LOG_LOC "/data/misc/media"
+#ifdef INPUT_BUFFER_LOG
+FILE *inputBufferFile1;
+char inputfilename [] = "/data/input.yuv";
+#endif
+#ifdef OUTPUT_BUFFER_LOG
+FILE *outputBufferFile1;
+char outputfilename [] = "/data/output-bitstream.\0\0\0\0";
+#endif
 
 //constructor
 venc_dev::venc_dev(class omx_venc *venc_class)
@@ -209,10 +215,12 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&capability, 0, sizeof(capability));
     memset(&m_debug,0,sizeof(m_debug));
     memset(&hier_p_layers,0,sizeof(hier_p_layers));
+#ifdef _ANDROID_
     memset(&display_info,0,sizeof(display_info));
+#endif
     is_searchrange_set = false;
     enable_mv_narrow_searchrange = false;
-
+#ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.enc.log.in", property_value, "0");
     m_debug.in_buffer_log = atoi(property_value);
@@ -225,6 +233,11 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 
     snprintf(m_debug.log_loc, PROPERTY_VALUE_MAX,
              "%s", BUFFER_LOG_LOC);
+#else
+    // enable below if input/output buffer logging is needed
+    // m_debug.in_buffer_log
+   // m_debug.out_buffer_log
+#endif
 }
 
 venc_dev::~venc_dev()
@@ -755,7 +768,9 @@ bool venc_dev::venc_open(OMX_U32 codec)
     int r;
     unsigned int alignment = 0,buffer_size = 0, temp =0;
     struct v4l2_control control;
-    OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_enc";
+    OMX_STRING device_name;
+#ifdef _ANDROID_
+     device_name = (OMX_STRING)"/dev/video/venus_enc";
     char narrow_searchrange[PROPERTY_VALUE_MAX] = {0};
     char platform_name[PROPERTY_VALUE_MAX] = {0};
 
@@ -770,9 +785,11 @@ bool venc_dev::venc_open(OMX_U32 codec)
             display_info.w, display_info.h);
     }
 
-    if (!strncmp(platform_name, "msm8610", 7)) {
-        device_name = (OMX_STRING)"/dev/video/q6_enc";
-    }
+    if (!strncmp(platform_name, "msm8610", 7))
+      device_name = (OMX_STRING)"/dev/video/q6_enc";
+#else
+    device_name = (OMX_STRING)"/dev/video33";
+#endif
     m_nDriver_fd = open (device_name, O_RDWR);
     if (m_nDriver_fd == 0) {
         DEBUG_PRINT_ERROR("ERROR: Got fd as 0 for msm_vidc_enc, Opening again");
@@ -801,28 +818,49 @@ bool venc_dev::venc_open(OMX_U32 codec)
         profile_level.level = V4L2_MPEG_VIDEO_MPEG4_LEVEL_2;
         session_qp_range.minqp = 1;
         session_qp_range.maxqp = 31;
+#ifdef OUTPUT_BUFFER_LOG
+        strcat(outputfilename, "m4v");
+#endif
     } else if (codec == OMX_VIDEO_CodingH263) {
         m_sVenc_cfg.codectype = V4L2_PIX_FMT_H263;
         codec_profile.profile = VEN_PROFILE_H263_BASELINE;
         profile_level.level = VEN_LEVEL_H263_20;
         session_qp_range.minqp = 1;
         session_qp_range.maxqp = 31;
+#ifdef OUTPUT_BUFFER_LOG
+        strcat(outputfilename, "263");
+#endif
     } else if (codec == OMX_VIDEO_CodingAVC) {
         m_sVenc_cfg.codectype = V4L2_PIX_FMT_H264;
         codec_profile.profile = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
         profile_level.level = V4L2_MPEG_VIDEO_H264_LEVEL_1_0;
         session_qp_range.minqp = 1;
         session_qp_range.maxqp = 51;
+#ifdef OUTPUT_BUFFER_LOG
+        strcat(outputfilename, "264");
+#endif
     } else if (codec == OMX_VIDEO_CodingVPX) {
         m_sVenc_cfg.codectype = V4L2_PIX_FMT_VP8;
         codec_profile.profile = V4L2_MPEG_VIDC_VIDEO_VP8_UNUSED;
         profile_level.level = V4L2_MPEG_VIDC_VIDEO_VP8_VERSION_0;
         session_qp_range.minqp = 1;
         session_qp_range.maxqp = 128;
+#ifdef OUTPUT_BUFFER_LOG
+        strcat(outputfilename, "ivf");
+#endif
     }
     session_qp_values.minqp = session_qp_range.minqp;
     session_qp_values.maxqp = session_qp_range.maxqp;
+#ifdef INPUT_BUFFER_LOG
+    inputBufferFile1 = fopen (inputfilename, "ab");
 
+    if (!inputBufferFile1)
+        DEBUG_PRINT_ERROR("Input File open failed");
+
+#endif
+#ifdef OUTPUT_BUFFER_LOG
+    outputBufferFile1 = fopen (outputfilename, "ab");
+#endif
     int ret;
     ret = subscribe_to_events(m_nDriver_fd);
 
@@ -1006,15 +1044,12 @@ void venc_dev::venc_close()
         m_nDriver_fd = -1;
     }
 
-    if (m_debug.infile) {
-        fclose(m_debug.infile);
-        m_debug.infile = NULL;
-    }
-
-    if (m_debug.outfile) {
-        fclose(m_debug.outfile);
-        m_debug.outfile = NULL;
-    }
+#ifdef INPUT_BUFFER_LOG
+    fclose (inputBufferFile1);
+#endif
+#ifdef OUTPUT_BUFFER_LOG
+    fclose (outputBufferFile1);
+#endif
 
     if (m_debug.extradatafile) {
         fclose(m_debug.extradatafile);
@@ -1191,14 +1226,18 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                     if (!venc_set_color_format(portDefn->format.video.eColorFormat)) {
                         return false;
                     }
+#ifdef _ANDROID_
                     if ((display_info.w * display_info.h) > (OMX_CORE_720P_WIDTH * OMX_CORE_720P_HEIGHT)
                         && enable_mv_narrow_searchrange &&
                         (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height) >=
                         (OMX_CORE_1080P_WIDTH * OMX_CORE_1080P_HEIGHT)) {
+#endif
                         if (venc_set_searchrange() == false) {
                             DEBUG_PRINT_ERROR("ERROR: Failed to set search range");
                         }
+#ifdef _ANDROID_
                     }
+#endif
                     if (m_sVenc_cfg.input_height != portDefn->format.video.nFrameHeight ||
                             m_sVenc_cfg.input_width != portDefn->format.video.nFrameWidth) {
                         DEBUG_PRINT_LOW("Basic parameter has changed");
@@ -1634,6 +1673,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 extradata = true;
                 break;
             }
+#ifdef _ANDROID_
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
                 PrependSPSPPSToIDRFramesParams * pParam =
@@ -1647,6 +1687,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
 
                 break;
             }
+#endif
         case OMX_QcomIndexParamH264AUDelimiter:
             {
                 OMX_QCOM_VIDEO_CONFIG_H264_AUD * pParam =
@@ -2396,9 +2437,11 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                 }
             } else if (!color_format) {
                 if (meta_buf->buffer_type == kMetadataBufferTypeCameraSource) {
+#ifdef _ANDROID_
                     if (meta_buf->meta_handle->numFds + meta_buf->meta_handle->numInts > 3 &&
                         meta_buf->meta_handle->data[3] & private_handle_t::PRIV_FLAGS_ITU_R_709)
                         buf.flags = V4L2_MSM_BUF_FLAG_YUV_601_709_CLAMP;
+#endif
                     if (meta_buf->meta_handle->numFds + meta_buf->meta_handle->numInts > 2) {
                         plane.data_offset = meta_buf->meta_handle->data[1];
                         plane.length = meta_buf->meta_handle->data[2];
@@ -2407,6 +2450,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     DEBUG_PRINT_LOW("venc_empty_buf: camera buf: fd = %d filled %d of %d flag 0x%x",
                             fd, plane.bytesused, plane.length, buf.flags);
                 } else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
+#ifdef _ANDROID_
                     private_handle_t *handle = (private_handle_t *)meta_buf->meta_handle;
                     fd = handle->fd;
                     plane.data_offset = 0;
@@ -2414,6 +2458,13 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     plane.bytesused = handle->size;
                         DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d "
                                 ": filled %d of %d", fd, plane.bytesused, plane.length);
+#else
+                    buffer_handle handle = (buffer_handle)meta_buf->meta_handle;
+                    fd = handle->data[0];
+                    plane.data_offset = handle->data[1];
+                    plane.length = handle->data[2];
+                    plane.bytesused = handle->data[2];
+#endif
                 }
             } else {
                 plane.data_offset = bufhdr->nOffset;
@@ -2466,10 +2517,44 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
             streaming[OUTPUT_PORT] = true;
         }
     }
-    if (m_debug.in_buffer_log) {
-        venc_input_log_buffers(bufhdr, fd, plane.data_offset);
-    }
+#ifdef INPUT_BUFFER_LOG
+    int i,msize;
+    int stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, m_sVenc_cfg.input_width);
+    int scanlines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, m_sVenc_cfg.input_height);
+    unsigned char *pvirt,*ptemp;
 
+    char *temp = (char *)bufhdr->pBuffer;
+
+    msize = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
+    if (metadatamode == 1) {
+        pvirt= (unsigned char *)mmap(NULL, msize, PROT_READ|PROT_WRITE,MAP_SHARED, fd, plane.data_offset);
+        if(pvirt) {
+            ptemp = pvirt;
+            for (i = 0; i < m_sVenc_cfg.input_height; i++) {
+                fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+                ptemp += stride;
+            }
+            ptemp = pvirt + (stride * scanlines);
+            for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
+                fwrite(ptemp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+                ptemp += stride;
+            }
+            munmap(pvirt, msize);
+        }
+    } else {
+        for (i = 0; i < m_sVenc_cfg.input_height; i++) {
+            fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+            temp += stride;
+        }
+
+        temp = (char *)bufhdr->pBuffer + (stride * scanlines);
+
+        for(i = 0; i < m_sVenc_cfg.input_height/2; i++) {
+	    fwrite(temp, m_sVenc_cfg.input_width, 1, inputBufferFile1);
+	    temp += stride;
+        }
+    }
+#endif
     return true;
 }
 bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,unsigned fd)
@@ -3141,6 +3226,7 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
             (codec_profile.profile != V4L2_MPEG_VIDEO_H264_PROFILE_HIGH)) {
         nBFrames=0;
     }
+#ifdef _ANDROID_
     if (nBFrames && (display_info.w * display_info.h > OMX_CORE_720P_WIDTH * OMX_CORE_720P_HEIGHT)
         && enable_mv_narrow_searchrange && (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height >=
         OMX_CORE_1080P_WIDTH * OMX_CORE_1080P_HEIGHT || is_searchrange_set)) {
@@ -3150,7 +3236,7 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
         nPFrames = pframes;
         nBFrames = 0;
     }
-
+#endif
     control.id = V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAMES;
     control.value = nPFrames;
     rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
@@ -4434,13 +4520,13 @@ bool venc_dev::venc_validate_profile_level(OMX_U32 *eProfile, OMX_U32 *eLevel)
 
     return true;
 }
-#ifdef _ANDROID_ICS_
+
 bool venc_dev::venc_set_meta_mode(bool mode)
 {
     metadatamode = 1;
     return true;
 }
-#endif
+
 
 bool venc_dev::venc_is_video_session_supported(unsigned long width,
         unsigned long height)

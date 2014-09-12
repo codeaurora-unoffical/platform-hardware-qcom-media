@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2011, 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2011, 2013-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -40,10 +40,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _ANDROID_
 #include <cutils/properties.h>
-#else
-#define PROPERTY_VALUE_MAX 92
 #endif
 
+#define PROPERTY_VALUE_MAX 92
 #define OMX_VIDEO_DEC_NUM_INPUT_BUFFERS   2
 #define OMX_VIDEO_DEC_NUM_OUTPUT_BUFFERS  2
 

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -31,7 +31,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "h264_utils.h"
-//#include <stdlib.h>
 
 enum codec_type {
     CODEC_TYPE_MPEG4 = 0,

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2012, 2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -31,19 +31,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "qc_omx_component.h"
+#include "vidc_debug.h"
 
 #include<stdlib.h>
 
 #include <stdio.h>
 #include <inttypes.h>
-
-#ifdef _ANDROID_
-extern "C" {
-#include<utils/Log.h>
-}
-#else
-#define ALOGE(fmt, args...) fprintf(stderr, fmt, ##args)
-#endif /* _ANDROID_ */
 
 class omx_time_stamp_reorder
 {
@@ -76,7 +69,7 @@ class omx_time_stamp_reorder
         bool update_head();
         void delete_list();
         void handle_error() {
-            ALOGE("Error handler called for TS Parser");
+            DEBUG_PRINT_ERROR("Error handler called for TS Parser");
 
             if (error)
                 return;

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -388,7 +388,7 @@ class panscan_handler
 
 #define PRINT_PANSCAN_PARAM(H264_PARAM) \
     do {\
-        ALOGE("%s(): left_off(%ld) right_off(%ld) top_off(%ld) bottom_off(%ld)",\
+        DEBUG_PRINT_ERROR("%s(): left_off(%ld) right_off(%ld) top_off(%ld) bottom_off(%ld)",\
                 __FUNCTION__,\
                 (H264_PARAM).rect_left_offset[0],\
                 (H264_PARAM).rect_right_offset[0],\
@@ -399,7 +399,7 @@ class panscan_handler
 #define PRINT_PANSCAN_DATA(NODE) \
     do {\
         if (NODE) {\
-            ALOGE("%s(): PANSCAN DATA start_ts(%lld) end_ts(%lld)", __FUNCTION__,\
+            DEBUG_PRINT_ERROR("%s(): PANSCAN DATA start_ts(%lld) end_ts(%lld)", __FUNCTION__,\
                     (NODE)->start_ts, (NODE)->end_ts);\
             PRINT_PANSCAN_PARAM(NODE->pan_scan_param);\
         }\
