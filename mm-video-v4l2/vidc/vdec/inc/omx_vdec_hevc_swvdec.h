@@ -51,51 +51,25 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "SwVdecTypes.h"
 #include "SwVdecAPI.h"
 
-static ptrdiff_t x;
-
-#ifdef _ANDROID_
-#ifdef MAX_RES_720P
-#define LOG_TAG "OMX-VDEC-720P"
-#elif MAX_RES_1080P
-#define LOG_TAG "OMX-VDEC-1080P"
-#else
-#define LOG_TAG "OMX-VDEC"
-#endif
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 #ifdef USE_ION
 #include <linux/msm_ion.h>
 #endif
+
+#ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
 #include <ui/ANativeObjectBase.h>
-extern "C"{
-#include <utils/Log.h>
-}
-#include <linux/videodev2.h>
-#include <poll.h>
-#include "hevc_utils.h"
-#define TIMEOUT 5000
-
-#else //_ANDROID_
-#define DEBUG_PRINT_LOW(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
-#define DEBUG_PRINT_HIGH(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
-#define DEBUG_PRINT_ERROR(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
+#include <media/hardware/HardwareAPI.h>
+#include <gralloc_priv.h>
+#include <cutils/properties.h>
 #endif // _ANDROID_
 
-
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
-#include <media/hardware/HardwareAPI.h>
-#endif
-
-#include <unistd.h>
-
-#if defined (_ANDROID_ICS_)
-#include <gralloc_priv.h>
-#endif
-
-#include <pthread.h>
-#ifndef PC_DEBUG
-#include <semaphore.h>
-#endif
+#include <poll.h>
+#include <linux/videodev2.h>
+#include "hevc_utils.h"
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "qc_omx_component.h"
@@ -110,11 +84,20 @@ extern "C"{
 #include "ts_parser.h"
 #include "vidc_color_converter.h"
 #include "vidc_debug.h"
-#ifdef _ANDROID_
-#include <cutils/properties.h>
+
+#define TIMEOUT 5000
+static ptrdiff_t x;
+
+#ifdef MAX_RES_720P
+#define LOG_TAG "OMX-VDEC-720P"
+#elif MAX_RES_1080P
+#define LOG_TAG "OMX-VDEC-1080P"
 #else
-#define PROPERTY_VALUE_MAX 92
+#define LOG_TAG "OMX-VDEC"
 #endif
+
+#define PROPERTY_VALUE_MAX 92
+
 extern "C" {
   OMX_API void * get_omx_component_factory_fn(void);
 }
@@ -184,9 +167,7 @@ extern "C" {
 
 #define DESC_BUFFER_SIZE (8192 * 16)
 
-#ifdef _ANDROID_
 #define MAX_NUM_INPUT_OUTPUT_BUFFERS 32
-#endif
 
 #define OMX_FRAMEINFO_EXTRADATA 0x00010000
 #define OMX_INTERLACE_EXTRADATA 0x00020000
@@ -573,7 +554,6 @@ private:
 
     };
 
-#ifdef _ANDROID_
     struct ts_entry
     {
         OMX_TICKS timestamp;
@@ -591,7 +571,6 @@ private:
         bool pop_min_ts(OMX_TICKS &ts);
         bool reset_ts_list();
     };
-#endif
 
     struct desc_buffer_hdr
     {
@@ -802,11 +781,7 @@ private:
     }
 #ifdef _ANDROID_
     OMX_ERRORTYPE createDivxDrmContext();
-#endif //_ANDROID_
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
     OMX_ERRORTYPE use_android_native_buffer(OMX_IN OMX_HANDLETYPE hComp, OMX_PTR data);
-#endif
-#if defined (_ANDROID_ICS_)
     struct nativebuffer{
         native_handle_t *nativehandle;
         private_handle_t *privatehandle;
@@ -849,10 +824,8 @@ private:
     OMX_BUFFERHEADERTYPE  *m_out_mem_ptr;
     // number of input bitstream error frame count
     unsigned int m_inp_err_count;
-#ifdef _ANDROID_
     // Timestamp list
     ts_arr_list           m_timestamp_list;
-#endif
 
     bool input_flush_progress;
     bool output_flush_progress;
@@ -956,18 +929,19 @@ private:
     OMX_NATIVE_WINDOWTYPE m_display_id;
     h264_stream_parser *h264_parser;
     OMX_U32 client_extradata;
-#ifdef _ANDROID_
     bool m_debug_timestamp;
     bool perf_flag;
     OMX_U32 proc_frms, latency;
     perf_metrics fps_metrics;
     perf_metrics dec_time;
+#ifdef _ANDROID_
     bool m_enable_android_native_buffers;
     bool m_use_android_native_buffers;
+#endif
     bool m_debug_extradata;
     bool m_debug_concealedmb;
     bool m_disable_dynamic_buf_mode;
-#endif
+
 #ifdef MAX_RES_1080P
     MP4_Utils mp4_headerparser;
 #endif
@@ -1064,15 +1038,15 @@ private:
 #endif
         unsigned char *pmem_baseaddress[MAX_COUNT];
         int pmem_fd[MAX_COUNT];
+#ifdef _ANDROID_
         struct vidc_heap
         {
             sp<MemoryHeapBase>    video_heap_ptr;
         };
         struct vidc_heap m_heap_ptr[MAX_COUNT];
-    };
-#if  defined (_MSM8960_) || defined (_MSM8974_)
-    allocate_color_convert_buf client_buffers;
 #endif
+    };
+    allocate_color_convert_buf client_buffers;
     HEVC_Utils mHEVCutils;
     struct video_decoder_capability m_decoder_capability;
     struct debug_cap m_debug;

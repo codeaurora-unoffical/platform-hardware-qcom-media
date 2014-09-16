@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -26,9 +26,6 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
 #include "ts_parser.h"
-#include "vidc_debug.h"
-
-#define DEBUG DEBUG_PRINT_ERROR
 
 void omx_time_stamp_reorder::set_timestamp_reorder_mode(bool mode)
 {
@@ -147,8 +144,7 @@ bool omx_time_stamp_reorder::insert_timestamp(OMX_BUFFERHEADERTYPE *header)
 
     if (!reorder_ts || error || !header) {
         if (error || !header)
-            DEBUG("Invalid condition in insert_timestamp %p", header);
-
+            DEBUG_PRINT_ERROR("Invalid condition in insert_timestamp %p", header);
         return false;
     }
 
@@ -158,7 +154,7 @@ bool omx_time_stamp_reorder::insert_timestamp(OMX_BUFFERHEADERTYPE *header)
     }
 
     if (pcurrent->entries_filled > (TIME_SZ - 1)) {
-        DEBUG("Table full return error");
+        DEBUG_PRINT_ERROR("Table full return error");
         handle_error();
         return false;
     }
@@ -168,7 +164,7 @@ bool omx_time_stamp_reorder::insert_timestamp(OMX_BUFFERHEADERTYPE *header)
     }
 
     if ((header->nFlags & OMX_BUFFERFLAG_EOS) && !header->nFilledLen) {
-        DEBUG("EOS with zero length recieved");
+        DEBUG_PRINT_ERROR("EOS with zero length recieved");
 
         if (!add_new_list()) {
             handle_error();
@@ -187,7 +183,7 @@ bool omx_time_stamp_reorder::insert_timestamp(OMX_BUFFERHEADERTYPE *header)
     }
 
     if (!table_entry) {
-        DEBUG("All entries in use");
+        DEBUG_PRINT_ERROR("All entries in use");
         handle_error();
         return false;
     }
@@ -195,7 +191,7 @@ bool omx_time_stamp_reorder::insert_timestamp(OMX_BUFFERHEADERTYPE *header)
     *table_entry = header->nTimeStamp;
 
     if (print_debug)
-        DEBUG("Time stamp inserted %lld", header->nTimeStamp);
+        DEBUG_PRINT_ERROR("Time stamp inserted %lld", header->nTimeStamp);
 
     if (header->nFlags & OMX_BUFFERFLAG_EOS) {
         if (!add_new_list()) {
@@ -212,7 +208,7 @@ bool omx_time_stamp_reorder::remove_time_stamp(OMX_TICKS ts, bool is_interlaced 
     unsigned int num_ent_remove = (is_interlaced)?2:1;
 
     if (!reorder_ts || error) {
-        DEBUG("not in avi mode");
+        DEBUG_PRINT_ERROR("not in avi mode");
         return false;
     }
 
@@ -225,7 +221,7 @@ bool omx_time_stamp_reorder::remove_time_stamp(OMX_TICKS ts, bool is_interlaced 
             num_ent_remove--;
 
             if (print_debug)
-                DEBUG("Removed TS %lld", ts);
+                DEBUG_PRINT_ERROR("Removed TS %lld", ts);
         }
     }
 
@@ -251,8 +247,7 @@ bool omx_time_stamp_reorder::get_next_timestamp(OMX_BUFFERHEADERTYPE *header, bo
 
     if (!reorder_ts || error || !header) {
         if (error || !header)
-            DEBUG("Invalid condition in insert_timestamp %p", header);
-
+            DEBUG_PRINT_ERROR("Invalid condition in insert_timestamp %p", header);
         return false;
     }
 
@@ -279,8 +274,7 @@ bool omx_time_stamp_reorder::get_next_timestamp(OMX_BUFFERHEADERTYPE *header, bo
         header->nTimeStamp = element->timestamps;
 
         if (print_debug)
-            DEBUG("Getnext Time stamp %lld", header->nTimeStamp);
-
+            DEBUG_PRINT_ERROR("Getnext Time stamp %lld", header->nTimeStamp);
         element->in_use = false;
     }
 

@@ -67,9 +67,13 @@ extern "C" {
 //#define TEST_TS_FROM_SEI // Define this macro to calculate the timestamps
 // from the SEI and VUI data for H264
 
+#undef USE_OUTPUT_BUFFER
+using namespace android;
 #else
 #include <glib.h>
 #define strlcpy g_strlcpy
+
+#define USE_OUTPUT_BUFFER
 
 #define ALOGE(fmt, args...) fprintf(stderr, fmt, ##args)
 #define DEBUG_PRINT printf
@@ -87,6 +91,9 @@ extern "C" {
 #include <linux/msm_mdp.h>
 #include <linux/fb.h>
 
+#ifdef USE_ION
+#include <linux/msm_ion.h>
+#endif
 /************************************************************************/
 /*              #DEFINES                            */
 /************************************************************************/
@@ -119,22 +126,32 @@ param.nSize = sizeof(param);
 #define MDP_DEINTERLACE 0x80000000
 
 #define ALLOCATE_BUFFER 0
+#define PMEM_DEVICE "/dev/ion"
 
-#ifdef MAX_RES_720P
-#define PMEM_DEVICE "/dev/pmem_adsp"
-#elif MAX_RES_1080P_EBI
-#define PMEM_DEVICE "/dev/pmem_adsp"
-#elif MAX_RES_1080P
-#define PMEM_DEVICE "/dev/pmem_smipool"
+#ifdef USE_OUTPUT_BUFFER
+#define USE_EXTERN_PMEM_BUF
+#undef USE_EGL_IMAGE_TEST_APP
 #endif
-
-//#define USE_EXTERN_PMEM_BUF
 
 /************************************************************************/
 /*              GLOBAL DECLARATIONS                     */
 /************************************************************************/
-#ifdef _ANDROID_
-using namespace android;
+
+#ifdef USE_ION
+#define MEM_DEVICE "/dev/ion"
+#define MEM_HEAP_ID ION_CP_MM_HEAP_ID
+
+struct vdec_ion {
+    int ion_device_fd;
+    struct ion_fd_data fd_ion_data;
+    struct ion_allocation_data ion_alloc_data;
+};
+
+struct vdec_ion *outPort_ion;
+
+int alloc_map_ion_memory(OMX_U32 buffer_size,OMX_U32 alignment, struct ion_allocation_data *alloc_data,
+                         struct ion_fd_data *fd_data,int flag);
+void free_ion_memory(struct vdec_ion *buf_ion_info);
 #endif
 
 #ifdef _MSM8974_
@@ -748,8 +765,12 @@ void* fbd_thread(void* pArg)
     int stride,scanlines,stride_c,i;
 #endif
     DEBUG_PRINT("First Inside %s\n", __FUNCTION__);
+#ifdef _ANDROID_
     property_get("vidc.vdec.debug.aspectratio", value, "0");
     aspectratio_prop = atoi(value);
+#else
+    aspectratio_prop = 0;
+#endif
     while (currentStatus != ERROR_STATE && !bOutputEosReached) {
         pthread_mutex_unlock(&eos_lock);
         DEBUG_PRINT("Inside %s\n", __FUNCTION__);
@@ -1910,9 +1931,11 @@ int Init_Decoder()
     if (FAILED(omxresult)) {
         DEBUG_PRINT_ERROR("\nFailed to Load the component:%s\n", vdecCompNames);
         if (!strncmp(vdecCompNames, "OMX.qcom.video.decoder.mvc", 27)) {
+#ifdef _ANDROID_
             char platform_name[PROPERTY_VALUE_MAX] = {0};
             property_get("ro.product.name", platform_name, "Name not available");
             printf("Error: MVC not listed as supported codec in this platform: %s\n", platform_name);
+#endif
         }
         return -1;
     } else {
@@ -1969,7 +1992,9 @@ int Init_Decoder()
                 (OMX_PTR)&thumbNailMode);
         DEBUG_PRINT("Enabled Thumbnail mode\n");
     }
-
+#ifdef USE_OUTPUT_BUFFER
+    use_external_pmem_buf = OMX_TRUE;
+#endif
     return 0;
 }
 
@@ -2033,7 +2058,7 @@ int Play_Decoder()
     CONFIG_VERSION_SIZE(outPortFmt);
     outPortFmt.nPortIndex = 1;  // output port
     outPortFmt.nCacheAttr = OMX_QCOM_CacheAttrNone;
-    outPortFmt.nMemRegion = OMX_QCOM_MemRegionSMI;
+    outPortFmt.nMemRegion = OMX_QCOM_MemRegionEBI1;
     OMX_SetParameter(dec_handle,(OMX_INDEXTYPE)OMX_QcomIndexPortDefn,
             (OMX_PTR)&outPortFmt);
 
@@ -2056,24 +2081,31 @@ int Play_Decoder()
     char videoinput_bitsinfo_value[PROPERTY_VALUE_MAX] = {0};
 
     OMX_U32 frameinfo = 0,interlace = 0,h264info =0, video_qp =0, videoinput_bitsinfo =0;
+#ifdef _ANDROID_
     property_get("vidc.vdec.debug.frameinfo", frameinfo_value, "0");
+#endif
     frameinfo = atoi(frameinfo_value);
     if (frameinfo) {
         OMX_SetParameter(dec_handle,(OMX_INDEXTYPE)OMX_QcomIndexParamFrameInfoExtraData,
             (OMX_PTR)&extra_data);
     }
+#ifdef _ANDROID_
     property_get("vidc.vdec.debug.interlace", interlace_value, "0");
+#endif
     interlace = atoi(interlace_value);
     if (interlace) {
         OMX_SetParameter(dec_handle,(OMX_INDEXTYPE)OMX_QcomIndexParamInterlaceExtraData,
             (OMX_PTR)&extra_data);
     }
+#ifdef _ANDROID_
     property_get("vidc.vdec.debug.h264info", h264info_value, "0");
+#endif
     h264info = atoi(h264info_value);
     if (h264info) {
         OMX_SetParameter(dec_handle,(OMX_INDEXTYPE)OMX_QcomIndexParamH264TimeInfo,
             (OMX_PTR)&extra_data);
     }
+#ifdef _ANDROID_
     property_get("vidc.vdec.debug.video_qp_value", video_qp_value, "0");
     video_qp = atoi(video_qp_value);
     if (video_qp) {
@@ -2086,7 +2118,7 @@ int Play_Decoder()
         OMX_SetParameter(dec_handle,(OMX_INDEXTYPE)OMX_QcomIndexParamVideoInputBitsInfoExtraData,
             (OMX_PTR)&extra_data);
     }
-
+#endif
     /* Query the decoder outport's min buf requirements */
     CONFIG_VERSION_SIZE(portFmt);
 
@@ -2631,7 +2663,7 @@ static OMX_ERRORTYPE use_output_buffer_multiple_fd ( OMX_COMPONENTTYPE *dec_hand
     OMX_ERRORTYPE error=OMX_ErrorNone;
     long bufCnt=0;
     OMX_U8* pvirt = NULL;
-
+#ifndef USE_OUTPUT_BUFFER
     *pBufHdrs= (OMX_BUFFERHEADERTYPE **)
         malloc(sizeof(OMX_BUFFERHEADERTYPE)* bufCntMin);
     if (*pBufHdrs == NULL) {
@@ -2673,7 +2705,7 @@ static OMX_ERRORTYPE use_output_buffer_multiple_fd ( OMX_COMPONENTTYPE *dec_hand
         pPlatformList[bufCnt].nEntries    = 1;
         pPlatformList[bufCnt].entryList   = &pPlatformEntry[bufCnt];
         pPMEMInfo[bufCnt].offset          =  0;
-        pPMEMInfo[bufCnt].pmem_fd = open(PMEM_DEVICE,O_RDWR);;
+        pPMEMInfo[bufCnt].pmem_fd = open(PMEM_DEVICE,O_RDWR);
         if ((int)pPMEMInfo[bufCnt].pmem_fd < 0) {
             DEBUG_PRINT_ERROR("\n open failed %s",PMEM_DEVICE);
             return OMX_ErrorInsufficientResources;
@@ -2687,7 +2719,7 @@ static OMX_ERRORTYPE use_output_buffer_multiple_fd ( OMX_COMPONENTTYPE *dec_hand
         pvirt = (unsigned char *)mmap(NULL,bufSize,PROT_READ|PROT_WRITE,
                 MAP_SHARED,pPMEMInfo[bufCnt].pmem_fd,0);
         getFreePmem();
-        DEBUG_PRINT("\n Virtaul Address %p Size %d pmem_fd=0x%x",pvirt,bufSize,pPMEMInfo[bufCnt].pmem_fd);
+        DEBUG_PRINT("\n Virtual Address %p Size %d pmem_fd=0x%x",pvirt,bufSize,pPMEMInfo[bufCnt].pmem_fd);
         if (pvirt == MAP_FAILED) {
             DEBUG_PRINT_ERROR("\n mmap failed for buffers");
             return OMX_ErrorInsufficientResources;
@@ -2696,8 +2728,82 @@ static OMX_ERRORTYPE use_output_buffer_multiple_fd ( OMX_COMPONENTTYPE *dec_hand
         error = OMX_UseBuffer(dec_handle, &((*pBufHdrs)[bufCnt]),
                 nPortIndex, &pPlatformList[bufCnt], bufSize, pvirt);
     }
+#else
+    int ion_device_fd =-1;
+    struct ion_allocation_data ion_alloc_data;
+    struct ion_fd_data fd_ion_data;
+
+    *pBufHdrs= (OMX_BUFFERHEADERTYPE **)
+                   malloc(sizeof(OMX_BUFFERHEADERTYPE)* bufCntMin);
+    if(*pBufHdrs == NULL){
+        DEBUG_PRINT_ERROR("\n m_inp_heap_ptr Allocation failed ");
+        return OMX_ErrorInsufficientResources;
+     }
+    pPlatformList = (OMX_QCOM_PLATFORM_PRIVATE_LIST *)
+        malloc(sizeof(OMX_QCOM_PLATFORM_PRIVATE_LIST)* bufCntMin);
+
+    if(pPlatformList == NULL){
+        DEBUG_PRINT_ERROR("\n pPlatformList Allocation failed ");
+        return OMX_ErrorInsufficientResources;
+     }
+
+    pPlatformEntry = (OMX_QCOM_PLATFORM_PRIVATE_ENTRY *)
+        malloc(sizeof(OMX_QCOM_PLATFORM_PRIVATE_ENTRY)* bufCntMin);
+
+    if(pPlatformEntry == NULL){
+        DEBUG_PRINT_ERROR("\n pPlatformEntry Allocation failed ");
+        return OMX_ErrorInsufficientResources;
+     }
+
+    pPMEMInfo = (OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *)
+        malloc(sizeof(OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO)* bufCntMin);
+
+    if(pPMEMInfo == NULL){
+        DEBUG_PRINT_ERROR("\n pPMEMInfo Allocation failed ");
+        return OMX_ErrorInsufficientResources;
+     }
+    outPort_ion = (struct vdec_ion *)calloc(sizeof(struct vdec_ion), bufCntMin);
+
+    //output_use_buffer = true;
+    for(bufCnt=0; bufCnt < bufCntMin; ++bufCnt) {
+        // allocate input buffers
+      DEBUG_PRINT("OMX_UseBuffer_multiple_fd No %d %d \n", bufCnt, bufSize);
+
+      pPlatformEntry[bufCnt].type       = OMX_QCOM_PLATFORM_PRIVATE_PMEM;
+      pPlatformEntry[bufCnt].entry      = &pPMEMInfo[bufCnt];
+      // Initialize the Platform List
+      pPlatformList[bufCnt].nEntries    = 1;
+      pPlatformList[bufCnt].entryList   = &pPlatformEntry[bufCnt];
+      pPMEMInfo[bufCnt].offset          =  0;
+
+      ion_device_fd = alloc_map_ion_memory(
+                                bufSize, 4096, &ion_alloc_data,
+                                &fd_ion_data, 0);
+      if (ion_device_fd < 0) {
+          return OMX_ErrorInsufficientResources;
+      }
+      pPMEMInfo[bufCnt].pmem_fd  = fd_ion_data.fd;
+
+      outPort_ion[bufCnt].ion_device_fd = ion_device_fd;
+      outPort_ion[bufCnt].ion_alloc_data = ion_alloc_data;
+      outPort_ion[bufCnt].fd_ion_data = fd_ion_data;
+
+      DEBUG_PRINT("\n allocation size %d pmem fd 0x%x",bufSize,pPMEMInfo[bufCnt].pmem_fd);
+      pvirt = (unsigned char *)mmap(NULL,bufSize,PROT_READ|PROT_WRITE,
+                      MAP_SHARED,pPMEMInfo[bufCnt].pmem_fd,0);
+      DEBUG_PRINT("\n Virtual Address %p Size %d pmem_fd=0x%x",pvirt,bufSize,pPMEMInfo[bufCnt].pmem_fd);
+      if (pvirt == MAP_FAILED) {
+        DEBUG_PRINT_ERROR("\n mmap failed for buffers");
+        return OMX_ErrorInsufficientResources;
+      }
+      use_buf_virt_addr[bufCnt] = (unsigned)pvirt;
+      error = OMX_UseBuffer(dec_handle, &((*pBufHdrs)[bufCnt]),
+                            nPortIndex, &pPlatformList[bufCnt], bufSize, pvirt);
+    }
+#endif
     return error;
 }
+
 static void do_freeHandle_and_clean_up(bool isDueToError)
 {
     int bufCnt = 0;
@@ -4289,11 +4395,20 @@ void free_output_buffers()
                 close(pPMEMInfo[index].pmem_fd);
                 pPMEMInfo[index].pmem_fd = -1;
             }
+#ifdef USE_OUTPUT_BUFFER
+            free_ion_memory(&outPort_ion[index]);
+#endif
         }
         DEBUG_PRINT("\n Free output buffer");
         OMX_FreeBuffer(dec_handle, 1, pBuffer);
         pBuffer = (OMX_BUFFERHEADERTYPE *)pop(fbd_queue);
     }
+#ifdef USE_OUTPUT_BUFFER
+    if (outPort_ion) {
+        free(outPort_ion);
+        outPort_ion = NULL;
+    }
+#endif
 }
 
 #ifndef USE_ION
@@ -4374,3 +4489,83 @@ freespace_query_failed:
     close(pmem_fd);
 #endif
 }
+
+#ifdef USE_ION
+int alloc_map_ion_memory(OMX_U32 buffer_size,
+              OMX_U32 alignment, struct ion_allocation_data *alloc_data,
+              struct ion_fd_data *fd_data, int flag)
+{
+  int fd = -EINVAL;
+  int rc = -EINVAL;
+  int ion_dev_flag;
+  struct vdec_ion ion_buf_info;
+  int secure_mode = 0;
+
+  if (!alloc_data || buffer_size <= 0 || !fd_data) {
+     DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_ion_memory\n");
+     return -EINVAL;
+  }
+  ion_dev_flag = O_RDONLY;
+  fd = open (MEM_DEVICE, ion_dev_flag);
+  if (fd < 0) {
+    DEBUG_PRINT_ERROR("opening ion device failed with fd = %d\n", fd);
+    return fd;
+  }
+  alloc_data->flags = 0;
+  if(!secure_mode && (flag & ION_FLAG_CACHED))
+  {
+    alloc_data->flags |= ION_FLAG_CACHED;
+  }
+  alloc_data->len = buffer_size;
+  alloc_data->align = clip2(alignment);
+  if (alloc_data->align < 4096)
+  {
+    alloc_data->align = 4096;
+  }
+  if ((secure_mode) && (flag & ION_SECURE))
+      alloc_data->flags |= ION_SECURE;
+
+  alloc_data->heap_mask = ION_HEAP(ION_IOMMU_HEAP_ID);
+  if (secure_mode)
+      alloc_data->heap_mask = ION_HEAP(MEM_HEAP_ID);
+  rc = ioctl(fd,ION_IOC_ALLOC,alloc_data);
+  if (rc || !alloc_data->handle) {
+    DEBUG_PRINT_ERROR("\n ION ALLOC memory failed ");
+    alloc_data->handle = NULL;
+    close(fd);
+    fd = -ENOMEM;
+    return fd;
+  }
+  fd_data->handle = alloc_data->handle;
+
+  rc = ioctl(fd,ION_IOC_MAP,fd_data);
+  if (rc) {
+    DEBUG_PRINT_ERROR("\n ION MAP failed ");
+    ion_buf_info.ion_alloc_data = *alloc_data;
+    ion_buf_info.ion_device_fd = fd;
+    ion_buf_info.fd_ion_data = *fd_data;
+    free_ion_memory(&ion_buf_info);
+    fd_data->fd =-1;
+    close(fd);
+    fd = -ENOMEM;
+  }
+  return fd;
+}
+
+void free_ion_memory(struct vdec_ion *buf_ion_info) {
+
+     if(!buf_ion_info) {
+       DEBUG_PRINT_ERROR("\n ION: free called with invalid fd/allocdata");
+       return;
+     }
+     if(ioctl(buf_ion_info->ion_device_fd,ION_IOC_FREE,
+             &buf_ion_info->ion_alloc_data.handle)) {
+       DEBUG_PRINT_ERROR("\n ION: free failed" );
+     }
+     close(buf_ion_info->ion_device_fd);
+     buf_ion_info->ion_device_fd = -1;
+     buf_ion_info->ion_alloc_data.handle = NULL;
+     buf_ion_info->fd_ion_data.fd = -1;
+}
+#endif
+

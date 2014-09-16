@@ -28,8 +28,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
 #define LOG_TAG "OMX_C2D"
 
-#include <utils/Log.h>
+#ifdef _ANDROID_
 #include <gralloc_priv.h>
+#else
+#include <stdio.h>
+#include <omx_meta_mode.h>
+#endif
+
 #include "vidc_color_converter.h"
 #include "vidc_debug.h"
 

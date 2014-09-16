@@ -49,25 +49,25 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <media/hardware/HardwareAPI.h>
+#include "omx_meta_mode.h"
+
 #include <media/msm_media_info.h>
-
-#ifndef _ANDROID_
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#endif //_ANDROID_
-
+#include "vidc_debug.h"
 #ifdef _ANDROID_
+#include <media/hardware/HardwareAPI.h>
 #include <cutils/properties.h>
 #undef USE_EGL_IMAGE_GPU
+#include "DivXDrmDecrypt.h"
+#include <qdMetaData.h>
+#else
+
+#include <glib.h>
+#define strlcpy g_strlcpy
 #endif
 
-#include <qdMetaData.h>
-
-#ifdef _ANDROID_
-#include "DivXDrmDecrypt.h"
-#endif //_ANDROID_
-
+#include <sys/poll.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
 #ifdef ANDROID_JELLYBEAN_MR2
 #include "QComOMXMetadata.h"
 #endif
@@ -111,12 +111,6 @@ char output_extradata_filename [] = "/data/misc/extradata";
 #define MEM_DEVICE "/dev/ion"
 #define MEM_HEAP_ID ION_CP_MM_HEAP_ID
 
-#ifdef _ANDROID_
-extern "C" {
-#include<utils/Log.h>
-}
-#endif//_ANDROID_
-
 #define SZ_4K 0x1000
 #define SZ_1M 0x100000
 
@@ -126,6 +120,8 @@ extern "C" {
 #define ALIGN(x, to_align) ((((unsigned) x) + (to_align - 1)) & ~(to_align - 1))
 
 #define DEFAULT_EXTRADATA (OMX_INTERLACE_EXTRADATA)
+#define STRINGIFY(s) string(s)
+#define string(s) #s
 #define DEFAULT_CONCEAL_COLOR "32784" //0x8010, black by default
 
 int debug_level = PRIO_ERROR;
@@ -370,7 +366,6 @@ unsigned omx_vdec::omx_cmd_queue::get_q_msg_type()
     return m_q[m_read].id;
 }
 
-#ifdef _ANDROID_
 omx_vdec::ts_arr_list::ts_arr_list()
 {
     //initialize timestamps array
@@ -457,7 +452,6 @@ bool omx_vdec::ts_arr_list::reset_ts_list()
     }
     return ret;
 }
-#endif
 
 // factory function executed by the core to create instances
 void *get_omx_component_factory_fn(void)
@@ -636,7 +630,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     async_thread_id = 0;
     msg_thread_created = false;
     async_thread_created = false;
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
     memset(&native_buffer, 0 ,(sizeof(struct nativebuffer) * MAX_NUM_INPUT_OUTPUT_BUFFERS));
 #endif
     memset(&drv_ctx.extradata_info, 0, sizeof(drv_ctx.extradata_info));
@@ -1464,6 +1458,8 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         maxSmoothStreamingWidth = 1280;
         maxSmoothStreamingHeight = 720;
     }
+#else
+     device_name = (OMX_STRING)"/dev/video32";
 #endif
 
 #ifdef _ANDROID_
@@ -1561,11 +1557,13 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         codec_type_parse = CODEC_TYPE_DIVX;
         m_frame_parser.init_start_codes(codec_type_parse);
 
+#ifdef _ANDROID_
         eRet = createDivxDrmContext();
         if (eRet != OMX_ErrorNone) {
             DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
             return eRet;
         }
+#endif
     } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx4",\
                 OMX_MAX_STRINGNAME_SIZE)) {
         strlcpy((char *)m_cRole, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
@@ -1577,11 +1575,13 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         codec_ambiguous = true;
         m_frame_parser.init_start_codes(codec_type_parse);
 
+#ifdef _ANDROID_
         eRet = createDivxDrmContext();
         if (eRet != OMX_ErrorNone) {
             DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
             return eRet;
         }
+#endif
     } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx",\
                 OMX_MAX_STRINGNAME_SIZE)) {
         strlcpy((char *)m_cRole, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
@@ -1593,11 +1593,13 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         codec_ambiguous = true;
         m_frame_parser.init_start_codes(codec_type_parse);
 
+#ifdef _ANDROID_
         eRet = createDivxDrmContext();
         if (eRet != OMX_ErrorNone) {
             DEBUG_PRINT_ERROR("createDivxDrmContext Failed");
             return eRet;
         }
+#endif
     } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.avc",\
                 OMX_MAX_STRINGNAME_SIZE)) {
         strlcpy((char *)m_cRole, "video_decoder.avc",OMX_MAX_STRINGNAME_SIZE);
@@ -1616,6 +1618,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         codec_type_parse = CODEC_TYPE_H264;
         m_frame_parser.init_start_codes(codec_type_parse);
         m_frame_parser.init_nal_length(nal_length);
+#ifdef _ANDROID_
     } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc",\
                 OMX_MAX_STRINGNAME_SIZE)) {
         strlcpy((char *)m_cRole, "video_decoder.hevc",OMX_MAX_STRINGNAME_SIZE);
@@ -1625,6 +1628,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         codec_type_parse = CODEC_TYPE_HEVC;
         m_frame_parser.init_start_codes(codec_type_parse);
         m_frame_parser.init_nal_length(nal_length);
+#endif
     } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vc1",\
                 OMX_MAX_STRINGNAME_SIZE)) {
         strlcpy((char *)m_cRole, "video_decoder.vc1",OMX_MAX_STRINGNAME_SIZE);
@@ -1728,7 +1732,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
                 DEBUG_PRINT_ERROR("Codec should not be ambiguous");
             }
         }
-
+#ifdef _ANDROID_
         property_get("persist.vidc.dec.conceal_color", property_value, DEFAULT_CONCEAL_COLOR);
         m_conceal_color= atoi(property_value);
         DEBUG_PRINT_HIGH("trying to set 0x%x as conceal color\n",m_conceal_color);
@@ -1738,7 +1742,9 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         if (ret) {
             DEBUG_PRINT_ERROR("Failed to set conceal color %d\n", ret);
         }
-
+#else
+	m_conceal_color = 32896;
+#endif 
         //Get the hardware capabilities
         memset((void *)&frmsize,0,sizeof(frmsize));
         frmsize.index = 0;
@@ -2571,11 +2577,9 @@ bool omx_vdec::execute_input_flush()
         prev_ts = LLONG_MAX;
         rst_prev_ts = true;
     }
-#ifdef _ANDROID_
     if (m_debug_timestamp) {
         m_timestamp_list.reset_ts_list();
     }
-#endif
     DEBUG_PRINT_HIGH("OMX flush i/p Port complete PenBuf(%d)", pending_input_buffers);
     return bRet;
 }
@@ -2656,11 +2660,15 @@ OMX_ERRORTYPE omx_vdec::get_supported_profile_level_for_1080p(OMX_VIDEO_PARAM_PR
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %lu", profileLevelType->nProfileIndex);
                 eRet = OMX_ErrorNoMore;
             }
-        } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
+        }
+#ifdef _ANDROID_
+           else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %d",
                         profileLevelType->nProfileIndex);
                 eRet = OMX_ErrorNoMore;
-        } else if ((!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.h263",OMX_MAX_STRINGNAME_SIZE))) {
+        }
+#endif
+           else if ((!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.h263",OMX_MAX_STRINGNAME_SIZE))) {
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_H263ProfileBaseline;
                 profileLevelType->eLevel   = OMX_VIDEO_H263Level70;
@@ -2775,17 +2783,17 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                     //On Android, we default to standard YUV formats for non-surface use-cases
                                     //where apps prefer known color formats.
                                     OMX_COLOR_FORMATTYPE formatsNonSurfaceMode[] = {
-                                        [0] = OMX_COLOR_FormatYUV420SemiPlanar,
-                                        [1] = OMX_COLOR_FormatYUV420Planar,
-                                        [2] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m,
-                                        [3] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView,
+                                        OMX_COLOR_FormatYUV420SemiPlanar,
+                                        OMX_COLOR_FormatYUV420Planar,
+                                        (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m,
+                                        (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView,
                                     };
                                     //for surface mode (normal playback), advertise native/accelerated formats first
                                     OMX_COLOR_FORMATTYPE formatsDefault[] = {
-                                        [0] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m,
-                                        [1] = OMX_COLOR_FormatYUV420Planar,
-                                        [2] = OMX_COLOR_FormatYUV420SemiPlanar,
-                                        [3] = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView,
+                                        (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m,
+                                        OMX_COLOR_FormatYUV420Planar,
+                                        OMX_COLOR_FormatYUV420SemiPlanar,
+                                        (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView,
                                     };
 #if _ANDROID_
                                     //Distinguish non-surface mode from normal playback use-case based on
@@ -2918,7 +2926,7 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                         eRet = get_supported_profile_level_for_1080p(profileLevelType);
                                         break;
                                     }
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
+#ifdef _ANDROID_
         case OMX_GoogleAndroidIndexGetAndroidNativeBufferUsage: {
                                         DEBUG_PRINT_LOW("get_parameter: OMX_GoogleAndroidIndexGetAndroidNativeBufferUsage");
                                         GetAndroidNativeBufferUsageParams* nativeBuffersUsage = (GetAndroidNativeBufferUsageParams *) paramData;
@@ -2956,7 +2964,7 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
     return eRet;
 }
 
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
+#ifdef _ANDROID_
 OMX_ERRORTYPE omx_vdec::use_android_native_buffer(OMX_IN OMX_HANDLETYPE hComp, OMX_PTR data)
 {
     DEBUG_PRINT_LOW("Inside use_android_native_buffer");
@@ -3367,14 +3375,18 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                           DEBUG_PRINT_ERROR("Setparameter: unknown Index %s", comp_role->cRole);
                                           eRet = OMX_ErrorUnsupportedSetting;
                                       }
-                                  } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
+                                  }
+#ifdef _ANDROID_
+                                    else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
                                       if (!strncmp((const char*)comp_role->cRole, "video_decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
                                           strlcpy((char*)m_cRole, "video_decoder.hevc", OMX_MAX_STRINGNAME_SIZE);
                                       } else {
                                           DEBUG_PRINT_ERROR("Setparameter: unknown Index %s", comp_role->cRole);
                                           eRet = OMX_ErrorUnsupportedSetting;
                                       }
-                                  } else {
+                                  }
+#endif
+                                    else {
                                       DEBUG_PRINT_ERROR("Setparameter: unknown param %s", drv_ctx.kind);
                                       eRet = OMX_ErrorInvalidComponentName;
                                   }
@@ -3572,7 +3584,7 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 #endif
                                   }
                                   break;
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
+#ifdef _ANDROID_
                                   /* Need to allow following two set_parameters even in Idle
                                    * state. This is ANDROID architecture which is not in sync
                                    * with openmax standard. */
@@ -4092,7 +4104,7 @@ OMX_ERRORTYPE  omx_vdec::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
     } else if (extn_equals(paramName, OMX_QCOM_INDEX_PARAM_VIDEO_EXTNUSER_EXTRADATA)) {
         *indexType = (OMX_INDEXTYPE)OMX_QcomIndexEnableExtnUserData;
     }
-#if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
+#ifdef _ANDROID_
     else if (extn_equals(paramName, "OMX.google.android.index.enableAndroidNativeBuffers")) {
         *indexType = (OMX_INDEXTYPE)OMX_GoogleAndroidIndexEnableAndroidNativeBuffers;
     } else if (extn_equals(paramName, "OMX.google.android.index.useAndroidNativeBuffer2")) {
@@ -4247,7 +4259,9 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
     unsigned                         i= 0; // Temporary counter
     struct vdec_setbuffer_cmd setbuffers;
     OMX_PTR privateAppData = NULL;
+#ifdef _ANDROID_
     private_handle_t *handle = NULL;
+#endif
     OMX_U8 *buff = buffer;
     struct v4l2_buffer buf;
     struct v4l2_plane plane[VIDEO_MAX_PLANES];
@@ -4291,12 +4305,11 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         BITMASK_SET(&m_out_bm_count,i);
         (*bufferHdr)->pAppPrivate = appData;
         (*bufferHdr)->pBuffer = buffer;
-        (*bufferHdr)->nAllocLen = sizeof(struct VideoDecoderOutputMetaData);
+    //    (*bufferHdr)->nAllocLen = sizeof(struct VideoDecoderOutputMetaData);
         return eRet;
     }
-
     if (eRet == OMX_ErrorNone) {
-#if defined(_ANDROID_HONEYCOMB_) || defined(_ANDROID_ICS_)
+#ifdef _ANDROID_
         if (m_enable_android_native_buffers) {
             if (m_use_android_native_buffers) {
                 UseAndroidNativeBufferParams *params = (UseAndroidNativeBufferParams *)appData;
@@ -4327,10 +4340,8 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                     }
                 }
             }
-#if defined(_ANDROID_ICS_)
             native_buffer[i].nativehandle = handle;
             native_buffer[i].privatehandle = handle;
-#endif
             if (!handle) {
                 DEBUG_PRINT_ERROR("Native Buffer handle is NULL");
                 return OMX_ErrorBadParameter;
@@ -4488,12 +4499,16 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
         }
 
         (*bufferHdr)->nAllocLen = drv_ctx.op_buf.buffer_size;
+#ifdef _ANDROID_
         if (m_enable_android_native_buffers) {
             DEBUG_PRINT_LOW("setting pBuffer to private_handle_t %p", handle);
             (*bufferHdr)->pBuffer = (OMX_U8 *)handle;
         } else {
             (*bufferHdr)->pBuffer = buff;
         }
+#else
+        (*bufferHdr)->pBuffer = buff;
+#endif
         (*bufferHdr)->pAppPrivate = privateAppData;
         BITMASK_SET(&m_out_bm_count,i);
     }
@@ -5516,7 +5531,7 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 
             DEBUG_PRINT_LOW("MOVING TO DISABLED STATE");
             BITMASK_CLEAR((&m_flags),OMX_COMPONENT_OUTPUT_DISABLE_PENDING);
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
             if (m_enable_android_native_buffers) {
                 DEBUG_PRINT_LOW("FreeBuffer - outport disabled: reset native buffers");
                 memset(&native_buffer, 0 ,(sizeof(struct nativebuffer) * MAX_NUM_INPUT_OUTPUT_BUFFERS));
@@ -5788,7 +5803,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
         frameinfo.flags |= buffer->nFlags;
     }
 
-#ifdef _ANDROID_
     if (m_debug_timestamp) {
         if (arbitrary_bytes) {
             DEBUG_PRINT_LOW("Inserting TIMESTAMP (%lld) into queue", buffer->nTimeStamp);
@@ -5798,7 +5812,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         h
             m_timestamp_list.insert_ts(buffer->nTimeStamp);
         }
     }
-#endif
 
 log_input_buffers((const char *)temp_buffer->bufferaddr, temp_buffer->buffer_len);
 
@@ -5904,7 +5917,8 @@ if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
    ========================================================================== */
 OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* buffer)
-{
+{  
+#ifdef _ANDROID_
     if (dynamic_buf_mode) {
         private_handle_t *handle = NULL;
         struct VideoDecoderOutputMetaData *meta;
@@ -5939,7 +5953,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         buffer->nFilledLen = 0;
         buffer->nAllocLen = handle->size;
     }
-
+#endif
 
     if (m_state == OMX_StateInvalid) {
         DEBUG_PRINT_ERROR("FTB in Invalid State");
@@ -6077,6 +6091,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
     if (rc) {
         /*TODO: How to handle this case */
         DEBUG_PRINT_ERROR("Failed to qbuf to driver");
+        return OMX_ErrorUndefined;
     }
 return OMX_ErrorNone;
 }
@@ -6145,7 +6160,7 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
         for (i = 0; i < drv_ctx.op_buf.actualcount; i++ ) {
             free_output_buffer (&m_out_mem_ptr[i]);
         }
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
         memset(&native_buffer, 0, (sizeof(nativebuffer) * MAX_NUM_INPUT_OUTPUT_BUFFERS));
 #endif
     }
@@ -6194,15 +6209,10 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     m_ftb_q.m_read = m_ftb_q.m_write =0;
     m_cmd_q.m_read = m_cmd_q.m_write =0;
     m_etb_q.m_read = m_etb_q.m_write =0;
-#ifdef _ANDROID_
     if (m_debug_timestamp) {
         m_timestamp_list.reset_ts_list();
     }
-#endif
 
-    DEBUG_PRINT_LOW("Calling VDEC_IOCTL_STOP_NEXT_MSG");
-    //(void)ioctl(drv_ctx.video_driver_fd, VDEC_IOCTL_STOP_NEXT_MSG,
-    // NULL);
     DEBUG_PRINT_HIGH("Close the driver instance");
 
     if (m_debug.infile) {
@@ -6367,7 +6377,9 @@ OMX_ERRORTYPE  omx_vdec::component_role_enum(OMX_IN OMX_HANDLETYPE hComp,
             DEBUG_PRINT_LOW("No more roles");
             eRet = OMX_ErrorNoMore;
         }
-    } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
+    }
+#ifdef _ANDROID_
+      else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
         if ((0 == index) && role) {
             strlcpy((char *)role, "video_decoder.hevc", OMX_MAX_STRINGNAME_SIZE);
             DEBUG_PRINT_LOW("component_role_enum: role %s", role);
@@ -6375,7 +6387,9 @@ OMX_ERRORTYPE  omx_vdec::component_role_enum(OMX_IN OMX_HANDLETYPE hComp,
             DEBUG_PRINT_LOW("No more roles");
             eRet = OMX_ErrorNoMore;
         }
-    } else if ( (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vc1",OMX_MAX_STRINGNAME_SIZE)) ||
+    }
+#endif
+       else if ( (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vc1",OMX_MAX_STRINGNAME_SIZE)) ||
             (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.wmv",OMX_MAX_STRINGNAME_SIZE))
           ) {
         if ((0 == index) && role) {
@@ -6718,11 +6732,16 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     /* Since we're passing around handles, adjust nFilledLen and nAllocLen
      * to size of the handle.  Do it _after_ handle_extradata() which
      * requires the respective sizes to be accurate. */
+#ifdef _ANDROID_
     if (dynamic_buf_mode) {
         buffer->nAllocLen = sizeof(struct VideoDecoderOutputMetaData);
+		video_meta_data
         buffer->nFilledLen = buffer->nFilledLen ?
             sizeof(struct VideoDecoderOutputMetaData) : 0;
+			video_meta_data
     }
+#endif
+
 
     if (m_cb.FillBufferDone) {
         if (buffer->nFilledLen > 0) {
@@ -6819,9 +6838,11 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
                         drv_ctx.ptr_outputbuffer[nPortIndex].mmaped_size);
                 }
 
+#ifdef _ANDROID_
                 //Clear graphic buffer handles in dynamic mode
                 native_buffer[nPortIndex].privatehandle = NULL;
                 native_buffer[nPortIndex].nativehandle = NULL;
+#endif
             }
             m_cb.FillBufferDone (hComp,m_app_data,il_buffer);
         } else {
@@ -7242,9 +7263,11 @@ OMX_ERRORTYPE omx_vdec::push_input_buffer (OMX_HANDLETYPE hComp)
             case CODEC_TYPE_H264:
                 ret = push_input_h264(hComp);
                 break;
+#ifdef _ANDROID_
             case CODEC_TYPE_HEVC:
                 ret = push_input_hevc(hComp);
                 break;
+#endif
             case CODEC_TYPE_VC1:
                 ret = push_input_vc1(hComp);
                 break;
@@ -7630,7 +7653,7 @@ OMX_ERRORTYPE copy_buffer(OMX_BUFFERHEADERTYPE* pDst, OMX_BUFFERHEADERTYPE* pSrc
     }
     return rc;
 }
-
+#ifdef _ANDROID_
 OMX_ERRORTYPE omx_vdec::push_input_hevc(OMX_HANDLETYPE hComp)
 {
     OMX_U32 partial_frame = 1;
@@ -7779,6 +7802,7 @@ OMX_ERRORTYPE omx_vdec::push_input_hevc(OMX_HANDLETYPE hComp)
     }
     return OMX_ErrorNone;
 }
+#endif
 
 OMX_ERRORTYPE omx_vdec::push_input_vc1(OMX_HANDLETYPE hComp)
 {
@@ -8634,7 +8658,7 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                                 drv_ctx.interlace = VDEC_InterlaceInterleaveFrameTopFieldFirst;
                         }
                     }
-
+#ifdef _ANDROID_
                     if (m_enable_android_native_buffers) {
                         DEBUG_PRINT_LOW("setMetaData INTERLACED format:%d enable:%d mbaff:%d",
                                          payload->format, enable,
@@ -8642,6 +8666,7 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                         setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                                 PP_PARAM_INTERLACED, (void*)&enable);
                     }
+#endif
                     if (client_extradata & OMX_INTERLACE_EXTRADATA) {
                         append_interlace_extradata(p_extra, payload->format,
                                       p_buf_hdr->nFlags & QOMX_VIDEO_BUFFERFLAG_MBAFF);
@@ -9427,6 +9452,7 @@ OMX_ERRORTYPE omx_vdec::handle_demux_data(OMX_BUFFERHEADERTYPE *p_buf_hdr)
     return OMX_ErrorNone;
 }
 
+#ifdef _ANDROID_
 OMX_ERRORTYPE omx_vdec::createDivxDrmContext()
 {
     OMX_ERRORTYPE err = OMX_ErrorNone;
@@ -9444,6 +9470,7 @@ OMX_ERRORTYPE omx_vdec::createDivxDrmContext()
     }
     return err;
 }
+#endif
 
 omx_vdec::allocate_color_convert_buf::allocate_color_convert_buf()
 {
@@ -9593,8 +9620,8 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr()
     return m_out_mem_ptr_client;
 }
 
-    OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
-(OMX_BUFFERHEADERTYPE *bufadd)
+OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
+        (OMX_BUFFERHEADERTYPE *bufadd)
 {
     if (!omx) {
         DEBUG_PRINT_ERROR("Invalid param get_buf_hdr");
@@ -9629,8 +9656,8 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr()
     return NULL;
 }
 
-    OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_dr_buf_hdr
-(OMX_BUFFERHEADERTYPE *bufadd)
+OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_dr_buf_hdr
+        (OMX_BUFFERHEADERTYPE *bufadd)
 {
     if (!omx) {
         DEBUG_PRINT_ERROR("Invalid param get_buf_hdr");
@@ -9646,8 +9673,9 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr()
     DEBUG_PRINT_ERROR("Index messed up in the get_dr_buf_hdr");
     return NULL;
 }
-    bool omx_vdec::allocate_color_convert_buf::get_buffer_req
-(unsigned int &buffer_size)
+
+bool omx_vdec::allocate_color_convert_buf::get_buffer_req
+        (unsigned int &buffer_size)
 {
     bool status = true;
     pthread_mutex_lock(&omx->c_lock);
@@ -9668,6 +9696,7 @@ fail_get_buffer_size:
     pthread_mutex_unlock(&omx->c_lock);
     return status;
 }
+
 OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::free_output_buffer(
         OMX_BUFFERHEADERTYPE *bufhdr)
 {
@@ -9694,7 +9723,9 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::free_output_buffer(
 #ifdef USE_ION
     omx->free_ion_memory(&op_buf_ion_info[index]);
 #endif
+#ifdef _ANDROID_
     m_heap_ptr[index].video_heap_ptr = NULL;
+#endif
     if (allocated_count > 0)
         allocated_count--;
     else
@@ -9764,11 +9795,16 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::allocate_buffers_color_conve
         omx->free_ion_memory(&op_buf_ion_info[i]);
         return OMX_ErrorInsufficientResources;
     }
+#ifdef _ANDROID_
     m_heap_ptr[i].video_heap_ptr = new VideoHeap (
             op_buf_ion_info[i].ion_device_fd,buffer_size_req,
             pmem_baseaddress[i],op_buf_ion_info[i].ion_alloc_data.handle,pmem_fd[i]);
+	m_pmem_info_client[i].pmem_fd = (OMX_U32)m_heap_ptr[i].video_heap_ptr.get();
 #endif
-    m_pmem_info_client[i].pmem_fd = (OMX_U32)m_heap_ptr[i].video_heap_ptr.get();
+#endif
+#ifndef _ANDROID_
+    m_pmem_info_client[i].pmem_fd = omx->drv_ctx.ptr_outputbuffer[i].pmem_fd ;
+#endif
     m_pmem_info_client[i].offset = 0;
     m_platform_entry_client[i].entry = (void *)&m_pmem_info_client[i];
     m_platform_entry_client[i].type = OMX_QCOM_PLATFORM_PRIVATE_PMEM;
@@ -9963,12 +9999,12 @@ void omx_vdec::perf_control::load_lib()
     char perf_lib_path[PROPERTY_VALUE_MAX] = {0};
     if (m_perf_lib)
         return;
-
+#ifdef _ANDROID_
     if((property_get("ro.vendor.extension_library", perf_lib_path, NULL) <= 0)) {
         DEBUG_PRINT_ERROR("vendor library not set in ro.vendor.extension_library");
         return;
     }
-
+#endif
     if ((m_perf_lib = dlopen(perf_lib_path, RTLD_NOW)) == NULL) {
         DEBUG_PRINT_ERROR("Failed to open %s : %s",perf_lib_path, dlerror());
     } else {
