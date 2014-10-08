@@ -127,7 +127,7 @@ extern "C" {
 #define Q16ToFraction(q,num,den) { OMX_U32 power; Log2(q,power);  num = q >> power; den = 0x1 << (16 - power); }
 #define EXTRADATA_IDX(__num_planes) (__num_planes  - 1)
 
-#define DEFAULT_EXTRADATA (OMX_INTERLACE_EXTRADATA)
+#define DEFAULT_EXTRADATA (OMX_INTERLACE_EXTRADATA | OMX_FRAMEINFO_EXTRADATA)
 #define DEFAULT_CONCEAL_COLOR "32896" //0x8080, black by default
 
 int debug_level = PRIO_ERROR;
@@ -8378,11 +8378,7 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                     recovery_sei_payload = (struct msm_vidc_recoverysei_payload *)data->data;
                     recovery_sei_flags = recovery_sei_payload->flags;
                     if (recovery_sei_flags != FRAME_RECONSTRUCTION_CORRECT) {
-                        p_buf_hdr->nFlags |= OMX_BUFFERFLAG_DATACORRUPT;
-                        DEBUG_PRINT_HIGH("");
-                        DEBUG_PRINT_HIGH("***************************************************");
-                        DEBUG_PRINT_HIGH("FillBufferDone: OMX_BUFFERFLAG_DATACORRUPT Received");
-                        DEBUG_PRINT_HIGH("***************************************************");
+                        p_buf_hdr->nFlags &= ~OMX_BUFFERFLAG_DATACORRUPT;
                     }
                     break;
                 case EXTRADATA_PANSCAN_WINDOW:
