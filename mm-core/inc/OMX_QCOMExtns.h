@@ -422,6 +422,8 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /* google smooth-streaming support */
     OMX_QcomIndexParamVideoAdaptivePlaybackMode = 0x7F00002E,
+
+    OMX_QcomIndexParamVideoProcessNotCodedVOP = 0x7F00003F,
 };
 
 /**
