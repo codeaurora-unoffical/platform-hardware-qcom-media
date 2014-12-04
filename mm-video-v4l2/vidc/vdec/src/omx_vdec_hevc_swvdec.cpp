@@ -999,6 +999,32 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
 
                             if (pThis->m_pSwVdec)
                             {
+                                if (pThis->in_reconfig) {
+                                    pThis->in_reconfig = false;
+                                    SWVDEC_PROP prop;
+                                    DEBUG_PRINT_HIGH("swvdec port settings changed");
+
+                                    // get_buffer_req and populate port defn structure
+                                    prop.ePropId = SWVDEC_PROP_ID_DIMENSIONS;
+                                    SwVdec_GetProperty(pThis->m_pSwVdec, &prop);
+                                    pThis->update_resolution(prop.uProperty.sDimensions.nWidth,
+                                        prop.uProperty.sDimensions.nHeight,
+                                        prop.uProperty.sDimensions.nWidth,
+                                        prop.uProperty.sDimensions.nHeight);
+                                    pThis->drv_ctx.video_resolution.stride =
+                                                    (prop.uProperty.sDimensions.nWidth + 127) & (~127);
+                                    pThis->drv_ctx.video_resolution.scan_lines =
+                                                    (prop.uProperty.sDimensions.nHeight + 31) & (~31);
+
+                                    pThis->m_port_def.nPortIndex = 1;
+                                    pThis->update_portdef(&pThis->m_port_def);
+
+                                    //Set property for dimensions and attrb to SwVdec
+                                    SwVdec_SetProperty(pThis->m_pSwVdec,&prop);
+                                    prop.ePropId = SWVDEC_PROP_ID_FRAME_ATTR;
+                                    prop.uProperty.sFrameAttr.eColorFormat = SWVDEC_FORMAT_NV12;
+                                    SwVdec_SetProperty(pThis->m_pSwVdec,&prop);
+                                }
                                 SWVDEC_STATUS SwStatus;
                                 DEBUG_PRINT_HIGH("In port reconfig, SwVdec_Stop");
                                 SwStatus = SwVdec_Stop(pThis->m_pSwVdec);
@@ -3439,17 +3465,21 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 DEBUG_PRINT_LOW("set_parameter: OMX_IndexParamPortDefinition OP port");
                 m_display_id = portDefn->format.video.pNativeWindow;
                 unsigned int buffer_size;
-
                 if (m_swvdec_mode == SWVDEC_MODE_PARSE_DECODE) {
                     SWVDEC_PROP prop;
+                    SWVDEC_STATUS sRet;
                     prop.ePropId = SWVDEC_PROP_ID_DIMENSIONS;
                     prop.uProperty.sDimensions.nWidth =
                                portDefn->format.video.nFrameWidth;
                     prop.uProperty.sDimensions.nHeight =
                                portDefn->format.video.nFrameHeight;
-                    SwVdec_SetProperty(m_pSwVdec,&prop);
+                    sRet = SwVdec_SetProperty(m_pSwVdec,&prop);
+                    if(sRet!=SWVDEC_S_SUCCESS)
+                    {
+                        DEBUG_PRINT_ERROR("set_parameter: SwVdec_SetProperty():Failed to set dimensions to SwVdec in full SW");
+                        return OMX_ErrorUnsupportedSetting;
+                    }
                 }
-
                 if (!client_buffers.get_buffer_req(buffer_size)) {
                     DEBUG_PRINT_ERROR("Error in getting buffer requirements");
                     eRet = OMX_ErrorBadParameter;
@@ -10768,31 +10798,7 @@ void omx_vdec::swvdec_handle_event(SWVDEC_EVENTHANDLER *pEvent)
 
     case SWVDEC_RECONFIG_INSUFFICIENT_RESOURCES:
         {
-            SWVDEC_PROP prop;
-            DEBUG_PRINT_HIGH("swvdec port settings changed");
             in_reconfig = true;
-            // get_buffer_req and populate port defn structure
-            prop.ePropId = SWVDEC_PROP_ID_DIMENSIONS;
-            SwVdec_GetProperty(m_pSwVdec, &prop);
-
-            update_resolution(prop.uProperty.sDimensions.nWidth,
-                prop.uProperty.sDimensions.nHeight,
-                prop.uProperty.sDimensions.nWidth,
-                prop.uProperty.sDimensions.nHeight);
-            drv_ctx.video_resolution.stride =
-                            (prop.uProperty.sDimensions.nWidth + 127) & (~127);
-            drv_ctx.video_resolution.scan_lines =
-                            (prop.uProperty.sDimensions.nHeight + 31) & (~31);
-
-            m_port_def.nPortIndex = 1;
-            update_portdef(&m_port_def);
-
-            //Set property for dimensions and attrb to SwVdec
-            SwVdec_SetProperty(m_pSwVdec,&prop);
-            prop.ePropId = SWVDEC_PROP_ID_FRAME_ATTR;
-            prop.uProperty.sFrameAttr.eColorFormat = SWVDEC_FORMAT_NV12;
-            SwVdec_SetProperty(m_pSwVdec,&prop);
-
             post_event (OMX_CORE_OUTPUT_PORT_INDEX, OMX_IndexParamPortDefinition,
                 OMX_COMPONENT_GENERATE_PORT_RECONFIG);
         }
