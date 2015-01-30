@@ -9570,8 +9570,11 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy_dsp(
 
     nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)m_interm_mem_ptr);
 
-    if (bufferAdd == NULL || nPortIndex > drv_ctx.interm_op_buf.actualcount)
+    if (bufferAdd == NULL || nPortIndex > drv_ctx.interm_op_buf.actualcount) {
+        DEBUG_PRINT_ERROR("FTBProxyDSP: bufhdr = %p, nPortIndex %u bufCount %u",
+            bufferAdd, nPortIndex, drv_ctx.interm_op_buf.actualcount);
         return OMX_ErrorBadParameter;
+    }
 
     DEBUG_PRINT_LOW("fill_this_buffer_proxy_dsp: bufhdr = %p,pBuffer = %p, idx %d, state %d",
         bufferAdd, bufferAdd->pBuffer, nPortIndex, m_interm_buf_state[nPortIndex]);

@@ -28,6 +28,7 @@
 #include <media/stagefright/SkipCutBuffer.h>
 #include <OMX_Audio.h>
 #include <OMX_Component.h>
+#include <OMX_IVCommon.h>
 
 #define TRACK_BUFFER_TIMING     0
 
@@ -65,6 +66,9 @@ struct DashCodec : public AHierarchicalStateMachine {
     void signalRequestIDRFrame();
     void queueNextFormat();
     void clearCachedFormats();
+
+    static status_t PushBlankBuffersToNativeWindow(sp<ANativeWindow> nativeWindow);
+
     struct PortDescription : public RefBase {
         size_t countBuffers();
         IOMX::buffer_id bufferIDAt(size_t index) const;
@@ -111,6 +115,7 @@ private:
         kWhatConfigureComponent      = 'conf',
         kWhatStart                   = 'star',
         kWhatRequestIDRFrame         = 'ridr',
+        kWhatWaitForPortEnable       = 'wfpe',
     };
 
     enum {
@@ -120,7 +125,8 @@ private:
 
     enum {
         kFlagIsSecure   = 1,
-        kFlagIsSecureOPOnly = 2
+        kFlagIsSecureOPOnly = 2,
+        kFlagPushBlankBuffersToNativeWindowOnShutdown = 4
     };
 
     struct BufferInfo {
@@ -197,6 +203,9 @@ private:
     bool mStoreMetaDataInOutputBuffers;
     int32_t mMetaDataBuffersToSubmit;
 
+    int32_t mCurrentWidth;
+    int32_t mCurrentHeight;
+
     status_t allocateBuffersOnPort(OMX_U32 portIndex);
     status_t freeBuffersOnPort(OMX_U32 portIndex);
     status_t freeBuffer(OMX_U32 portIndex, size_t i);
@@ -267,8 +276,6 @@ private:
     status_t setupErrorCorrectionParameters();
 
     status_t initNativeWindow();
-
-    status_t pushBlankBuffersToNativeWindow();
 
     // Returns true iff all buffers on the given port have status OWNED_BY_US.
     bool allYourBuffersAreBelongToUs(OMX_U32 portIndex);

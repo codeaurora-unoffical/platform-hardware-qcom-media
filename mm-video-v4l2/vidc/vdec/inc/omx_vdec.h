@@ -137,10 +137,10 @@ class VideoHeap : public MemoryHeapBase
         (unsigned)((OMX_BUFFERHEADERTYPE *)bufHdr)->nTimeStamp)
 
 // BitMask Management logic
-#define BITS_PER_BYTE        32
-#define BITMASK_SIZE(mIndex) (((mIndex) + BITS_PER_BYTE - 1)/BITS_PER_BYTE)
-#define BITMASK_OFFSET(mIndex) ((mIndex)/BITS_PER_BYTE)
-#define BITMASK_FLAG(mIndex) (1 << ((mIndex) % BITS_PER_BYTE))
+#define BITS_PER_INDEX        64
+#define BITMASK_SIZE(mIndex) (((mIndex) + BITS_PER_INDEX - 1)/BITS_PER_INDEX)
+#define BITMASK_OFFSET(mIndex) ((mIndex)/BITS_PER_INDEX)
+#define BITMASK_FLAG(mIndex) ((uint64_t)1 << ((mIndex) % BITS_PER_INDEX))
 #define BITMASK_CLEAR(mArray,mIndex) (mArray)[BITMASK_OFFSET(mIndex)] \
     &=  ~(BITMASK_FLAG(mIndex))
 #define BITMASK_SET(mArray,mIndex)  (mArray)[BITMASK_OFFSET(mIndex)] \
@@ -182,6 +182,8 @@ class VideoHeap : public MemoryHeapBase
             sizeof(OMX_PARAM_PORTDEFINITIONTYPE) + 3)&(~3))
 #define OMX_FRAMEPACK_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
             sizeof(OMX_QCOM_FRAME_PACK_ARRANGEMENT) + 3)&(~3))
+#define OMX_USERDATA_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
+            + 3)&(~3))
 
 //  Define next macro with required values to enable default extradata,
 //    VDEC_EXTRADATA_MB_ERROR_MAP
@@ -221,6 +223,7 @@ struct video_driver_context {
     enum vdec_output_fromat output_format;
     enum vdec_interlaced_format interlace;
     enum vdec_output_order picture_order;
+    struct vdec_framesize frame_size;
     struct vdec_picsize video_resolution;
     struct vdec_allocatorproperty ip_buf;
     struct vdec_allocatorproperty op_buf;
@@ -758,9 +761,9 @@ class omx_vdec: public qc_omx_component
         int pending_input_buffers;
         int pending_output_buffers;
         // bitmask array size for output side
-        unsigned int m_out_bm_count;
+        uint64_t m_out_bm_count;
         // bitmask array size for input side
-        unsigned int m_inp_bm_count;
+        uint64_t m_inp_bm_count;
         //Input port Populated
         OMX_BOOL m_inp_bPopulated;
         //Output port Populated
@@ -883,8 +886,9 @@ class omx_vdec: public qc_omx_component
         int capture_capability;
         int output_capability;
         bool streaming[MAX_PORT];
+        OMX_FRAMESIZETYPE framesize;
         OMX_CONFIG_RECTTYPE rectangle;
-        int prev_n_filled_len;
+        OMX_U32 prev_n_filled_len;
         bool is_down_scalar_enabled;
 #endif
         bool m_power_hinted;
@@ -908,6 +912,7 @@ class omx_vdec: public qc_omx_component
 
         unsigned int m_fill_output_msg;
         bool client_set_fps;
+        bool ignore_not_coded_vops;
         class allocate_color_convert_buf
         {
             public:
