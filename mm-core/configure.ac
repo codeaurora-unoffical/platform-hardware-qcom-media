@@ -59,7 +59,7 @@ AC_ARG_ENABLE([target-msm8226],
 AM_CONDITIONAL(TARGET_MSM8960, test "x$target_msm8960" = "xyes")
 AM_CONDITIONAL(TARGET_MSM8974, test "x$target_msm8974" = "xyes")
 AM_CONDITIONAL(TARGET_MSM8610, test "x$target_msm8610" = "xyes")
-AM_CONDITIONAL(TARGET_MSM8226, test "x$target_msm8226" = "xyes")
+AM_CONDITIONAL(TARGET_MSM8226, [test ["x$target_msm8226" = "xyes" || "x$target_apq8026" = "xyes"]])
 
 AC_ARG_WITH([sanitized-headers],
 	[AS_HELP_STRING([--with-sanitized-headers=DIR],[location of the sanitized Linux headers])],
