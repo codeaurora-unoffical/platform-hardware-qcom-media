@@ -288,6 +288,19 @@ omx_core_cb_type core[] =
     }
   },
   {
+    "OMX.qti.video.encoder.hevc",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxSwVencHevc.so",
+    {
+      "video_encoder.hevc"
+    }
+  },
+  {
     "OMX.qcom.audio.decoder.Qcelp13",
     NULL, // Create instance function
     // Unique instance handle
@@ -376,6 +389,19 @@ omx_core_cb_type core[] =
     "libOmxAacDec.so",
     {
       "audio_decoder.aac"
+    }
+  },
+  {
+    "OMX.qcom.audio.decoder.alac",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxAlacDec.so",
+    {
+      "audio_decoder.alac"
     }
   },
   {
