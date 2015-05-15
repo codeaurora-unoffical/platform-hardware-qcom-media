@@ -145,6 +145,19 @@ omx_core_cb_type core[] =
     }
   },
    {
+    "OMX.ittiam.video.encoder.avc",
+    NULL, // Create instance function
+    // Unique instance handle
+    {
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxIttiamVenc.so",
+    {
+      "video_encoder.avc"
+    }
+  },
+   {
     "OMX.qcom.video.encoder.mpeg4sw",
     NULL, // Create instance function
     // Unique instance handle
