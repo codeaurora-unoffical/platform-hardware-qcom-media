@@ -8811,10 +8811,8 @@ OMX_ERRORTYPE omx_vdec::update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn)
 
     if ((portDefn->format.video.eColorFormat == OMX_COLOR_FormatYUV420Planar) ||
        (portDefn->format.video.eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar)) {
-        portDefn->format.video.nStride = VENUS_Y_STRIDE(COLOR_FMT_NV12,
-            drv_ctx.video_resolution.frame_width);
-        portDefn->format.video.nSliceHeight = VENUS_Y_SCANLINES(COLOR_FMT_NV12,
-            drv_ctx.video_resolution.frame_height);
+           portDefn->format.video.nStride = ALIGN(drv_ctx.video_resolution.frame_width, 16);
+           portDefn->format.video.nSliceHeight = drv_ctx.video_resolution.frame_height;
     }
     DEBUG_PRINT_HIGH("update_portdef(%u): Width = %u Height = %u Stride = %d "
             "SliceHeight = %u eColorFormat = %d nBufSize %u nBufCnt %u",
@@ -9397,16 +9395,23 @@ OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U32 requested_extradata,
                 DEBUG_PRINT_HIGH("Failed to set timeinfo extradata");
             }
         }
-        if (requested_extradata & OMX_FRAMEPACK_EXTRADATA) {
+
+        /*
+         * S3D extradata for secure playback is not supported by FW. S3D is just
+         * copying the SEI from input to output, which is not allowed in secure
+         * mode.
+         */
+
+        if (!secure_mode && requested_extradata & OMX_FRAMEPACK_EXTRADATA) {
             if (output_capability == V4L2_PIX_FMT_H264) {
-                DEBUG_PRINT_HIGH("enable OMX_FRAMEPACK_EXTRADATA");
+                DEBUG_PRINT_LOW("enable OMX_FRAMEPACK_EXTRADATA");
                 control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
                 control.value =  V4L2_MPEG_VIDC_EXTRADATA_S3D_FRAME_PACKING;
                 if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control)) {
                     DEBUG_PRINT_HIGH("Failed to set S3D_FRAME_PACKING extradata");
                 }
             } else {
-                DEBUG_PRINT_HIGH("OMX_FRAMEPACK_EXTRADATA supported for H264 only");
+                DEBUG_PRINT_LOW("OMX_FRAMEPACK_EXTRADATA supported for H264 only");
             }
         }
         if (requested_extradata & OMX_QP_EXTRADATA) {
