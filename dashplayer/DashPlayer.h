@@ -25,9 +25,11 @@
 #include <media/stagefright/foundation/ABuffer.h>
 #include <cutils/properties.h>
 
+#define KEY_QCTIMEDTEXT_LISTENER 6000
 //Keys for playback modes
 #define KEY_DASH_SEEK_EVENT 7001
 #define KEY_DASH_PAUSE_EVENT 7002
+#define KEY_DASH_RESUME_EVENT 7003
 
 // used for Get Adaptionset property (NonJB)and for both Get and set for JB
 #define KEY_DASH_ADAPTION_PROPERTIES 8002
@@ -87,6 +89,8 @@ struct DashPlayer : public AHandler {
     status_t setParameter(int key, const Parcel &request);
     status_t dump(int fd, const Vector<String16> &args);
 
+    void setQCTimedTextListener(const bool val);
+
 public:
     struct DASHHTTPLiveSource;
     struct WFDSource;
@@ -100,6 +104,10 @@ private:
     struct Decoder;
     struct Renderer;
     struct Source;
+    struct Action;
+    struct SimpleAction;
+    struct SetSurfaceAction;
+    struct ShutdownDecoderAction;
 
     enum {
           // These keys must be in sync with the keys in QCTimedText.java
@@ -124,6 +132,7 @@ private:
           KEY_DURATION                      = 19,
           KEY_START_OFFSET                  = 20,
           KEY_SUB_ATOM                      = 21,
+          KEY_TEXT_FORMAT                   = 22,
           KEY_GLOBAL_SETTING                = 101,
           KEY_LOCAL_SETTING                 = 102,
           KEY_START_CHAR                    = 103,
@@ -132,6 +141,8 @@ private:
           KEY_FONT_SIZE                     = 106,
           KEY_TEXT_COLOR_RGBA               = 107,
           KEY_TEXT_EOS                      = 108,
+          KEY_TEXT_FLAG_TYPE                = 109,
+          KEY_TEXT_DISCONTINUITY            = 110,
     };
 
     enum {
@@ -159,7 +170,6 @@ private:
     enum {
         kWhatBufferingStart             = 'bfst',
         kWhatBufferingEnd               = 'bfen',
-        kWhatSourceResumeStatus         = 'srsm',
     };
 
     wp<DashPlayerDriver> mDriver;
@@ -174,10 +184,13 @@ private:
     sp<Decoder> mTextDecoder;
     sp<Renderer> mRenderer;
 
+    List<sp<Action> > mDeferredActions;
+
     bool mAudioEOS;
     bool mVideoEOS;
 
     bool mScanSourcesPending;
+    bool isSetSurfaceTexturePending;
     int32_t mScanSourcesGeneration;
     bool mBufferingNotification;
 
@@ -198,11 +211,19 @@ private:
         SHUT_DOWN,
     };
 
+    //Should be in sync with QCTimedText.java
     enum FrameFlags {
          TIMED_TEXT_FLAG_FRAME = 0x00,
-         TIMED_TEXT_FLAG_CODEC_CONFIG_FRAME,
+         TIMED_TEXT_FLAG_CODEC_CONFIG,
          TIMED_TEXT_FLAG_EOS,
          TIMED_TEXT_FLAG_END = TIMED_TEXT_FLAG_EOS,
+    };
+
+    //Currently we only support SMPTE and CEA. Today sendTextPacket() has default parameter as SMPTE
+    enum TimedTextType {
+        TIMED_TEXT_SMPTE,
+        TIMED_TEXT_CEA,
+        TIMED_TEXT_UNKNOWN,
     };
 
     // Once the current flush is complete this indicates whether the
@@ -269,9 +290,18 @@ private:
     // for qualcomm statistics profiling
     sp<DashPlayerStats> mStats;
 
-    void sendTextPacket(sp<ABuffer> accessUnit, status_t err);
+    void sendTextPacket(sp<ABuffer> accessUnit, status_t err, DashPlayer::TimedTextType eTimedTextType = TIMED_TEXT_SMPTE);
     void getTrackName(int track, char* name);
     void prepareSource();
+
+    void processDeferredActions();
+
+    //void performSeek(int64_t seekTimeUs);
+    //void performDecoderFlush();
+    void performDecoderShutdown(bool audio, bool video);
+    //void performReset();
+    void performScanSources();
+    void performSetSurface(const sp<NativeWindowWrapper> &wrapper);
 
     struct QueueEntry {
         sp<AMessage>  mMessageToBeConsumed;
@@ -279,6 +309,13 @@ private:
 
     List<QueueEntry> mDecoderMessageQueue;
 
+    bool mTimedTextCEAPresent;
+
+    //Set and reset in cases of seek/resume-out-of-tsb to signal discontinuity in CEA timedtextsamples
+    bool mTimedTextCEASamplesDisc;
+
+    //Tells if app registered for a QCTimedText Listener. If not registered do not send text samples above.
+    bool mQCTimedTextListenerPresent;
 
     DISALLOW_EVIL_CONSTRUCTORS(DashPlayer);
 };

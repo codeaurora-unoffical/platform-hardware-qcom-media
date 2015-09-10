@@ -230,6 +230,9 @@ class omx_video: public qc_omx_component
 #endif
         virtual bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height) = 0;
+        virtual bool dev_get_output_log_flag() = 0;
+        virtual int dev_output_log_buffers(const char *buffer_addr, int buffer_len) = 0;
+        virtual int dev_extradata_log_buffers(char *buffer_addr) = 0;
         OMX_ERRORTYPE component_role_enum(
                 OMX_HANDLETYPE hComp,
                 OMX_U8 *role,
@@ -506,8 +509,19 @@ class omx_video: public qc_omx_component
         inline void omx_report_error () {
             if (m_pCallbacks.EventHandler && !m_error_propogated) {
                 m_error_propogated = true;
+                DEBUG_PRINT_ERROR("ERROR: send OMX_ErrorHardware to Client");
                 m_pCallbacks.EventHandler(&m_cmp,m_app_data,
                         OMX_EventError,OMX_ErrorHardware,0,NULL);
+            }
+        }
+
+        inline void omx_report_hw_overload ()
+        {
+            if (m_pCallbacks.EventHandler && !m_error_propogated) {
+                m_error_propogated = true;
+                DEBUG_PRINT_ERROR("ERROR: send OMX_ErrorInsufficientResources to Client");
+                m_pCallbacks.EventHandler(&m_cmp, m_app_data,
+                        OMX_EventError, OMX_ErrorInsufficientResources, 0, NULL);
             }
         }
 
@@ -619,6 +633,7 @@ class omx_video: public qc_omx_component
         bool m_event_port_settings_sent;
         OMX_U8                m_cRole[OMX_MAX_STRINGNAME_SIZE];
         extra_data_handler extra_data_handle;
+        bool hw_overload;
 
 };
 

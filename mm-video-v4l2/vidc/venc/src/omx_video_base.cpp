@@ -93,9 +93,6 @@ typedef struct OMXComponentCapabilityFlagsType {
 
 } OMXComponentCapabilityFlagsType;
 #define OMX_COMPONENT_CAPABILITY_TYPE_INDEX 0xFF7A347
-#ifdef OUTPUT_BUFFER_LOG
-extern FILE *outputBufferFile1;
-#endif
 
 void* message_thread(void *input)
 {
@@ -242,7 +239,8 @@ omx_video::omx_video():
     m_flags(0),
     m_etb_count(0),
     m_fbd_count(0),
-    m_event_port_settings_sent(false)
+    m_event_port_settings_sent(false),
+    hw_overload(false)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -407,12 +405,17 @@ void omx_video::process_event_cb(void *ctxt, unsigned char id)
                         pThis->omx_report_error ();
                     }
                     break;
-                case OMX_COMPONENT_GENERATE_ETB:
-                    DEBUG_PRINT_LOW("OMX_COMPONENT_GENERATE_ETB");
-                    if (pThis->empty_this_buffer_proxy((OMX_HANDLETYPE)p1,\
-                                (OMX_BUFFERHEADERTYPE *)p2) != OMX_ErrorNone) {
-                        DEBUG_PRINT_ERROR("ERROR: ETBProxy() failed!");
-                        pThis->omx_report_error ();
+                case OMX_COMPONENT_GENERATE_ETB: {
+                        OMX_ERRORTYPE iret;
+                        DEBUG_PRINT_LOW("OMX_COMPONENT_GENERATE_ETB");
+                        iret = pThis->empty_this_buffer_proxy((OMX_HANDLETYPE)p1, (OMX_BUFFERHEADERTYPE *)p2);
+                        if (iret == OMX_ErrorInsufficientResources) {
+                            DEBUG_PRINT_ERROR("empty_this_buffer_proxy failure due to HW overload");
+                            pThis->omx_report_hw_overload ();
+                        } else if (iret != OMX_ErrorNone) {
+                            DEBUG_PRINT_ERROR("empty_this_buffer_proxy failure");
+                            pThis->omx_report_error ();
+                        }
                     }
                     break;
 
@@ -1491,7 +1494,7 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         [2] = OMX_COLOR_FormatYUV420SemiPlanar,
                     };
 
-                    if (index > sizeof(supportedFormats)/sizeof(*supportedFormats))
+                    if (index > (sizeof(supportedFormats)/sizeof(*supportedFormats) - 1))
                         eRet = OMX_ErrorNoMore;
                     else {
                         memcpy(portFmt, &m_sInPortFormat, sizeof(m_sInPortFormat));
@@ -3312,6 +3315,10 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
     if (meta_mode_enable && !mUseProxyColorFormat) {
         // Camera or Gralloc-source meta-buffers queued with pre-announced color-format
         struct pmem Input_pmem_info;
+        if (!media_buffer) {
+            DEBUG_PRINT_ERROR("%s: invalid media_buffer",__FUNCTION__);
+            return OMX_ErrorBadParameter;
+        }
         if (media_buffer->buffer_type == kMetadataBufferTypeCameraSource) {
             Input_pmem_info.buffer = media_buffer;
             Input_pmem_info.fd = media_buffer->meta_handle->data[0];
@@ -3394,6 +3401,9 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE         
         post_event ((unsigned int)buffer,0,OMX_COMPONENT_GENERATE_EBD);
         /*Generate an async error and move to invalid state*/
         pending_input_buffers--;
+        if (hw_overload) {
+            return OMX_ErrorInsufficientResources;
+        }
         return OMX_ErrorBadParameter;
     }
     return ret;
@@ -3879,16 +3889,17 @@ OMX_ERRORTYPE omx_video::fill_buffer_done(OMX_HANDLETYPE hComp,
         if (buffer->nFilledLen > 0) {
             m_fbd_count++;
 
-#ifdef OUTPUT_BUFFER_LOG
-            if (outputBufferFile1) {
-                fwrite((const char *)buffer->pBuffer, buffer->nFilledLen, 1, outputBufferFile1);
+            if (dev_get_output_log_flag()) {
+                dev_output_log_buffers((const char*)buffer->pBuffer, buffer->nFilledLen);
             }
-#endif
         }
 #ifdef _MSM8974_
         if (buffer->nFlags & OMX_BUFFERFLAG_EXTRADATA) {
             if (!dev_handle_extradata((void *)buffer, index))
                 DEBUG_PRINT_ERROR("Failed to parse extradata");
+
+            dev_extradata_log_buffers((char *)(((int)buffer->pBuffer + buffer->nOffset +
+                        buffer->nFilledLen + 3) & (~3)));
         }
 #endif
         m_pCallbacks.FillBufferDone (hComp,m_app_data,buffer);
@@ -4424,6 +4435,12 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         return OMX_ErrorBadParameter;
     }
     media_buffer = (encoder_media_buffer_type *)buffer->pBuffer;
+    if (!media_buffer || !media_buffer->meta_handle) {
+        DEBUG_PRINT_ERROR("Incorrect Buffer queued media buffer = %p meta handle = %p",
+            media_buffer, media_buffer->meta_handle);
+        m_pCallbacks.EmptyBufferDone(hComp, m_app_data, buffer);
+        return OMX_ErrorBadParameter;
+    }
     private_handle_t *handle = (private_handle_t *)media_buffer->meta_handle;
     /*Enable following code once private handle color format is
       updated correctly*/

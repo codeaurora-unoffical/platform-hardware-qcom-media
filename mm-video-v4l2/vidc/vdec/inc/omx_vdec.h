@@ -202,6 +202,8 @@ class VideoHeap : public MemoryHeapBase
             sizeof(OMX_QCOM_EXTRADATA_QP) + 3)&(~3))
 #define OMX_BITSINFO_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
             sizeof(OMX_QCOM_EXTRADATA_BITS_INFO) + 3)&(~3))
+#define OMX_USERDATA_EXTRADATA_SIZE ((sizeof(OMX_OTHER_EXTRADATATYPE) +\
+            + 3)&(~3))
 
 //  Define next macro with required values to enable default extradata,
 //    VDEC_EXTRADATA_MB_ERROR_MAP
@@ -496,6 +498,7 @@ class omx_vdec: public qc_omx_component
             OMX_COMPONENT_GENERATE_INFO_PORT_RECONFIG = 0x15,
             OMX_COMPONENT_GENERATE_INFO_FIELD_DROPPED = 0x16,
             OMX_COMPONENT_GENERATE_UNSUPPORTED_SETTING = 0x17,
+            OMX_COMPONENT_GENERATE_HARDWARE_OVERLOAD = 0x18,
         };
 
         enum vc1_profile_type {
@@ -635,7 +638,7 @@ class omx_vdec: public qc_omx_component
         void print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra);
 #ifdef _MSM8974_
         void append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
-                OMX_U32 interlaced_format_type);
+                OMX_U32 interlaced_format_type, bool is_mbaff);
         OMX_ERRORTYPE enable_extradata(OMX_U32 requested_extradata, bool is_internal,
                 bool enable = true);
         void append_frame_info_extradata(OMX_OTHER_EXTRADATATYPE *extra,
@@ -713,7 +716,7 @@ class omx_vdec: public qc_omx_component
 
         inline void omx_report_error () {
             if (m_cb.EventHandler && !m_error_propogated) {
-                ALOGE("\nERROR: Sending OMX_EventError to Client");
+                DEBUG_PRINT_ERROR("ERROR: Sending OMX_ErrorHardware to Client");
                 m_error_propogated = true;
                 m_cb.EventHandler(&m_cmp,m_app_data,
                         OMX_EventError,OMX_ErrorHardware,0,NULL);
@@ -725,10 +728,21 @@ class omx_vdec: public qc_omx_component
                 DEBUG_PRINT_ERROR(
                         "\nERROR: Sending OMX_ErrorUnsupportedSetting to Client");
                 m_error_propogated = true;
-                m_cb.EventHandler(&m_cmp,m_app_data,
-                        OMX_EventError,OMX_ErrorUnsupportedSetting,0,NULL);
+                m_cb.EventHandler(&m_cmp, m_app_data,
+                        OMX_EventError, OMX_ErrorUnsupportedSetting, 0, NULL);
             }
         }
+
+        inline void omx_report_hw_overload () {
+            if (m_cb.EventHandler && !m_error_propogated) {
+                DEBUG_PRINT_ERROR(
+                        "ERROR: Sending OMX_ErrorInsufficientResources to Client");
+                m_error_propogated = true;
+                m_cb.EventHandler(&m_cmp, m_app_data,
+                        OMX_EventError, OMX_ErrorInsufficientResources, 0, NULL);
+            }
+        }
+
 #ifdef _ANDROID_
         OMX_ERRORTYPE createDivxDrmContext();
 #endif //_ANDROID_
@@ -871,6 +885,7 @@ class omx_vdec: public qc_omx_component
         bool m_use_android_native_buffers;
         bool m_debug_extradata;
         bool m_debug_concealedmb;
+        bool m_disable_dynamic_buf_mode;
         OMX_U32 m_conceal_color;
 #endif
 #ifdef MAX_RES_1080P

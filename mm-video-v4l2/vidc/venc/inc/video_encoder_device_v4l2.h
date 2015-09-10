@@ -240,7 +240,12 @@ class venc_dev
         bool venc_is_video_session_supported(unsigned long width, unsigned long height);
         bool venc_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height);
+        bool venc_get_output_log_flag();
+        int venc_output_log_buffers(const char *buffer_addr, int buffer_len);
+        int venc_input_log_buffers(OMX_BUFFERHEADERTYPE *buffer, int fd, int plane_offset);
+        int venc_extradata_log_buffers(char *buffer_addr);
 
+        struct venc_debug_cap m_debug;
         OMX_U32 m_nDriver_fd;
         bool m_profile_set;
         bool m_level_set;
@@ -271,7 +276,9 @@ class venc_dev
         bool handle_extradata(void *, int);
         int venc_set_format(int);
         bool deinterlace_enabled;
+        bool hw_overload;
     private:
+        OMX_U32                             m_codec;
         struct msm_venc_basecfg             m_sVenc_cfg;
         struct msm_venc_ratectrlcfg         rate_ctrl;
         struct msm_venc_targetbitrate       bitrate;
