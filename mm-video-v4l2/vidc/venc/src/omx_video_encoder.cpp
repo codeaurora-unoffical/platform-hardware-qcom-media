@@ -50,7 +50,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (_s_)->nVersion.nVersion = OMX_SPEC_VERSION
 
 extern int m_pipe;
-int debug_level = PRIO_ERROR;
+int debug_level = 0;
 
 // factory function executed by the core to create instances
 void *get_omx_component_factory_fn(void)
@@ -69,11 +69,13 @@ omx_venc::omx_venc()
     memset(opaque_buffer_hdr,0,sizeof(opaque_buffer_hdr));
     mUseProxyColorFormat = false;
     get_syntaxhdr_enable = false;
-#endif
-    char property_value[PROPERTY_VALUE_MAX] = {0};
+	char property_value[PROPERTY_VALUE_MAX] = {0};
+#ifdef _ANDROID_
     property_get("vidc.debug.level", property_value, "0");
     debug_level = atoi(property_value);
+#endif
     property_value[0] = '\0';
+#endif
 }
 
 omx_venc::~omx_venc()
@@ -540,7 +542,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     DEBUG_PRINT_LOW("i/p previous min cnt = %lu", m_sInPortDef.nBufferCountMin);
                     memcpy(&m_sInPortDef, portDefn,sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
 
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
                     if (portDefn->format.video.eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
                         m_sInPortDef.format.video.eColorFormat = (OMX_COLOR_FORMATTYPE)
@@ -622,7 +624,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                             portFmt->eColorFormat);
                     update_profile_level(); //framerate
 
-#ifdef _ANDROID_ICS_
+#ifdef _ANDROID_
                     if (portFmt->eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
                         m_sInPortFormat.eColorFormat = (OMX_COLOR_FORMATTYPE)

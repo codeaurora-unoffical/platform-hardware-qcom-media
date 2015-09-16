@@ -31,6 +31,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/prctl.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 #include "video_encoder_device_v4l2.h"
 #include "omx_video_encoder.h"
 #include <linux/android_pmem.h>
@@ -39,10 +40,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/msm_ion.h>
 #endif
 #include <media/msm_media_info.h>
-#include <cutils/properties.h>
-#include <media/hardware/HardwareAPI.h>
 
 #ifdef _ANDROID_
+#include <cutils/properties.h>
 #include <media/hardware/HardwareAPI.h>
 #include <gralloc_priv.h>
 #endif
@@ -212,6 +212,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&ltrinfo, 0, sizeof(ltrinfo));
     memset(&m_debug,0,sizeof(m_debug));
 
+#ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.enc.log.in", property_value, "0");
     m_debug.in_buffer_log = atoi(property_value);
@@ -224,6 +225,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 
     snprintf(m_debug.log_loc, PROPERTY_VALUE_MAX,
              "%s", BUFFER_LOG_LOC);
+#endif
 }
 
 venc_dev::~venc_dev()
@@ -765,12 +767,14 @@ bool venc_dev::venc_open(OMX_U32 codec)
     struct v4l2_control control;
     OMX_STRING device_name = (OMX_STRING)"/dev/video/venus_enc";
 
+#ifdef _ANDROID_
     char platform_name[PROPERTY_VALUE_MAX];
     property_get("ro.board.platform", platform_name, "0");
 
     if (!strncmp(platform_name, "msm8610", 7)) {
         device_name = (OMX_STRING)"/dev/video/q6_enc";
     }
+#endif
 
     m_nDriver_fd = open (device_name, O_RDWR);
 
@@ -1619,6 +1623,8 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
             }
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
+// Not supported in Linux, no HardwareAPI
+#ifdef _ANDROID_
                 PrependSPSPPSToIDRFramesParams * pParam =
                     (PrependSPSPPSToIDRFramesParams *)paramData;
 
@@ -1627,7 +1633,9 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                     DEBUG_PRINT_ERROR("ERROR: set inband sps/pps failed");
                     return OMX_ErrorUnsupportedSetting;
                 }
-
+#else
+                DEBUG_PRINT_ERROR("ERROR: set inband sps/pps not supported");
+#endif
                 break;
             }
         case OMX_QcomIndexParamH264AUDelimiter:
@@ -2146,7 +2154,7 @@ bool venc_dev::venc_use_buf(void *buf_addr, unsigned port,unsigned index)
         rc = ioctl(m_nDriver_fd, VIDIOC_PREPARE_BUF, &buf);
 
         if (rc)
-            DEBUG_PRINT_LOW("VIDIOC_PREPARE_BUF Failed");
+            DEBUG_PRINT_ERROR("VIDIOC_PREPARE_BUF Failed");
     } else if (port == PORT_INDEX_OUT) {
         extra_idx = EXTRADATA_IDX(num_planes);
 
@@ -2184,7 +2192,7 @@ bool venc_dev::venc_use_buf(void *buf_addr, unsigned port,unsigned index)
         rc = ioctl(m_nDriver_fd, VIDIOC_PREPARE_BUF, &buf);
 
         if (rc)
-            DEBUG_PRINT_LOW("VIDIOC_PREPARE_BUF Failed");
+            DEBUG_PRINT_ERROR("VIDIOC_PREPARE_BUF Failed");
     } else {
         DEBUG_PRINT_ERROR("ERROR: venc_use_buf:Invalid Port Index ");
         return false;
@@ -2278,7 +2286,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     struct v4l2_plane plane;
     int rc=0;
     struct OMX_BUFFERHEADERTYPE *bufhdr;
+#ifdef _ANDROID_ICS_
     encoder_media_buffer_type * meta_buf = NULL;
+#endif
     temp_buffer = (struct pmem *)buffer;
 
     memset (&buf, 0, sizeof(buf));
@@ -2309,6 +2319,8 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         // CPU (Eg: MediaCodec)  0            --             0              bufhdr
         // ---------------------------------------------------------------------------------------
         if (metadatamode) {
+// Not supported in Linux, no meta mode
+#ifdef _ANDROID_ICS_
             meta_buf = (encoder_media_buffer_type *)bufhdr->pBuffer;
 
             if (!meta_buf)
@@ -2322,7 +2334,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     plane.bytesused = meta_buf->meta_handle->data[2];
                     DEBUG_PRINT_LOW("venc_empty_buf: camera buf: fd = %d filled %d of %d",
                             fd, plane.bytesused, plane.length);
-                } else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
+                }
+#ifdef _ANDROID_
+                else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
                     private_handle_t *handle = (private_handle_t *)meta_buf->meta_handle;
                     fd = handle->fd;
                     plane.data_offset = 0;
@@ -2331,6 +2345,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d filled %d of %d",
                             fd, plane.bytesused, plane.length);
                 }
+#endif
             } else {
                 plane.m.userptr = (unsigned long) bufhdr->pBuffer;
                 plane.data_offset = bufhdr->nOffset;
@@ -2339,6 +2354,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                 DEBUG_PRINT_LOW("venc_empty_buf: Opaque non-camera buf: fd = %d filled %d of %d",
                         fd, plane.bytesused, plane.length);
             }
+#endif
         } else {
             plane.m.userptr = (unsigned long) bufhdr->pBuffer;
             plane.data_offset = bufhdr->nOffset;
@@ -2362,6 +2378,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
     buf.timestamp.tv_sec = bufhdr->nTimeStamp / 1000000;
     buf.timestamp.tv_usec = (bufhdr->nTimeStamp % 1000000);
+
     rc = ioctl(m_nDriver_fd, VIDIOC_QBUF, &buf);
 
     if (rc) {

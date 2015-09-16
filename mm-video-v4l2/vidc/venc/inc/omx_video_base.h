@@ -48,10 +48,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/mman.h>
 #ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
+#endif // _ANDROID_
 #ifdef _ANDROID_ICS_
 #include "QComOMXMetadata.h"
 #endif
-#endif // _ANDROID_
 #include <pthread.h>
 #include <semaphore.h>
 #include <linux/msm_vidc_enc.h>
@@ -64,11 +64,14 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "extra_data_handler.h"
 #include <linux/videodev2.h>
 #include <dlfcn.h>
+#ifdef _ANDROID_
 #include "C2DColorConverter.h"
+#endif // _ANDROID_
 #include "vidc_debug.h"
 
-#ifdef _ANDROID_
 using namespace android;
+
+#ifdef _ANDROID_
 // local pmem heap object
 class VideoHeap : public MemoryHeapBase
 {
@@ -135,19 +138,15 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
         & BITMASK_FLAG(mIndex))
 #define BITMASK_ABSENT(mArray,mIndex) (((mArray)[BITMASK_OFFSET(mIndex)] \
             & BITMASK_FLAG(mIndex)) == 0x0)
-#ifdef _ANDROID_ICS_
 #define MAX_NUM_INPUT_BUFFERS 32
-#endif
 void* message_thread(void *);
 
 // OMX video class
 class omx_video: public qc_omx_component
 {
     protected:
-#ifdef _ANDROID_ICS_
         bool meta_mode_enable;
         bool c2d_opened;
-        encoder_media_buffer_type meta_buffers[MAX_NUM_INPUT_BUFFERS];
         OMX_BUFFERHEADERTYPE *opaque_buffer_hdr[MAX_NUM_INPUT_BUFFERS];
         bool mUseProxyColorFormat;
         //RGB or non-native input, and we have pre-allocated conversion buffers
@@ -156,7 +155,9 @@ class omx_video: public qc_omx_component
         OMX_BUFFERHEADERTYPE  *psource_frame;
         OMX_BUFFERHEADERTYPE  *pdest_frame;
         bool secure_session;
-
+#ifdef _ANDROID_ICS_
+        encoder_media_buffer_type meta_buffers[MAX_NUM_INPUT_BUFFERS];
+#ifdef _ANDROID_
         class omx_c2d_conv
         {
             public:
@@ -180,6 +181,7 @@ class omx_video: public qc_omx_component
                 destroyC2DColorConverter_t *mConvertClose;
         };
         omx_c2d_conv c2d_conv;
+#endif
 #endif
     public:
         omx_video();  // constructor
@@ -485,7 +487,10 @@ class omx_video: public qc_omx_component
                 OMX_BUFFERHEADERTYPE *buffer);
         OMX_ERRORTYPE empty_this_buffer_opaque(OMX_HANDLETYPE hComp,
                 OMX_BUFFERHEADERTYPE *buffer);
+// Not supported in Linux, no libstagefright
+#ifdef _ANDROID_ICS_
         OMX_ERRORTYPE push_input_buffer(OMX_HANDLETYPE hComp);
+#endif
         OMX_ERRORTYPE convert_queue_buffer(OMX_HANDLETYPE hComp,
                 struct pmem &Input_pmem_info,unsigned &index);
         OMX_ERRORTYPE queue_meta_buffer(OMX_HANDLETYPE hComp,

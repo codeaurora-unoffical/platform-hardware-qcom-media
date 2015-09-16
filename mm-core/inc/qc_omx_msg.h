@@ -73,9 +73,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         #define DEBUG_PRINT       LOGI
         #define DEBUG_DETAIL      LOGV
     #else
-        #define DEBUG_PRINT_ERROR printf
-        #define DEBUG_PRINT       printf
-        #define DEBUG_DETAIL      printf
+        #include <syslog.h>
+        #define DEBUG_PRINT_ERROR(fmt, args...) syslog(LOG_ERR, fmt, ##args)
+        #define DEBUG_PRINT(fmt, args...)       syslog(LOG_DEBUG, fmt, ##args)
+        #define DEBUG_DETAIL(fmt, args...)      syslog(LOG_DEBUG, fmt, ##args)
     #endif // _ANDROID_
 #else
     #define DEBUG_PRINT_ERROR
