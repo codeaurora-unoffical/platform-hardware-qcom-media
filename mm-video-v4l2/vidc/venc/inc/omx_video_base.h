@@ -624,7 +624,7 @@ class omx_video: public qc_omx_component
         QOMX_VIDEO_HIERARCHICALLAYERS m_sHierLayers;
         OMX_QOMX_VIDEO_MBI_STATISTICS m_sMBIStatistics;
         QOMX_EXTNINDEX_VIDEO_INITIALQP m_sParamInitqp;
-        QOMX_EXTNINDEX_VIDEO_MAX_HIER_P_LAYERS m_sMaxHPlayers;
+        QOMX_EXTNINDEX_VIDEO_HIER_P_LAYERS m_sHPlayers;
         OMX_SKYPE_VIDEO_CONFIG_BASELAYERPID m_sBaseLayerID;
         OMX_SKYPE_VIDEO_PARAM_DRIVERVER m_sDriverVer;
         OMX_SKYPE_VIDEO_CONFIG_QP m_sConfigQP;

@@ -493,7 +493,7 @@ class venc_dev
         bool venc_calibrate_gop();
         void venc_set_vqzip_defaults();
         bool venc_validate_hybridhp_params(OMX_U32 layers, OMX_U32 bFrames, OMX_U32 count, int mode);
-        bool venc_set_max_hierp(OMX_U32 hierp_layers);
+        bool venc_set_hierp_layers(OMX_U32 hierp_layers);
         bool venc_set_baselayerid(OMX_U32 baseid);
         bool venc_set_qp(OMX_U32 nQp);
         bool venc_set_aspectratio(void *nSar);

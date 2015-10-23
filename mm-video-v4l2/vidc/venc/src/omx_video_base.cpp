@@ -2118,12 +2118,12 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                 }
                 break;
             }
-       case OMX_QcomIndexConfigMaxHierPLayers:
+       case OMX_QcomIndexConfigNumHierPLayers:
            {
-               QOMX_EXTNINDEX_VIDEO_MAX_HIER_P_LAYERS* pParam =
-                   reinterpret_cast<QOMX_EXTNINDEX_VIDEO_MAX_HIER_P_LAYERS*>(configData);
-               DEBUG_PRINT_LOW("get_config: OMX_QcomIndexConfigMaxHierPLayers");
-               memcpy(pParam, &m_sMaxHPlayers, sizeof(m_sMaxHPlayers));
+               QOMX_EXTNINDEX_VIDEO_HIER_P_LAYERS* pParam =
+                   reinterpret_cast<QOMX_EXTNINDEX_VIDEO_HIER_P_LAYERS*>(configData);
+               DEBUG_PRINT_LOW("get_config: OMX_QcomIndexConfigNumHierPLayers");
+               memcpy(pParam, &m_sHPlayers, sizeof(m_sHPlayers));
                break;
            }
        case OMX_QcomIndexConfigQp:
@@ -2225,7 +2225,7 @@ OMX_ERRORTYPE  omx_video::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
 
     if (!strncmp(paramName, "OMX.QCOM.index.config.video.hierplayers",
             sizeof("OMX.QCOM.index.config.video.hierplayers") - 1)) {
-        *indexType = (OMX_INDEXTYPE)OMX_QcomIndexConfigMaxHierPLayers;
+        *indexType = (OMX_INDEXTYPE)OMX_QcomIndexConfigNumHierPLayers;
         return OMX_ErrorNone;
     }
 

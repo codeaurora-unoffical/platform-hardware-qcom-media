@@ -2454,13 +2454,13 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                 }
                 break;
             }
-        case OMX_QcomIndexConfigMaxHierPLayers:
+        case OMX_QcomIndexConfigNumHierPLayers:
             {
-                QOMX_EXTNINDEX_VIDEO_MAX_HIER_P_LAYERS *pParam =
-                    (QOMX_EXTNINDEX_VIDEO_MAX_HIER_P_LAYERS *) configData;
-                DEBUG_PRINT_LOW("venc_set_config: OMX_QcomIndexConfigMaxHierPLayers");
-                if (venc_set_max_hierp(pParam->nMaxHierLayers) == false) {
-                    DEBUG_PRINT_ERROR("Failed to set OMX_QcomIndexConfigMaxHierPLayers");
+                QOMX_EXTNINDEX_VIDEO_HIER_P_LAYERS *pParam =
+                    (QOMX_EXTNINDEX_VIDEO_HIER_P_LAYERS *) configData;
+                DEBUG_PRINT_LOW("venc_set_config: OMX_QcomIndexConfigNumHierPLayers");
+                if (venc_set_hierp_layers(pParam->nNumHierLayers) == false) {
+                    DEBUG_PRINT_ERROR("Failed to set OMX_QcomIndexConfigNumHierPLayers");
                     return false;
                 }
                 break;
@@ -3621,6 +3621,13 @@ bool venc_dev::venc_set_hier_layers(QOMX_VIDEO_HIERARCHICALCODINGTYPE type,
     if (type == QOMX_HIERARCHICALCODING_P) {
         // Reduce layer count by 1 before sending to driver. This avoids
         // driver doing the same in multiple places.
+        control.id = V4L2_CID_MPEG_VIDC_VIDEO_MAX_HIERP_LAYERS;
+        control.value = num_layers - 1;
+        DEBUG_PRINT_HIGH("Set MAX Hier P num layers: %u", (unsigned int)num_layers);
+        if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
+            DEBUG_PRINT_ERROR("Request to set MAX Hier P num layers failed");
+            return false;
+        }
         control.id = V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS;
         control.value = num_layers - 1;
         DEBUG_PRINT_HIGH("Set Hier P num layers: %u", (unsigned int)num_layers);
@@ -5495,21 +5502,21 @@ bool venc_dev::venc_set_aspectratio(void *nSar)
     return true;
 }
 
-bool venc_dev::venc_set_max_hierp(OMX_U32 hierp_layers)
+bool venc_dev::venc_set_hierp_layers(OMX_U32 hierp_layers)
 {
     struct v4l2_control control;
     if (hierp_layers && (hier_layers.hier_mode == HIER_P) &&
             (hierp_layers <= hier_layers.numlayers)) {
-        control.id = V4L2_CID_MPEG_VIDC_VIDEO_MAX_HIERP_LAYERS;
-        control.value = hierp_layers;
-        DEBUG_PRINT_LOW("Going to set V4L2_CID_MPEG_VIDC_VIDEO_MAX_HIERP_LAYERS");
+        control.id = V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS;
+        control.value = hierp_layers - 1;
+        DEBUG_PRINT_LOW("Going to set V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS");
         if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
-            DEBUG_PRINT_ERROR("Failed to set MAX_HIERP_LAYERS");
+            DEBUG_PRINT_ERROR("Failed to set HIERP_LAYERS");
             return false;
         }
         return true;
     } else {
-        DEBUG_PRINT_ERROR("Invalid layers set for MAX_HIERP_LAYERS: %d",
+        DEBUG_PRINT_ERROR("Invalid layers set for HIERP_LAYERS: %d",
                 hierp_layers);
         return false;
     }
