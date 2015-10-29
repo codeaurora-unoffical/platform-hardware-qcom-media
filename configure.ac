@@ -45,6 +45,7 @@ AC_SUBST(GLIB_LIBS)
 AC_CONFIG_FILES([
 	Makefile \
 	mm-core/Makefile \
-	mm-video-v4l2/vidc/venc/Makefile
+	mm-video-v4l2/vidc/venc/Makefile \
+	libc2dcolorconvert/Makefile
 	])
 AC_OUTPUT

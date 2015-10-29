@@ -33,8 +33,12 @@
 #include <fcntl.h>
 #include <linux/msm_kgsl.h>
 #include <sys/ioctl.h>
-#include <utils/Log.h>
 #include <dlfcn.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <syslog.h>
+#include <unistd.h>
 
 #undef LOG_TAG
 #define LOG_TAG "C2DColorConvert"
@@ -45,6 +49,9 @@
 #define ALIGN128 128
 #define ALIGN32 32
 #define ALIGN16 16
+
+#define ALOGE(format, ...) syslog(LOG_ERR, format, ## __VA_ARGS__)
+#define ALOGV(format, ...) syslog(LOG_DEBUG, format, ## __VA_ARGS__)
 
 //-----------------------------------------------------
 namespace android {
