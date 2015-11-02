@@ -868,9 +868,9 @@ private:
     int pending_input_buffers;
     int pending_output_buffers;
     // bitmask array size for output side
-    unsigned int m_out_bm_count;
+    unsigned long long m_out_bm_count;
     // bitmask array size for input side
-    unsigned int m_inp_bm_count;
+    unsigned long long m_inp_bm_count;
     //Input port Populated
     OMX_BOOL m_inp_bPopulated;
     //Output port Populated
@@ -929,7 +929,7 @@ private:
     OMX_BUFFERHEADERTYPE  *pdest_frame;
     OMX_BUFFERHEADERTYPE  *m_inp_heap_ptr;
     OMX_BUFFERHEADERTYPE  **m_phdr_pmem_ptr;
-    unsigned int m_heap_inp_bm_count;
+    unsigned long long m_heap_inp_bm_count;
     codec_type codec_type_parse;
     bool first_frame_meta;
     unsigned frame_count;

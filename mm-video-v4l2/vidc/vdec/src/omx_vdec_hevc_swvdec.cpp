@@ -4634,7 +4634,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
 
     if (eRet == OMX_ErrorNone) {
         for(i=0; i< drv_ctx.op_buf.actualcount; i++) {
-            if(BITMASK_ABSENT(&m_out_bm_count,i))
+            if ((m_out_bm_count & (1 << i)) == 0)
             {
                 break;
             }
@@ -4669,7 +4669,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                 DEBUG_PRINT_LOW("STREAMON Successful");
             }
         }
-        BITMASK_SET(&m_out_bm_count,i);
+        m_out_bm_count |= (1 << i);
         (*bufferHdr)->pAppPrivate = appData;
         (*bufferHdr)->pBuffer = buffer;
         (*bufferHdr)->nAllocLen = sizeof(struct VideoDecoderOutputMetaData);
@@ -4914,7 +4914,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                 (*bufferHdr)->pBuffer = buff;
             }
             (*bufferHdr)->pAppPrivate = privateAppData;
-            BITMASK_SET(&m_out_bm_count,i);
+            m_out_bm_count |= (1 << i);
     }
     return eRet;
 }
@@ -5222,7 +5222,7 @@ OMX_ERRORTYPE omx_vdec::allocate_input_heap_buffer(OMX_HANDLETYPE       hComp,
     /*Find a Free index*/
     for(i=0; i< drv_ctx.ip_buf.actualcount; i++)
     {
-        if(BITMASK_ABSENT(&m_heap_inp_bm_count,i))
+        if ((m_heap_inp_bm_count & (1 << i)) == 0)
         {
             DEBUG_PRINT_LOW("Free Input Buffer Index %d",i);
             break;
@@ -5240,7 +5240,7 @@ OMX_ERRORTYPE omx_vdec::allocate_input_heap_buffer(OMX_HANDLETYPE       hComp,
 
         *bufferHdr = (m_inp_heap_ptr + i);
         input = *bufferHdr;
-        BITMASK_SET(&m_heap_inp_bm_count,i);
+        m_heap_inp_bm_count |= (1 << i);
 
         input->pBuffer           = (OMX_U8 *)buf_addr;
         input->nSize             = sizeof(OMX_BUFFERHEADERTYPE);
@@ -5357,7 +5357,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_input_buffer(
 
     for(i=0; i< drv_ctx.ip_buf.actualcount; i++)
     {
-        if(BITMASK_ABSENT(&m_inp_bm_count,i))
+        if ((m_inp_bm_count & (1 << i)) == 0)
         {
             DEBUG_PRINT_LOW("Free Input Buffer Index %d",i);
             break;
@@ -5467,7 +5467,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_input_buffer(
         }
 
         input = *bufferHdr;
-        BITMASK_SET(&m_inp_bm_count,i);
+        m_inp_bm_count |= (1 << i);
         DEBUG_PRINT_LOW("Buffer address %p of pmem idx %d",*bufferHdr, i);
         if (secure_mode)
             input->pBuffer = (OMX_U8 *)(unsigned long)drv_ctx.ptr_inputbuffer [i].pmem_fd;
@@ -5759,7 +5759,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
 
     for(i=0; i< drv_ctx.op_buf.actualcount; i++)
     {
-        if(BITMASK_ABSENT(&m_out_bm_count,i))
+        if ((m_out_bm_count & (1 << i)) == 0)
         {
             DEBUG_PRINT_LOW("Found a Free Output Buffer %d",i);
             break;
@@ -5840,7 +5840,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             }
             (*bufferHdr)->pBuffer = (OMX_U8*)drv_ctx.ptr_outputbuffer[i].bufferaddr;
             (*bufferHdr)->pAppPrivate = appData;
-            BITMASK_SET(&m_out_bm_count,i);
+            m_out_bm_count |= (1 << i);
         }
         else
         {
@@ -6016,8 +6016,8 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         if(nPortIndex < drv_ctx.ip_buf.actualcount)
         {
             // Clear the bit associated with it.
-            BITMASK_CLEAR(&m_inp_bm_count,nPortIndex);
-            BITMASK_CLEAR(&m_heap_inp_bm_count,nPortIndex);
+            m_inp_bm_count      &= (~(1 << nPortIndex));
+            m_heap_inp_bm_count &= (~(1 << nPortIndex));
             if (input_use_buffer == true)
             {
 
@@ -6069,7 +6069,7 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         {
             DEBUG_PRINT_LOW("free_buffer on o/p port - Port idx %d", nPortIndex);
             // Clear the bit associated with it.
-            BITMASK_CLEAR(&m_out_bm_count,nPortIndex);
+            m_out_bm_count &= (~(1 << nPortIndex));
             m_out_bPopulated = OMX_FALSE;
             client_buffers.free_output_buffer (buffer);
 
@@ -7062,7 +7062,7 @@ bool omx_vdec::allocate_input_done(void)
     {
         for(;i<drv_ctx.ip_buf.actualcount;i++)
         {
-            if(BITMASK_ABSENT(&m_inp_bm_count,i))
+            if ((m_inp_bm_count & (1 << i)) == 0)
             {
                 break;
             }
@@ -7107,7 +7107,7 @@ bool omx_vdec::allocate_output_done(void)
     {
         for(;j < drv_ctx.op_buf.actualcount;j++)
         {
-            if(BITMASK_ABSENT(&m_out_bm_count,j))
+            if ((m_out_bm_count & (1 << j)) == 0)
             {
                 break;
             }
@@ -7206,7 +7206,7 @@ bool omx_vdec::release_output_done(void)
     {
         for(;j < drv_ctx.op_buf.actualcount ; j++)
         {
-            if(BITMASK_PRESENT(&m_out_bm_count,j))
+            if (m_out_bm_count & (1 << j))
             {
                 break;
             }
@@ -7248,7 +7248,7 @@ bool omx_vdec::release_input_done(void)
     {
         for(;j<drv_ctx.ip_buf.actualcount;j++)
         {
-            if( BITMASK_PRESENT(&m_inp_bm_count,j))
+            if (m_inp_bm_count & (1 << j))
             {
                 break;
             }
