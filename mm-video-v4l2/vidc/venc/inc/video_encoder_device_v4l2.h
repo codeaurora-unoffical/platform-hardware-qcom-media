@@ -105,6 +105,16 @@ struct msm_venc_qprange {
     unsigned long    maxqp;
     unsigned long    minqp;
 };
+
+struct msm_venc_ipb_qprange {
+    unsigned long    max_i_qp;
+    unsigned long    min_i_qp;
+    unsigned long    max_p_qp;
+    unsigned long    min_p_qp;
+    unsigned long    max_b_qp;
+    unsigned long    min_b_qp;
+};
+
 struct msm_venc_intraperiod {
     unsigned long    num_pframes;
     unsigned long    num_bframes;
@@ -367,6 +377,7 @@ class venc_dev
         struct msm_venc_initqp              init_qp;
         struct msm_venc_qprange             session_qp_range;
         struct msm_venc_qprange             session_qp_values;
+        struct msm_venc_ipb_qprange         session_ipb_qp_values;
         struct msm_venc_multiclicecfg       multislice;
         struct msm_venc_entropycfg          entropy;
         struct msm_venc_dbcfg               dbkfilter;
