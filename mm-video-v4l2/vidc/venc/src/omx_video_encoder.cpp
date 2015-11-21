@@ -1907,15 +1907,15 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 }
                 break;
             }
-        case OMX_QcomIndexConfigMaxHierPLayers:
+        case OMX_QcomIndexConfigNumHierPLayers:
         {
-            QOMX_EXTNINDEX_VIDEO_MAX_HIER_P_LAYERS* pParam =
-                (QOMX_EXTNINDEX_VIDEO_MAX_HIER_P_LAYERS*)configData;
-            if (!handle->venc_set_config(pParam, (OMX_INDEXTYPE)OMX_QcomIndexConfigMaxHierPLayers)) {
-                DEBUG_PRINT_ERROR("ERROR: Setting OMX_QcomIndexConfigMaxHierPLayers failed");
+            QOMX_EXTNINDEX_VIDEO_HIER_P_LAYERS* pParam =
+                (QOMX_EXTNINDEX_VIDEO_HIER_P_LAYERS*)configData;
+            if (!handle->venc_set_config(pParam, (OMX_INDEXTYPE)OMX_QcomIndexConfigNumHierPLayers)) {
+                DEBUG_PRINT_ERROR("ERROR: Setting OMX_QcomIndexConfigNumHierPLayers failed");
                 return OMX_ErrorUnsupportedSetting;
             }
-            memcpy(&m_sMaxHPlayers, pParam, sizeof(m_sMaxHPlayers));
+            memcpy(&m_sHPlayers, pParam, sizeof(m_sHPlayers));
             break;
         }
         case OMX_QcomIndexConfigBaseLayerId:
