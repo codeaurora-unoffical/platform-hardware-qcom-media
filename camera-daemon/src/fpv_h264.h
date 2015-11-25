@@ -1,0 +1,69 @@
+/* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+#include "liveMedia.hh"
+#include "BasicUsageEnvironment.hh"
+#include "GroupsockHelper.hh"
+
+#include "OnDemandServerMediaSubsession.hh"
+#include "omx/preview_component.h"
+#include "qcamvid_session.h"
+
+#ifndef FPV_H264_H
+#define  FPV_H264_H
+
+namespace camerad
+{
+class fpvH264OnDemandMediaSubsession : public OnDemandServerMediaSubsession
+{
+public:
+    fpvH264OnDemandMediaSubsession(UsageEnvironment& env, const char* params, int param_siz);
+    ~fpvH264OnDemandMediaSubsession(void);
+
+public:
+    virtual char const * getAuxSDPLine(RTPSink * rtpSink, FramedSource * inputSource);
+    virtual FramedSource * createNewStreamSource(unsigned clientSessionId, unsigned & estBitrate); // "estBitrate" is the stream's estimated bitrate, in kbps
+    virtual RTPSink * createNewRTPSink(Groupsock * rtpGroupsock, unsigned char rtpPayloadTypeIfDynamic, FramedSource * inputSource);
+    virtual void closeStreamSource(FramedSource* inputSource);
+    static fpvH264OnDemandMediaSubsession * createNew(UsageEnvironment & env, const char* params, int param_siz);
+
+    void afterPlayingDummy1();
+    static void afterPlayingDummy(void * ptr);
+
+    static void chkForAuxSDPLine(void * ptr);
+    void chkForAuxSDPLine1();
+private:
+    char * m_pSDPLine;
+    RTPSink * m_pDummyRTPSink;
+    char m_done;
+    omxa::PreviewComponentPtr  preComp_;
+    ISession* rtpSession_ = NULL;   /* rtp streaming session */
+    std::shared_ptr<FramedSource> src_;
+};
+}
+#endif

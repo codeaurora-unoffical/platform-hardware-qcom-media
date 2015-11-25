@@ -46,6 +46,8 @@ AC_CONFIG_FILES([
 	Makefile \
 	mm-core/Makefile \
 	mm-video-v4l2/vidc/venc/Makefile \
-	libc2dcolorconvert/Makefile
+	libc2dcolorconvert/Makefile \
+	camera-daemon/Makefile \
+	camera-daemon/src/Makefile
 	])
 AC_OUTPUT
