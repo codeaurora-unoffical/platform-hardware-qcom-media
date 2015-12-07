@@ -46,7 +46,8 @@ c_sources = src/common/omx_core_cmp.cpp
 c_sources += src/common/qc_omx_core.c
 c_sources += src/$(MM_CORE_TARGET)/qc_registry_table.c
 
-include_HEADERS = $(h_sources)
+# It's being copied by recipe now
+#include_HEADERS = $(h_sources)
 lib_LTLIBRARIES = libOmxCore.la
 libOmxCore_la_SOURCES = $(c_sources)
 libOmxCore_la_LDFLAGS = -ldl -lrt -lpthread -shared -version-info $(OMXVIDEO_LIBRARY_VERSION)
