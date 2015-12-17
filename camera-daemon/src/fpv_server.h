@@ -32,6 +32,8 @@
 #include <thread>
 #include <string>
 #include <future>
+#include <queue>
+#include <mutex>
 
 #include "liveMedia.hh"
 #include "BasicUsageEnvironment.hh"
@@ -48,6 +50,15 @@ namespace camerad
 **/
 class FpvServer
 {
+    struct Request {
+        unsigned int uid_;
+        std::string param_;
+        Request() : uid_(-1) {}
+        Request(unsigned int uid, const char* param, int param_siz)
+        : uid_(uid), param_(param, param_siz){}
+        Request(const Request& r) : uid_(r.uid_), param_(r.param_) {}
+    };
+
 public:
 	FpvServer();
 	virtual ~FpvServer(){};
@@ -105,7 +116,8 @@ private:
     int  port_;
     std::string net_iface_;
     std::thread task_;      /**< a hosting thread */
-
+    std::queue<Request> requests_;   /**< queue of requests to server */
+    std::mutex lock_;   /**< serialize the access to this object */
     EventTriggerId signal_; /**< used to resume asynchronous operations */
 
     /** LiveMedia parameters */

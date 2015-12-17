@@ -41,6 +41,7 @@
 #include "omx/preview_component.h"
 #include <media/hardware/HardwareAPI.h>
 #include <memory>
+#include <atomic>
 
 /* OMX video encoder port identifiers */
 enum PortIndexType {
@@ -158,7 +159,7 @@ protected:
 
     omxa::EncoderComponent encoderComponent_;
 
-    bool ready_ = false;   /* perform atomic write to indicate the session is ready
+    std::atomic_bool ready_ = {false};   /* perform atomic write to indicate the session is ready
                            ** to process the frames from encoder. */
 
     static OMX_ERRORTYPE EventCallback(OMX_IN OMX_HANDLETYPE hComponent,
@@ -215,6 +216,8 @@ public:
     virtual int stop();
     virtual void setConfig(const SessionConfig& config) {
         mConfig = config;
+    }
+    virtual void setConfig(const H264Config& config) {
     }
     virtual int setConfig(JSONParser& js) {
         JSONID res_arr_val;
@@ -422,6 +425,8 @@ int VSession::start()
     TRY(rc, cameraComponent_.openOMXDrain(stream_, hEncoder_, input_,
                                           &inputComponent_));
 
+    QCAM_INFO("Session[%d] start", (int)stream_);
+
     /* start the source */
     startPlaying();
 
@@ -439,7 +444,7 @@ int VSession::stop()
     ready_ = false;
 
     if (camera_ != nullptr) {
-        QCAM_INFO("Stop encoding....");
+        QCAM_INFO("Session[%d] stop", (int)stream_);
         encoderComponent_.enter_and_wait_until(OMX_StateIdle);
 
         /* Tear down the encoder and camera components */
@@ -463,7 +468,7 @@ int VSession::stop()
 
         camera_.reset();
 
-        QCAM_INFO("Capture Finished.");
+        QCAM_INFO("Session[%d] Capture Finished.", (int) stream_);
     }
 
     return rc;
@@ -583,7 +588,12 @@ public:
     }
 };
 
-ISession* createSession(SessionType sessionType)
+/**
+ Create an instance of the session type.
+ @param sessionType*
+ @return ISession* [out] not NULL if succeeded in creating the instance.
+ **/
+static ISession* createSession(SessionType sessionType)
 {
     /* TODO: load from config file */
     if (QCAM_SESSION_RECORDING == sessionType) {
@@ -597,5 +607,39 @@ ISession* createSession(SessionType sessionType)
     return NULL;
 }
 
+std::map<SessionType, std::weak_ptr<ISession>> SessionMgr::sessions_;
+
+std::shared_ptr<ISession> SessionMgr::get(SessionType st)
+{
+    std::shared_ptr<ISession> s = nullptr;
+
+    auto i = sessions_.find(st);
+    if (i != sessions_.end()) {   /* found */
+        s = i->second.lock();
+    }
+    else {
+        ISession* nsess = createSession(st);
+
+        if (NULL != nsess) {
+            QCAM_INFO("New Session type: %d\n", (int)st);
+
+            /* install in the shared ptr. override the default delete */
+            s.reset(nsess, [](ISession* p) {
+                auto j = sessions_.begin();
+                while (j != sessions_.end()) {
+                    if (j->second.expired()) {
+                        sessions_.erase(j++);
+                    }
+                    else {
+                        j++;
+                    }
+                }
+                delete p;
+            });
+            sessions_[st] = s;
+        }
+    }
+    return s;
+}
 }
 

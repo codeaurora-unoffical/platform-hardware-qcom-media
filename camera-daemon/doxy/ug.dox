@@ -1,0 +1,130 @@
+/* Copyright (c) 2015-16, The Linux Foundataion. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+/**
+@page user_guide User Guide
+
+# Overview
+
+This page discusses about using the two programs built from the sources
+- camerad : is the camera daemon program.
+- camclient : is a simple client program to invoke operations on the daemon.
+
+# camerad
+
+### Usage
+
+    camerad [options]
+
+      -l              enable logging on stderr
+      -q              kill server if it is running. All other options are ignored.
+      -d <level>      logging level [2]
+                        0: silent
+                        1: error
+                        2: info
+                        3: debug
+      -D <dir>        server working directory
+                        all other paths will be relative to this folder.
+                        default "/"
+      -h              print this message
+      -p              run as foreground program
+
+
+__Note__ Camera daemon will use a configuration file `camerad.json` to assist with
+various settings. This file is expected to be in the servers working directory as
+given by the `-D <dir>` option.
+
+__Note__ Files created for video recording and snapshot pictures will be stored in
+folders relative to the server working directory.
+
+### Example
+
+- To start the camera daemon and use a working directory `/root/test` with verbose
+logging to the `stderr`.
+
+    ./camerad -d 3 -l -D /root/test
+
+- To stop the camera daemon.
+
+    ./camerad -q
+
+# camclient
+
+ This is the front end application for camera daemon. This is only a reference
+program, to serve as an example for creating a more complete application intended
+to run on a remote device.
+
+ On the outset, this program is just an envelope for submitting commands to the
+daemon. To achieve those functions it supports a few sub commands. After this program
+is started, user is expected to issue sub-commands to achieve a desired function.
+
+ This program can operate two modes :
+- interactive mode : where the program waits for user input from stdin.
+- batch mode, where it sequentially runs the subcommands from another file.
+
+### Usage
+
+    camclient [options]
+
+      -i              interactive shell
+      -b <file>       batch mode operation
+      -h              print this message
+
+### Sub Commands
+
+Command                   | Description
+--------------------------|---------------------------
+ `sleep <seconds>`        | wait the given seconds before running next command.
+ `send <json rpc>`        | send a given json rpc to server.
+ `quit`                   | or Ctrl-D is to exit the client program.
+
+### Example
+
+- Here is an example run of an interactive session to start recording a 1280x720p
+session in to file.
+
+    root@linaro-developer:~/test# ./camclient -i
+    > send {"id" : 100, "method" : "camera.recording.start", "params" : {"id" : 0, "resolution" : [1280, 720]}}
+    > RECV : {"id": 100, "result": 0}
+    >
+
+- Here is an example run to record for 2 seconds, but using a batch mode.
+Commands are stored in file `record2.cmd`
+
+    root@linaro-developer:~/test# cat record2.cmd
+    send {"id" : 101, "method" : "camera.recording.start", "params" : {"id" : 0, "resolution" : [1280, 720]}}
+    sleep 2
+    send {"id" : 102, "method" : "camera.recording.stop"}
+    sleep 1
+    root@linaro-developer:~/test# ./camclient -b record2.cmd
+    > > RECV : {"id": 101, "result": 0}
+    > > > RECV : {"id": 102, "result": 0}
+    > >
+
+*/

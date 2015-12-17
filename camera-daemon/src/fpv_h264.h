@@ -39,18 +39,18 @@
 
 namespace camerad
 {
-class fpvH264OnDemandMediaSubsession : public OnDemandServerMediaSubsession
+class fpvH264 : public OnDemandServerMediaSubsession
 {
 public:
-    fpvH264OnDemandMediaSubsession(UsageEnvironment& env, const char* params, int param_siz);
-    ~fpvH264OnDemandMediaSubsession(void);
+    fpvH264(UsageEnvironment& env, const char* params, int param_siz);
+    ~fpvH264(void);
 
 public:
     virtual char const * getAuxSDPLine(RTPSink * rtpSink, FramedSource * inputSource);
     virtual FramedSource * createNewStreamSource(unsigned clientSessionId, unsigned & estBitrate); // "estBitrate" is the stream's estimated bitrate, in kbps
     virtual RTPSink * createNewRTPSink(Groupsock * rtpGroupsock, unsigned char rtpPayloadTypeIfDynamic, FramedSource * inputSource);
     virtual void closeStreamSource(FramedSource* inputSource);
-    static fpvH264OnDemandMediaSubsession * createNew(UsageEnvironment & env, const char* params, int param_siz);
+    static fpvH264 * createNew(UsageEnvironment & env, const char* params, int param_siz);
 
     void afterPlayingDummy1();
     static void afterPlayingDummy(void * ptr);
@@ -62,8 +62,9 @@ private:
     RTPSink * m_pDummyRTPSink;
     char m_done;
     omxa::PreviewComponentPtr  preComp_;
-    ISession* rtpSession_ = NULL;   /* rtp streaming session */
+    std::shared_ptr<ISession> rtpSession_ = nullptr;   /* rtp streaming session */
     std::shared_ptr<FramedSource> src_;
+    std::string params_;   /**< arguments from remote client to "start.rtsp" */
 };
 }
 #endif

@@ -71,11 +71,14 @@ int OmxDrain::dispatchOmx(camera::ICameraFrame* frame, OMX_TICKS ts)
     /** Keep the video frame around until drainer is done with it */
     frame->acquireRef();
 
-    if (OMX_ErrorNone != OMX_EmptyThisBuffer(drainer_, buffer)) {
-        nret = EIO;
-        frame->releaseRef();
-        pool_->releaseBuf(buffer);
-        goto bail;
+    {   /** unlock below might open up the small window if component is reset */
+        OMX_HANDLETYPE hLocal = drainer_;
+        lk.unlock();
+        if (OMX_ErrorNone != OMX_EmptyThisBuffer(hLocal, buffer)) {
+            nret = EIO;
+            emptyBufferDone(hLocal, buffer);
+            goto bail;
+        }
     }
 
 bail:
@@ -136,7 +139,8 @@ void OmxDrain::close()
 }
 
 void FrameStats::onNewFrame(camera::ICameraFrame* frame,
-                            const std::chrono::microseconds& ts)
+                            const std::chrono::microseconds& ts,
+                            uint32_t stream_id)
 {
     /* the fps sampling for debug purposes */
     #define FPS_SAMPLING_FRAME_COUNT 30
@@ -150,10 +154,15 @@ void FrameStats::onNewFrame(camera::ICameraFrame* frame,
         (timeDiff_.count() + (ts.count() - timePrevious_.count())) / 2);
     timePrevious_ = ts;
 
-    curFps_ = USEC_PER_SEC / timeDiff_.count();
+    if (timeDiff_.count()) {
+        curFps_ = USEC_PER_SEC / timeDiff_.count();
+    }
+    else {
+        QCAM_ERR("Invalid timestamp on the frame");
+    }
 
     if (frameCount_ % FPS_SAMPLING_FRAME_COUNT == 0) {
-        QCAM_INFO("video FPS = %.2f", curFps_);
+        QCAM_INFO("FPS[%d] = %.2f", stream_id, curFps_);
     }
 }
 
@@ -227,7 +236,7 @@ void CameraComponent::processFrame(CameraStream sid, camera::ICameraFrame* frame
         std::chrono::nanoseconds(frame->timeStamp));
 
     /* update stats */
-    stat_[sid].onNewFrame(frame, timeCurrent);
+    stat_[sid].onNewFrame(frame, timeCurrent, (uint32_t)sid);
 
     /* dispatch */
     if (0 != drain_[sid].dispatchOmx(

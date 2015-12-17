@@ -30,13 +30,31 @@
 #include "camera_factory.h"
 #include "json/json_parser.h"
 #include "camerad.h"
+#include "camerad_util.h"
 #include "camera_parameters.h"
 #include "qcamvid_log.h"
+#include "virtual/camera_virtual.h"
 
 namespace camerad
 {
 
 std::map<int, std::weak_ptr<camera::ICameraDevice>> CameraFactory::cameras_;
+
+int cfgGetCamera_fps(int indx, unsigned int& fps)
+{
+    int rc;
+    JSONParser jp;
+    JSONID jsid;
+
+    fps = 0;
+
+    TRY(rc, cfgGetCamera(indx, jp));
+    TRY(rc, JSONParser_Lookup(&jp, 0, "settings.fps", 0, &jsid));
+    TRY(rc, JSONParser_GetUInt(&jp, jsid, &fps));
+
+    CATCH(rc) {}
+    return rc;
+}
 
 std::shared_ptr<camera::ICameraDevice> CameraFactory::get(int index)
 {
@@ -47,48 +65,48 @@ std::shared_ptr<camera::ICameraDevice> CameraFactory::get(int index)
         s = i->second.lock();
     }
     else {
+        unsigned int fps = 0;
+        int rc;
         camera::ICameraDevice* icd;
 
-        /* create an instance */
-        if (0 == camera::ICameraDevice::createInstance(index, &icd)) {
-            JSONParser jp;
-
-            /* configure this camera to default configuration */
-            if (0 == cfgGetCamera(index, jp)) {
-                unsigned int fps;
-                JSONID jsid;
-                camera::CameraParams param;
-
-                param.init(icd);
-
-                if (JSONPARSER_SUCCESS == JSONParser_Lookup(
-                    &jp, 0, "settings.fps", 0, &jsid)
-                    && JSONPARSER_SUCCESS == JSONParser_GetUInt(
-                        &jp, jsid, &fps)) {
-                    /* set the preview fps */
-                    camera::Range fps_r(fps * 1000, fps * 1000, 1);
-                    param.setPreviewFpsRange(fps_r);
-                    QCAM_INFO("settings.fps:%d\n", fps);
-                }
-
-                param.commit();
-            }
-
-            /* install in the shared ptr. override the default delete */
-            s.reset(icd, [](camera::ICameraDevice* p) {
-                auto j = cameras_.begin();
-                while (j != cameras_.end()) {
-                    if (j->second.expired()) {
-                        cameras_.erase(j++);
-                    }
-                    else {
-                        j++;
-                    }
-                }
-                camera::ICameraDevice::deleteInstance(&p);
-            });
-            cameras_[index] = s;
+        rc = cfgGetCamera_fps(index, fps);
+        if (0 != rc) {
+            THROW(rc, EINVAL);
         }
+
+        rc = (30 == fps) ? CameraVirtual_CreateInstance(index, &icd)
+        : camera::ICameraDevice::createInstance(index, &icd);
+
+        if (0 == rc) {
+            camera::CameraParams param;
+
+            param.init(icd);
+            /* set the preview fps */
+            camera::Range fps_r(fps * 1000, fps * 1000, 1);
+            param.setPreviewFpsRange(fps_r);
+            rc = param.commit();
+
+            if (0 == rc) {
+                QCAM_INFO("camera[%d] settings.fps:%d\n", index, fps);
+
+                /* install in the shared ptr. override the default delete */
+                s.reset(icd, [](camera::ICameraDevice* p) {
+                    auto j = cameras_.begin();
+                    while (j != cameras_.end()) {
+                        if (j->second.expired()) {
+                            cameras_.erase(j++);
+                        }
+                        else {
+                            j++;
+                        }
+                    }
+                    camera::ICameraDevice::deleteInstance(&p);
+                });
+                cameras_[index] = s;
+            }
+        }
+
+        CATCH(rc) {}
     }
     return s;
 }

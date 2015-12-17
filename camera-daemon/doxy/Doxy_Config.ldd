@@ -1,0 +1,480 @@
+# Copyright (c) 2015, The Linux Foundation. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#     * Neither the name of The Linux Foundation nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+# BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+# OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+# IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+
+#---------------------------------------------------------------------------
+# Project-related configuration options
+#---------------------------------------------------------------------------
+
+# This tag specifies the encoding used for all characters in the config file
+# that follow. The default is UTF-8 which is also the encoding used for all
+# text before the first occurrence of this tag. Doxygen uses libiconv (or the
+# iconv built into libc) for the transcoding. See
+# http://www.gnu.org/software/libiconv for the list of possible encodings.
+
+DOXYFILE_ENCODING      = UTF-8
+#                        The PROJECT_NAME and PROJECT_NUMBER appear in the header
+#                        on each HTML page.
+PROJECT_NAME           = "Camera Daemon for Snapdragon Drone"
+PROJECT_NUMBER         = "80-????????"
+PROJECT_BRIEF          =
+PROJECT_LOGO           =
+OUTPUT_DIRECTORY       = "."
+CREATE_SUBDIRS         = NO
+OUTPUT_LANGUAGE        = English
+BRIEF_MEMBER_DESC      = YES
+REPEAT_BRIEF           = YES
+ABBREVIATE_BRIEF       = NO
+ALWAYS_DETAILED_SEC    = NO
+INLINE_INHERITED_MEMB  = NO
+INLINE_SIMPLE_STRUCTS  = YES
+INLINE_GROUPED_CLASSES = YES
+FULL_PATH_NAMES        = NO
+STRIP_FROM_PATH        =
+STRIP_FROM_INC_PATH    =
+SHORT_NAMES            = NO
+JAVADOC_AUTOBRIEF      = NO
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = NO
+INHERIT_DOCS           = YES
+SEPARATE_MEMBER_PAGES  = NO
+TAB_SIZE               = 8
+#                     COMMON SUBHEADS FOR ANY DOC:
+ALIASES +=               "codeexample=@latexonly \vspace{3pt}{\sf\small\bf @endlatexonly @htmlonly <b> @endhtmlonly Code example @latexonly \bf}@endlatexonly @htmlonly </b> @endhtmlonly" \
+                         "codeexample{1}=@latexonly \vspace{3pt}{\sf\small\bf @endlatexonly @htmlonly <b> @endhtmlonly Code example \1 @latexonly \bf}@endlatexonly @htmlonly </b> @endhtmlonly" \
+                         "dependencies=@par Dependencies" \
+                         "detdesc=@par Detailed description" \
+                         "head5{1}=@latexonly \paragraph{@endlatexonly\1@latexonly}@endlatexonly" \
+                         "sideeffects=@par Side effects" \
+                         "subhead{1}=@latexonly {\vspace{6pt} \sf\small\bf{\1} \bf} \n \n@endlatexonly \n \n @htmlonly <b>\1</b>@endhtmlonly \n \n " \
+						 "Largehead{1}=@latexonly {\vspace{6pt} \sf\Large\bf{\1} \bf} \n \n@endlatexonly \n \n @htmlonly <b>\1</b>@endhtmlonly \n \n "
+#                     SPACING:
+ALIASES +=               "indent=@latexonly \vspace{12pt} \hangindent2em \hangafter=0 @endlatexonly @htmlonly <p style=\"margin-left:.5in;                           text-indent:-.5in\">@endhtmlonly" \
+                         "tablebulletend=@latexonly \vspace{-15pt}@endlatexonly" \
+                         "vertspace{1}=@latexonly \vspace{\1pt}@endlatexonly" \
+                         "hspace{1}=@latexonly  \hspace{\1}@endlatexonly"
+#                     TEXT HIGHLIGHTING:
+ALIASES +=               "hl{1}=@latexonly \hl{\1}@endlatexonly @htmlonly[block] <FONT style=\"BACKGROUND-COLOR: yellow\">\1</FONT> @endhtmlonly"
+#                     SUBHEADS FOR FUNCTION-BASED DOCS:
+ALIASES +=               "datatypes=@par Associated data types"
+#                     SUBHEADS FOR DEFINE-BASED DOCS:
+ALIASES +=               "apr_hdr_fields=@par Relevant APR header fields" \
+                         "table{1}=&nbsp; @latexonly \vspace{-20pt} \input{group__\1.tex}@endlatexonly" \
+                         "tablens{1}=@latexonly \input{group__\1.tex}@endlatexonly" \
+                         "values=@latexonly {\sf\small\bf{Supported values:} \bf} \rm @endlatexonly @htmlonly[block]<b>Supported values:</b> @endhtmlonly" \
+                         "values{1}=@latexonly {\sf\small\bf{Supported values \1:}\bf} \rm @endlatexonly @htmlonly[block] <b>Supported values \1: </b> @endhtmlonly"
+#                     SUBHEADS FOR PROTOCOL-BASED DOCS:
+ALIASES +=               "summary=@par Summary" \
+                         "protoparam=@par Parameters" \
+                         "description=@par Description" \
+                         "statusreturn=@par Status codes returned" \
+                         "inputprotoparams{1}=@latexonly \item[] \vspace{-18pt}\input{protoparams/\1}@endlatexonly"
+#                     SUBHEAD FOR ANONYMOUS (UNNAMED) ENUM:
+ALIASES +=               "anonenum{1}=@latexonly\anonenum{@endlatexonly\1@latexonly}{\1}@endlatexonly \n"
+#                     FIGURE AND TABLE INSERTION:
+ALIASES +=               "inputfig{2}=@latexonly \begin{figure}[H] \centering \includegraphics[scale=\1]{../images/\2} \end{figure} @endlatexonly " \
+                         "inputfigcap{4}=@latexonly \begin{figure}[H] \centering \includegraphics[scale=\1]{../images/\2} \renewcommand{\thefigure}{\thechapter-\arabic{figure}} \caption{\3} \label{fig_\4} \end{figure}@endlatexonly" \
+                         "html_image{5}=@htmlonly <div style="text-align:center;"><img src=\"../images/\1\" alt=\"\2\" width=\"\3%\" height=\"\4%\"><br/><br/><b>\5</b></div><br/> @endhtmlonly" \
+                         "inputtable{1}=&nbsp; @latexonly \vspace{-8pt} \input{tables/\1}@endlatexonly"
+#                     CROSS-REFERENCES FOR LATEX AND HTML:
+ALIASES +=               "xreflabel{1}=@latexonly \label{\1}@endlatexonly" \
+                         "xref{1}=@latexonly \ref{\1}@endlatexonly @htmlonly \ref \1 @endhtmlonly" \
+			 "xref{2}=@latexonly \1 \ref{\2}@endlatexonly @htmlonly @ref \2 \1 @endhtmlonly" \
+                         "xhyperref{2}=@latexonly \hyperref[\1]{\2}@endlatexonly"
+#                     SYMBOLS - ASTERISK (SUPERSCRIPT), GREATER THAN OR EQUAL TO, and LESS THAN OR EQUAL TO:
+ALIASES +=               "ast=@latexonly $\sp{*}$@endlatexonly@htmlonly*@endhtmlonly" \
+                         "ge=@latexonly $\ge$@endlatexonly@htmlonly &gt; @endhtmlonly" \
+                         "le=@latexonly $\le$@endlatexonly@htmlonly &lt; @endhtmlonly" \
+                         "regns=@latexonly\hspace{-3pt}\textsuperscript{\textregistered}@endlatexonly" \
+                         "tm=@latexonly\hspace{-3pt}\texttrademark~@endlatexonly" \
+                         "tmns=@latexonly\hspace{-3pt}\texttrademark@endlatexonly"
+#                     SPACING:
+ALIASES +=               "indent=@latexonly \hangindent2em \hangafter=0 @endlatexonly @htmlonly <p style=\"margin-left:.5in; text-indent:-.5in\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;@endhtmlonly" \
+                         "tablebulletend=@latexonly \vspace{-15pt}@endlatexonly" \
+                         "vertspace{1}=@latexonly \vspace{\1pt}@endlatexonly" \
+                         "hspace{1}=@latexonly  \hspace{\1}@endlatexonly"
+#                     PAGE BREAK: Check with Lars on what we are using to force page breakin dox files.
+ALIASES +=               "newpage=@latexonly \clearpage @endlatexonly" \
+                         "begin_nopagebreak=@latexonly \begingroup \let\clearpage\relax @endlatexonly" \
+                         "end_nopagebreak=@latexonly \endgroup @endlatexonly"
+#                     PAGE BREAK IN GENERATED TABLE:
+ALIASES +=               "newpagetable=@latexonly requires_insertion_of_clear_page @endlatexonly"
+#                     CELL BREAK IN GENERATED LATEX TABLE:
+ALIASES +=               "contcell=@latexonly (cont.) \\ \hline & & @endlatexonly"
+#                     KEEP LINES TOGETHER ON SAME PAGE:
+ALIASES +=               "keep{1}=@latexonly \ensurespace{\1\baselineskip}@endlatexonly"
+#                     MISC:
+ALIASES +=               "inputfile{1}=@latexonly \input{\1}@endlatexonly" \
+                         "mappayload{1}=@par Map payload (\1)" \
+                         "msgpayload=@par Message payload" \
+                         "msgpayload{1}=@par Message payload (\1)" \
+                         "msgpayload_hdr{1}=@par Message payload header (\1)" \
+                         "nbsp{1}=@latexonly~@endlatexonly " \
+                         "rarrow=@latexonly$\rightarrow$@endlatexonly" \
+                         "sscr{1}=@latexonly$^{\1}$@endlatexonly" \
+                         "tbend2=@latexonly \vspace{-28pt}@endlatexonly" \
+                         "tblsubhd{1}=@latexonly {\sf\small\bf{\1:}\bf} \rm @endlatexonly" \
+                         "txtbullet=@latexonly \textbullet~~ @endlatexonly" \
+                         "unmappayload{1}=@par Unmap payload (\1)"
+#                     UNIQUE ALIASES ONLY USED FOR THIS DOCUMENT:
+ALIASES +=               "limit=@par Limitations"
+#      CUSTOM ALIASES TO SUPPORT BOTH HTML AND LATEX OUTPUT:
+ALIASES +=              "apr_msgpayload=@par APR message payload" \
+                        "apr_msgpayload{1}=@par APR message payload (\1)" \
+ "titlepage=@htmlonly <center><span style='font-size:1cm;'><b>Camera Daemon for Snapdragon Drone</b></span>\
+        <br /><span style='font-size:0.8cm;'></span><br /> \
+        <span style='font-size:0.4cm;'>80-????????<br /> $(today)<br /><br /></span></>@endhtmlonly" \
+ "copyright_titlepage=@htmlonly &copy;2015 The Linux Foundation. All rights reserved. @endhtmlonly" \
+ "questions_comments=@htmlonly <center><p><b>Questions or comments:</b> <a style='color: #0A0AFF;' href='https://www.codeaurora.org/'>www.codeaurora.org</a></p></center>@endhtmlonly" \
+ "url{2}=@htmlonly <p><b></b> <a style='color: #0A0AFF;' href='\1'>\2</a></p>@endhtmlonly" \
+ "export_statement=This technical data may be subject to U.S. and international export, re-export, or transfer ("export") laws. Diversion contrary to U.S. and international law is strictly prohibited." \
+ "company_address=@htmlonly <center><b>Code Aurora Forum, a Linux Foundation Labs Project<br />660 York Street Suite 102<br /> San Francisco, CA 94110<br />U.S.A.<br /> </center>@endhtmlonly"
+#                       Table definitions:
+ALIASES +=              "mk_tbl_cap{2}=@latexonly \renewcommand{\thetable}{\thechapter-\arabic{table}} \
+                         \captionof{table}{\1} \label{\2} \vspace{-1pt} @endlatexonly \
+                         @htmlonly <b><caption align=\"top\" class=\"caption\">\1</caption></b>@endhtmlonly" \
+						 "mk_tbl_cap_cont{1}=@latexonly {\bf\vspace{-1pt} \1} @endlatexonly" \
+						 "mk_tbl_break_2_col{3}=@latexonly \\\cline{1-2} \end{TabularC} \clearpage \begin{center}\textbf{\1}\end{center} \begin{TabularC}{2} \
+                         \hline {\bf \2}&{\bf \3 } @endlatexonly"
+ALIASES +=              "table{9}=@htmlonly<p><table class=\"doxtable\" width=\"100%\">@endhtmlonly@latexonly \begin{customtable}{\1}{\2}{\3}{\4}{\5}{\6}{\7}{\8}{\9}@endlatexonly\n" \
+                        "table{8}=@table{\1,\2,\3,\4,\5,\6,\7,\8,}" \
+                        "table{7}=@table{\1,\2,\3,\4,\5,\6,\7,,}" \
+                        "table{6}=@table{\1,\2,\3,\4,\5,\6,,,}" \
+                        "table{5}=@table{\1,\2,\3,\4,\5,,,,}" \
+                        "table{4}=@table{\1,\2,\3,\4,,,,,}" \
+                        "table{3}=@table{\1,\2,\3,,,,,,}" \
+                        "tableend=@htmlonly</table></p>@endhtmlonly@latexonly \end{customtable} @endlatexonly"
+#                       Table caption:
+ALIASES +=              "tblcap{2}=@htmlonly<caption align=\"top\" class=\"caption\">\1</caption>@endhtmlonly@latexonly \caption{\1} \label{\2} \vspace{-0.05in} \\@endlatexonly\n" \
+                        "tblcapcont{1}=@latexonly\caption[]{\1} \vspace{-0.05in} \\ @endlatexonly\n" \
+#                       Table heading row:
+ALIASES +=              "trfirsthdg=@htmlonly<tr>@endhtmlonly@latexonly\hline@endlatexonly" \
+                        "trfirsthdgend=@htmlonly</tr>@endhtmlonly@latexonly\\\hline \endfirsthead@endlatexonly\n" \
+                        "thmultcol{2}=@htmlonly<th colspan=\"\1\">@endhtmlonly@latexonly\multicolumn{\1}{\2}{\small\sf\textbf{@endlatexonly" \
+                        "thmultcolend=@htmlonly</th>@endhtmlonly@latexonly }} & @endlatexonly" \
+                        "thmultcollast{2}=@htmlonly<th colspan=\"\1\">@endhtmlonly@latexonly\multicolumn{\1}{\2}{\small\sf\textbf{@endlatexonly" \
+                        "thmultcollastend=@htmlonly</th>@endhtmlonly@latexonly}}@endlatexonly"
+#                       Table heading row for continued tables in pdf:
+ALIASES +=              "trhdg=@latexonly \hline @endlatexonly" \
+                        "trhdgend=@latexonly \\\hline \endhead @endlatexonly\n" \
+                        "thdg{3}=@latexonly\multicolumn{\1}{\2}{\small\sf\textbf{\3 }} & @endlatexonly" \
+                        "thdglast{3}=@latexonly\multicolumn{\1}{\2}{\small\sf\textbf{\3}}@endlatexonly"
+#                       Table row and cell:
+ALIASES +=              "tr=@htmlonly<tr>@endhtmlonly" \
+                        "trend=@htmlonly</tr>@endhtmlonly@latexonly\tn\hline@endlatexonly\n" \
+                        "td=@htmlonly<td>@endhtmlonly" \
+                        "tdend=@htmlonly</td>@endhtmlonly@latexonly & @endlatexonly" \
+                        "tdlast=@htmlonly<td>@endhtmlonly" \
+                        "tdlastend=@htmlonly</td>@endhtmlonly"
+#                       Table row for spanning columns:
+ALIASES +=              "tdmultcol{2}=@htmlonly<tr><td colspan=\"\1\">@endhtmlonly@latexonly\multicolumn{\1}{\2}{\sf\small\textbf{@endlatexonly" \
+                        "tdmultcolend=@htmlonly</tr></td>@endhtmlonly@latexonly } & @endlatexonly" \
+                        "tdmultcollast{2}=@htmlonly<td colspan=\"\1\">@endhtmlonly@latexonly\multicolumn{\1}{\2}{\sf\small\textbf{@endlatexonly" \
+                        "tdmultcollastend=@htmlonly</td>@endhtmlonly@latexonly }} \hline @endlatexonly"
+@INCLUDE=$(ALIAS_INCLUDE_FILE)
+OPTIMIZE_OUTPUT_FOR_C  = YES
+OPTIMIZE_OUTPUT_JAVA   = NO
+OPTIMIZE_FOR_FORTRAN   = NO
+OPTIMIZE_OUTPUT_VHDL   = NO
+EXTENSION_MAPPING      =
+MARKDOWN_SUPPORT       = YES
+BUILTIN_STL_SUPPORT    = NO
+CPP_CLI_SUPPORT        = NO
+SIP_SUPPORT            = NO
+IDL_PROPERTY_SUPPORT   = NO
+DISTRIBUTE_GROUP_DOC   = NO
+SUBGROUPING            = YES
+INLINE_GROUPED_CLASSES = YES
+INLINE_SIMPLE_STRUCTS  = YES
+TYPEDEF_HIDES_STRUCT   = NO
+LOOKUP_CACHE_SIZE      = 0
+#---------------------------------------------------------------------------
+# Build related configuration options
+#---------------------------------------------------------------------------
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_PACKAGE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+EXTRACT_LOCAL_METHODS  = YES
+EXTRACT_ANON_NSPACES   = YES
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+HIDE_FRIEND_COMPOUNDS  = NO
+HIDE_IN_BODY_DOCS      = NO
+INTERNAL_DOCS          = NO
+CASE_SENSE_NAMES       = YES
+HIDE_SCOPE_NAMES       = NO
+SHOW_INCLUDE_FILES     = NO
+FORCE_LOCAL_INCLUDES   = YES
+INLINE_INFO            = NO
+SORT_MEMBER_DOCS       = NO
+SORT_BRIEF_DOCS        = NO
+SORT_MEMBERS_CTORS_1ST = NO
+SORT_GROUP_NAMES       = NO
+SORT_BY_SCOPE_NAME     = NO
+STRICT_PROTO_MATCHING  = NO
+GENERATE_TODOLIST      = NO
+GENERATE_TESTLIST      = NO
+GENERATE_BUGLIST       = NO
+GENERATE_DEPRECATEDLIST= YES
+#      Uncomment one of the following ENABLED_SECTION lines
+ENABLED_SECTIONS       =
+MAX_INITIALIZER_LINES  = 30
+SHOW_USED_FILES        = NO
+SHOW_FILES             = NO
+SHOW_NAMESPACES        = YES
+FILE_VERSION_FILTER    =
+#LAYOUT_FILE OPTIONS:
+LAYOUT_FILE            = $(ENV_LAYOUT_FILE)
+#---------------------------------------------------------------------------
+# configuration options related to warning and progress messages
+#---------------------------------------------------------------------------
+QUIET                  = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_FORMAT            = "$file:$line: $text"
+WARN_LOGFILE           = $(ENV_WARN_LOG)
+#---------------------------------------------------------------------------
+# configuration options related to the input files
+#---------------------------------------------------------------------------
+INPUT                  = ../src \
+                         title_page.dox \
+                         revision_history.dox \
+                         mainpage.dox \
+                         introduction/overview.dox \
+                         introduction/architecture.dox \
+                         introduction/features.dox \
+                         ug.dox \
+                         messages \
+                         appxa_references.dox
+INPUT_ENCODING         = UTF-8
+# FILE_PATTERNS tag to specify one or more wildcard patterns (like *.cpp and
+# *.h) to filter out the source-files in the directories. If left blank the
+# following patterns are tested:*.c, *.cc, *.cxx, *.cpp, *.c++, *.java, *.ii,
+# *.ixx, *.ipp, *.i++, *.inl, *.idl, *.ddl, *.odl, *.h, *.hh, *.hxx, *.hpp,
+# *.h++, *.cs, *.d, *.php, *.php4, *.php5, *.phtml, *.inc, *.m, *.markdown,
+# *.md, *.mm, *.dox, *.py, *.f90, *.f, *.for, *.tcl, *.vhd, *.vhdl, *.ucf,
+# *.qsf, *.as and *.js.
+FILE_PATTERNS          = *.h \
+                         *.dox \
+                         *.cpp \
+                         *.c \
+                         *.md
+RECURSIVE              = YES
+EXCLUDE                =
+EXCLUDE_SYMLINKS       = NO
+EXCLUDE_PATTERNS       =
+EXCLUDE_SYMBOLS        = YES
+EXAMPLE_PATH           =
+EXAMPLE_PATTERNS       = *
+EXAMPLE_RECURSIVE      = NO
+IMAGE_PATH             = images
+INPUT_FILTER           =
+FILTER_PATTERNS        =
+FILTER_SOURCE_FILES    = NO
+FILTER_SOURCE_PATTERNS =
+#---------------------------------------------------------------------------
+# configuration options related to source browsing
+#---------------------------------------------------------------------------
+SOURCE_BROWSER         = NO
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = YES
+REFERENCED_BY_RELATION = NO
+REFERENCES_RELATION    = NO
+REFERENCES_LINK_SOURCE = YES
+USE_HTAGS              = NO
+VERBATIM_HEADERS       = YES
+#---------------------------------------------------------------------------
+# configuration options related to the alphabetical class index
+#---------------------------------------------------------------------------
+ALPHABETICAL_INDEX     = YES
+COLS_IN_ALPHA_INDEX    = 5
+IGNORE_PREFIX          =
+#---------------------------------------------------------------------------
+# configuration options related to the HTML output
+#---------------------------------------------------------------------------
+GENERATE_HTML          = $(ENV_GEN_HTML)
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = .html
+HTML_HEADER            = template/header.html
+HTML_FOOTER            = template/footer.html
+HTML_STYLESHEET        = template/sdk.css
+HTML_EXTRA_STYLESHEET  = template/custom.css
+HTML_EXTRA_FILES       = template/tabs.css
+HTML_COLORSTYLE_HUE    = 0
+HTML_COLORSTYLE_SAT    = 0
+HTML_COLORSTYLE_GAMMA  = 110
+HTML_TIMESTAMP         = YES
+HTML_DYNAMIC_SECTIONS  = NO
+HTML_INDEX_NUM_ENTRIES = 100
+GENERATE_DOCSET        = NO
+DOCSET_FEEDNAME        = "Doxygen generated docs"
+DOCSET_BUNDLE_ID       = org.doxygen.Project
+DOCSET_PUBLISHER_ID    = org.doxygen.Publisher
+DOCSET_PUBLISHER_NAME  = Publisher
+GENERATE_HTMLHELP      = NO
+CHM_FILE               =
+# For Windows XP:
+# HHC_LOCATION         = "C:/Program Files/HTML Help Workshop/hhc.exe"
+# For Windows 7:
+HHC_LOCATION           = "C:/Program Files (x86)/HTML Help Workshop/hhc.exe"
+GENERATE_CHI           = NO
+CHM_INDEX_ENCODING     =
+BINARY_TOC             = NO
+TOC_EXPAND             = NO
+GENERATE_QHP           = NO
+QCH_FILE               =
+QHP_NAMESPACE          = org.doxygen.Project
+QHP_VIRTUAL_FOLDER     = doc
+QHP_CUST_FILTER_NAME   =
+QHP_CUST_FILTER_ATTRS  =
+QHP_SECT_FILTER_ATTRS  =
+QHG_LOCATION           =
+GENERATE_ECLIPSEHELP   = NO
+ECLIPSE_DOC_ID         = org.doxygen.Project
+DISABLE_INDEX          = YES
+GENERATE_TREEVIEW      = YES
+ENUM_VALUES_PER_LINE   = 4
+TREEVIEW_WIDTH         = 100
+EXT_LINKS_IN_WINDOW    = NO
+FORMULA_FONTSIZE       = 10
+FORMULA_TRANSPARENT    = YES
+USE_MATHJAX            = YES
+MATHJAX_RELPATH        = http://cdn.mathjax.org/mathjax/latest
+MATHJAX_EXTENSIONS     =
+SEARCHENGINE           = NO
+SERVER_BASED_SEARCH    = NO
+#---------------------------------------------------------------------------
+# configuration options related to the LaTeX output
+#---------------------------------------------------------------------------
+GENERATE_LATEX         = NO
+LATEX_OUTPUT           = latex
+LATEX_CMD_NAME         = latex
+MAKEINDEX_CMD_NAME     = makeindex
+COMPACT_LATEX          = NO
+PAPER_TYPE             = letter
+EXTRA_PACKAGES         =
+LATEX_HEADER           =
+LATEX_FOOTER           =
+PDF_HYPERLINKS         = YES
+USE_PDFLATEX           = YES
+LATEX_BATCHMODE        = NO
+LATEX_HIDE_INDICES     = NO
+LATEX_SOURCE_CODE      = NO
+LATEX_BIB_STYLE        =
+CITE_BIB_FILES         =
+#---------------------------------------------------------------------------
+# configuration options related to the RTF output
+#---------------------------------------------------------------------------
+GENERATE_RTF           = NO
+RTF_OUTPUT             = rtf
+COMPACT_RTF            = NO
+RTF_HYPERLINKS         = NO
+RTF_STYLESHEET_FILE    =
+RTF_EXTENSIONS_FILE    =
+#---------------------------------------------------------------------------
+# configuration options related to the man page output
+#---------------------------------------------------------------------------
+GENERATE_MAN           = NO
+MAN_OUTPUT             = man
+MAN_EXTENSION          = .3
+MAN_LINKS              = NO
+#---------------------------------------------------------------------------
+# configuration options related to the XML output
+#---------------------------------------------------------------------------
+GENERATE_XML           = NO
+XML_OUTPUT             = xml
+XML_PROGRAMLISTING     = NO
+#---------------------------------------------------------------------------
+# configuration options for the AutoGen Definitions output
+#---------------------------------------------------------------------------
+GENERATE_AUTOGEN_DEF   = NO
+#---------------------------------------------------------------------------
+# configuration options related to the Perl module output
+#---------------------------------------------------------------------------
+GENERATE_PERLMOD       = NO
+PERLMOD_LATEX          = NO
+PERLMOD_PRETTY         = NO
+PERLMOD_MAKEVAR_PREFIX =
+#---------------------------------------------------------------------------
+# Configuration options related to the preprocessor
+#---------------------------------------------------------------------------
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+SEARCH_INCLUDES        = YES
+INCLUDE_PATH           =
+INCLUDE_FILE_PATTERNS  =
+PREDEFINED             = DOXYGEN_SHOULD_SKIP_THIS
+EXPAND_AS_DEFINED      =
+SKIP_FUNCTION_MACROS   = NO
+#---------------------------------------------------------------------------
+# Configuration additions related to external references
+#---------------------------------------------------------------------------
+TAGFILES               =
+GENERATE_TAGFILE       =
+ALLEXTERNALS           = NO
+EXTERNAL_GROUPS        = NO
+PERL_PATH              = /usr/bin/perl
+#---------------------------------------------------------------------------
+# Configuration options related to the dot tool
+#---------------------------------------------------------------------------
+CLASS_DIAGRAMS         = YES
+MSCGEN_PATH            =
+MSCFILE_DIRS           =
+HIDE_UNDOC_RELATIONS   = NO
+HAVE_DOT               = NO
+DOT_NUM_THREADS        = 0
+DOT_FONTNAME           = ARIAL.TTF
+DOT_FONTSIZE           = 9
+DOT_FONTPATH           = "C:/WINDOWS/Fonts"
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = YES
+GROUP_GRAPHS           = YES
+UML_LOOK               = NO
+UML_LIMIT_NUM_FIELDS   = 10
+TEMPLATE_RELATIONS     = NO
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+GRAPHICAL_HIERARCHY    = YES
+DIRECTORY_GRAPH        = YES
+DOT_IMAGE_FORMAT       = png
+INTERACTIVE_SVG        = NO
+DOT_PATH               =
+DOTFILE_DIRS           =
+
+DOT_GRAPH_MAX_NODES    = 50
+MAX_DOT_GRAPH_DEPTH    = 1000
+DOT_TRANSPARENT        = NO
+DOT_MULTI_TARGETS      = NO
+GENERATE_LEGEND        = YES
+DOT_CLEANUP            = YES

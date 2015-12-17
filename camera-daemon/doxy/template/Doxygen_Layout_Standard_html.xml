@@ -1,0 +1,238 @@
+<!--
+/* Copyright (c) 2015-16, The Linux Foundataion. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+-->
+<doxygenlayout version="1.0">
+    <!-- Navigation index tabs for HTML output -->
+    <navindex>
+      <tab type="mainpage" visible="yes" title="Home"/>
+      <tab type="user" url="@ref revision_history" title="Revision History"/>
+
+      <tab type="user" url="@ref user_guide" title="User Guide"/>
+
+      <tab type="usergroup" visible="yes" title="Introduction">
+        <tab type="user" url="@ref intro_overview" title="Overview"/>
+        <tab type="user" url="@ref intro_architecture_overview" title="Architecture"/>
+        <tab type="user" url="@ref intro_features" title="Features"/>
+      </tab>
+
+      <tab type="usergroup" visible="yes" title="RPC Messages" intro="Remote procedure calls interfacing with the Camera daemon are provided below:">
+        <tab type="user" url="@ref messages_architecture" title="Messaging Architecture"/>
+        <tab type="user" url="@ref messages_daemon" title="Daemon Operations"/>
+        <tab type="user" url="@ref messages_camera" title="Camera Operations"/>
+      </tab>
+
+      <tab type="namespaces" visible="yes" title="">
+        <tab type="namespacelist" visible="yes" title="" intro=""/>
+        <tab type="namespacemembers" visible="yes" title="" intro=""/>
+      </tab>
+
+      <tab type="classes" visible="yes" title="Classes">
+        <tab type="classlist" visible="yes" title="" intro=""/>
+        <tab type="classindex" visible="$ALPHABETICAL_INDEX" title=""/>
+        <tab type="hierarchy" visible="yes" title="" intro=""/>
+        <tab type="classmembers" visible="yes" title="" intro=""/>
+      </tab>
+
+      <tab type="files" visible="yes"/>
+
+      <tab type="modules" visible="yes"/>
+
+      <tab type="user" url="@ref appxa_references" title="Appendix A - References"/>
+    </navindex>
+    <!-- Layout definition for a class (structs, classes, unions)page -->
+	<class>
+		<briefdescription visible="yes"/>
+		<!-- Brief description for structs, classes, and unions -->
+		<includes visible="$SHOW_INCLUDE_FILES"/>
+		<inheritancegraph visible="$CLASS_GRAPH"/>
+		<collaborationgraph visible="$COLLABORATION_GRAPH"/>
+		<allmemberslink visible="yes"/>
+		<memberdecl>
+			<!-- These elements relate to C++ only. -->
+			<nestedclasses visible="yes" title="Data Structure Index"/>
+			<publictypes title=""/>
+			<publicslots title=""/>
+			<signals title=""/>
+			<publicmethods title="Public member functions"/>
+			<publicstaticmethods title=""/>
+			<publicattributes title=""/>
+			<publicstaticattributes title=""/>
+			<protectedtypes title=""/>
+			<protectedslots title=""/>
+			<protectedmethods title=""/>
+			<protectedstaticmethods title=""/>
+			<protectedattributes title=""/>
+			<protectedstaticattributes title=""/>
+			<packagetypes title=""/>
+			<packagemethods title=""/>
+			<packagestaticmethods title=""/>
+			<packageattributes title=""/>
+			<packagestaticattributes title=""/>
+			<properties title=""/>
+			<events title=""/>
+			<privatetypes title=""/>
+			<privateslots title=""/>
+			<privatemethods title="Private member functions"/>
+			<privatestaticmethods title=""/>
+			<privateattributes title=""/>
+			<privatestaticattributes title=""/>
+			<friends title=""/>
+			<related title="" subtitle=""/>
+			<membergroups visible="yes"/>
+		</memberdecl>
+		<detaileddescription title=""/>
+		<memberdef>
+			<inlineclasses title=""/>
+			<typedefs title=""/>
+			<enums title=""/>
+			<constructors title="Constructors and Destructors"/>
+			<functions title=""/>
+			<related title="Related Function Documentation"/>
+			<variables title=""/>
+			<properties title=""/>
+			<events title=""/>
+		</memberdef>
+		<usedfiles visible="$SHOW_USED_FILES"/>
+		<authorsection visible="yes"/>
+	</class>
+	<!-- Layout definition for a namespace page -->
+	<namespace>
+		<briefdescription visible="yes"/>
+		<memberdecl>
+			<nestednamespaces visible="yes" title=""/>
+			<classes visible="yes" title=""/>
+			<!-- <typedefs title=""/> -->
+			<!-- <enums title=""/> -->
+			<!-- <functions title=""/> -->
+			<!-- <variables title=""/> -->
+			<membergroups visible="yes"/>
+		</memberdecl>
+		<detaileddescription title=""/>
+		<memberdef>
+			<inlineclasses title=""/>
+			<typedefs title=""/>
+			<enums title=""/>
+			<functions title=""/>
+			<variables title=""/>
+		</memberdef>
+		<authorsection visible="yes"/>
+	</namespace>
+	<!-- Layout definition for a file page. -->
+	<file>
+		<briefdescription visible="yes"/>
+		<includes visible="$SHOW_INCLUDE_FILES"/>
+		<includegraph visible="$INCLUDE_GRAPH"/>
+		<includedbygraph visible="$INCLUDED_BY_GRAPH"/>
+		<sourcelink visible="yes"/>
+		<memberdecl>
+			<classes visible="yes" title=""/>
+			<namespaces visible="yes" title=""/>
+			<defines title=""/>
+			<typedefs title=""/>
+			<enums title=""/>
+			<functions title=""/>
+			<variables title=""/>
+			<membergroups visible="yes"/>
+		</memberdecl>
+		<detaileddescription title=""/>
+		<memberdef>
+			<inlineclasses title=""/>
+			<defines title=""/>
+			<typedefs title=""/>
+			<enums title=""/>
+			<functions title=""/>
+			<variables title=""/>
+		</memberdef>
+		<authorsection/>
+	</file>
+	<!-- Layout definition for a group page -->
+	<group>
+		<briefdescription visible="yes"/>
+		<detaileddescription visible="no" title=""/>
+		<groupgraph visible="$GROUP_GRAPHS"/>
+		<!-- Bulleted lists of members, such as defines, typedefs, typedef structs, enums,
+         structs, unions, classes, etc. Does not turn off name group bulleted
+         lists (membergroups). -->
+		<memberdecl>
+			<nestedgroups visible="yes" title=""/>
+			<dirs visible="yes" title=""/>
+			<files visible="yes" title=""/>
+			<namespaces visible="yes" title=""/>
+			<!-- <classes visible="yes" title=""/> -->
+			<!-- <namespaces visible="yes" title=""/> -->
+			<!-- <dirs visible="no" title=""/> -->
+			<!-- <files visible="no" title=""/> -->
+			<!-- <defines title=""/> Removes the bulleted list of defines. -->
+			<!-- <typedefs title=""/> Removes the bulleted list of typedefs. -->
+			<!-- <enums title=""/> Removes the bulleted list of enums. -->
+			<!-- <enumvalues title=""/> -->
+			<!-- <functions title=""/> Removes the bulleted list of functions. -->
+			<!-- <variables title=""/> Removes the bulleted list of variables. -->
+			<!-- <signals title=""/> -->
+			<!-- <publicslots title=""/> -->
+			<!-- <protectedslots title=""/> -->
+			<!-- <privateslots title=""/> -->
+			<!-- <events title=""/> -->
+			<!-- <properties title=""/> -->
+			<!-- <friends title=""/> -->
+			<membergroups visible="yes"/>
+		</memberdecl>
+		<detaileddescription title=""/>
+		<!-- Detailed sections (Defines Documentation, Data Structure Documentation, etc. -->
+		<memberdef>
+			<pagedocs/>
+			<inlineclasses title=""/>
+			<defines title="Define Documentation"/>
+			<typedefs title=""/>
+			<enums title=""/>
+			<enumvalues title=""/>
+			<functions title=""/>
+			<variables title=""/>
+			<signals title=""/>
+			<publicslots title=""/>
+			<protectedslots title=""/>
+			<privateslots title=""/>
+			<events title=""/>
+			<properties title=""/>
+			<friends title=""/>
+		</memberdef>
+		<authorsection visible="yes"/>
+	</group>
+	<!-- Layout definition for a directory page -->
+	<directory>
+		<briefdescription visible="yes"/>
+		<directorygraph visible="yes"/>
+		<memberdecl>
+			<dirs visible="yes"/>
+			<files visible="yes"/>
+		</memberdecl>
+		<detaileddescription title=""/>
+	</directory>
+</doxygenlayout>

@@ -28,10 +28,10 @@
  */
 #include "fpv_h264.h"
 
-/** Manage an H264 RTP streaming subsession. */
+/** Manage a H264 RTP streaming subsession. */
 namespace camerad
 {
-fpvH264OnDemandMediaSubsession::fpvH264OnDemandMediaSubsession(
+fpvH264::fpvH264(
     UsageEnvironment& env, const char* params, int param_siz)
 : OnDemandServerMediaSubsession(env, True)
 {
@@ -39,33 +39,46 @@ fpvH264OnDemandMediaSubsession::fpvH264OnDemandMediaSubsession(
     m_pDummyRTPSink = NULL;
     m_done = 0;
 
-    /*TODO: retain the params for later creation of the source */
+    /* retain the params for later creation of the source */
+    params_ = std::string(params, param_siz);
 }
 
-fpvH264OnDemandMediaSubsession::~fpvH264OnDemandMediaSubsession(void)
+fpvH264::~fpvH264(void)
 {
-    if (m_pSDPLine)
+    if (m_pSDPLine) {
         free(m_pSDPLine);
+    }
 }
 
-fpvH264OnDemandMediaSubsession* fpvH264OnDemandMediaSubsession::createNew(
-    UsageEnvironment& env, const char* params, int param_siz)
+fpvH264* fpvH264::createNew(UsageEnvironment& env, const char* params,
+                            int param_siz)
 {
-    return new fpvH264OnDemandMediaSubsession(env, params, param_siz);
+    return new fpvH264(env, params, param_siz);
 }
 
 /** Create the H264 video stream source and start the RTP session. */
-FramedSource* fpvH264OnDemandMediaSubsession::createNewStreamSource(
+FramedSource* fpvH264::createNewStreamSource(
     unsigned clientSessionId, unsigned& estBitrate)
 {
-    rtpSession_ = createSession(QCAM_SESSION_RTP);
+    rtpSession_ = SessionMgr::get(QCAM_SESSION_RTP);
+
+    if (params_.length()) {
+        JSONParser js;
+        JSONType jt;
+
+        JSONParser_Ctor(&js, params_.c_str(), params_.length());
+        if (JSONPARSER_SUCCESS == JSONParser_GetType(&js, 0, &jt)
+            && JSONObject == jt) {
+            (void)rtpSession_->setConfig(js);
+        }
+    }
 
     rtpSession_->start();
 
     estBitrate = 90000;
 
     /* todo: revisit for a better architecture */
-    omxa::IPreviewComp* comp = dynamic_cast<omxa::IPreviewComp*>(rtpSession_);
+    omxa::IPreviewComp* comp = dynamic_cast<omxa::IPreviewComp*>(rtpSession_.get());
     if (NULL == comp) {
         return NULL;
     }
@@ -73,14 +86,14 @@ FramedSource* fpvH264OnDemandMediaSubsession::createNewStreamSource(
     return H264VideoStreamDiscreteFramer::createNew(envir(), src_.get());
 }
 
-void fpvH264OnDemandMediaSubsession::closeStreamSource(FramedSource* inputSource)
+void fpvH264::closeStreamSource(FramedSource* inputSource)
 {
     rtpSession_->stop();
 }
 
 /** Create a new RTP sink that is used by the encoder to provide
  *  frames for streaming. */
-RTPSink * fpvH264OnDemandMediaSubsession::createNewRTPSink(Groupsock * rtpGroupsock, unsigned char rtpPayloadTypeIfDynamic, FramedSource * inputSource)
+RTPSink * fpvH264::createNewRTPSink(Groupsock * rtpGroupsock, unsigned char rtpPayloadTypeIfDynamic, FramedSource * inputSource)
 {
     H264VideoRTPSink *RTPSink = H264VideoRTPSink::createNew(envir(), rtpGroupsock, rtpPayloadTypeIfDynamic);
     OutPacketBuffer::increaseMaxSizeTo(500000); // allow for some possibly large H.264 frames
@@ -88,7 +101,7 @@ RTPSink * fpvH264OnDemandMediaSubsession::createNewRTPSink(Groupsock * rtpGroups
     return RTPSink;
 }
 
-char const * fpvH264OnDemandMediaSubsession::getAuxSDPLine(RTPSink * rtpSink, FramedSource * inputSource)
+char const * fpvH264::getAuxSDPLine(RTPSink * rtpSink, FramedSource * inputSource)
 {
     if (m_pSDPLine != NULL)  {
         return m_pSDPLine;
@@ -105,25 +118,25 @@ char const * fpvH264OnDemandMediaSubsession::getAuxSDPLine(RTPSink * rtpSink, Fr
     return m_pSDPLine;
 }
 
-void fpvH264OnDemandMediaSubsession::afterPlayingDummy(void * ptr)
+void fpvH264::afterPlayingDummy(void * ptr)
 {
-    fpvH264OnDemandMediaSubsession * mysess = (fpvH264OnDemandMediaSubsession *) ptr;
+    fpvH264 * mysess = (fpvH264 *) ptr;
     mysess->afterPlayingDummy1();
 }
 
-void fpvH264OnDemandMediaSubsession::afterPlayingDummy1()
+void fpvH264::afterPlayingDummy1()
 {
     envir().taskScheduler().unscheduleDelayedTask(nextTask());
     m_done = 0xff;
 }
 
-void fpvH264OnDemandMediaSubsession::chkForAuxSDPLine(void * ptr)
+void fpvH264::chkForAuxSDPLine(void * ptr)
 {
-    fpvH264OnDemandMediaSubsession * mysess = (fpvH264OnDemandMediaSubsession *)ptr;
+    fpvH264 * mysess = (fpvH264 *)ptr;
     mysess->chkForAuxSDPLine1();
 }
 
-void fpvH264OnDemandMediaSubsession::chkForAuxSDPLine1()
+void fpvH264::chkForAuxSDPLine1()
 {
     char const* sdp;
 

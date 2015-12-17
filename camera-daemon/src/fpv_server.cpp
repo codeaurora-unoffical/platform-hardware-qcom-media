@@ -121,13 +121,15 @@ int FpvServer::stop()
     return 0;
 }
 
-int FpvServer::addSession(unsigned int uid, const char* params, int param_siz)
+int FpvServer::addSession(unsigned int uid, const char* param, int param_siz)
 {
-    if (0 == rtsp_) {   /* todo: lock */
+    std::unique_lock<std::mutex> lk(lock_);
+    if (0 == rtsp_) {
         return ENOSR;
     }
 
-    /* TODO: push the params in to a queue */
+    /** push the params in to a queue */
+    requests_.push(Request(uid, param, param_siz));
 
     if (NULL != scheduler_) {
         scheduler_->triggerEvent(signal_, this);
@@ -138,20 +140,27 @@ int FpvServer::addSession(unsigned int uid, const char* params, int param_siz)
 
 void FpvServer::doSession()
 {
-    /* TODO: pop the params from a queue */
-    /* make a media session. TODO: process the params */
-    ServerMediaSession* sms = ServerMediaSession::createNew(
-        *env_, "fpvview", 0, "session stream for fpv", true);
+    std::unique_lock<std::mutex> lk(lock_);
+    Request req;
 
-    QCAM_INFO("Add session : fpvview");
+    while (!requests_.empty()) {
 
-    /* TODO: forward params to subsession */
-    fpvH264OnDemandMediaSubsession* h264subsession
-        = fpvH264OnDemandMediaSubsession::createNew(*env_, NULL, 0);
+        req = requests_.front();
+        requests_.pop();
 
-    sms->addSubsession(h264subsession);
+        /* make a media session.
+           TODO: process the params for the session name. */
+        ServerMediaSession* sms = ServerMediaSession::createNew(
+            *env_, "fpvview", 0, "session stream for fpv", true);
 
-    rtsp_->addServerMediaSession(sms);
+        /* forward params to video subsession */
+        fpvH264* h264subsession = fpvH264::createNew(
+                *env_, req.param_.c_str(), req.param_.length());
+
+        sms->addSubsession(h264subsession);
+
+        rtsp_->addServerMediaSession(sms);
+    }
 
     return;
 }

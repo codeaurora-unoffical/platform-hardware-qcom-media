@@ -108,7 +108,7 @@ class FrameStats {
 
 public:
     void onNewFrame(camera::ICameraFrame* frame,
-                    const std::chrono::microseconds& ts);
+                    const std::chrono::microseconds& ts, uint32_t stream_id);
     void onOverrun() {
         overrunCount_++;
     }

@@ -1,0 +1,81 @@
+###########################################################################################
+# Copyright (c) 2015, The Linux Foundataion. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#     * Neither the name of The Linux Foundation nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+# BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+# BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+# OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+# IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+###########################################################################################
+
+# Doxyfile 1.8.3.1
+
+# Updated:  03/08/13 Rev E Alpha Version 2. Updated to support Doxy 1.8.3.1-p1
+# New File: 01/28/13 Rev E Alpha Version 1.
+
+#---------------------------------------------------------------------------
+# HTML-only custom aliases that must be run in the html doc build only
+#---------------------------------------------------------------------------
+
+ALIASES += "reg=<sup>&reg;</sup>" \
+           "ast=<sup>*</sup>" \
+           "tm=&tm;" \
+           "tmns=&tm;" \
+           "sup{1}=<sup>\1</sup>" \
+           "sub{1}=<sub>\1</sub>" \
+           "fn{1}=@htmlonly<sup><a href=\"#fn\1\" id=\"ref\1\"><font color=\"blue\">\1</font></a></sup>@endhtmlonly" \
+           "fntext{2}=@htmlonly<hr></hr><sup id=\"fn\1\"><a href=\"#ref\1\" title=\"Go to text.\"><font color=\"blue\">\1</font></a></sup>\2<br />@endhtmlonly" \
+           "np=@htmlonly <br />@endhtmlonly"
+#       CROSS-REFERENCES FOR HTML:
+ALIASES += "xreflabel{1}=@anchor \1 \n" \
+           "xref{1}=@ref \1" \
+           "xref{2}=@ref \1 \2" \
+           "xref{3}=@ref \1 \"\3\"" \
+           "xhyperref{2}=@ref \1 \"\2\"" \
+           "xnameref{1}=@ref \1" \
+		   "appendixpage{2}=@page \1 \2" \
+           "section{2}=@section \1 \2" \
+           "subsection{2}=@subsection \1 \2" \
+           "subsubsection{2}=@subsubsection \1 \2" \
+           "paragraph{2}=@paragraph \1 \2" \
+           "paragraphast{2}=@paragraph{\1,\2}" \
+           "subparagraph{2}=@anchor \1 <h5>\2</h5>" \
+           "subparagraphast{2}=@subparagraph{\1,\2}" \
+           "head5{1}=@htmlonly[block] <b>\1</b><br />@endhtmlonly"
+ALIASES += "weakgroup{1}=@addtogroup msgpld Message Payloads \n\
+           Detailed Description for Message Payload group." \
+           "msg_payload{1}=@par APR message payload \n \1 \
+           @par  \
+             " \
+           "ack_payload{1}=@par Acknowledgment parameter payload \n \1 \
+           @par  \
+             " \
+           "mappayload{1}=@par Map payload \n \1 \
+           @par  \
+            " \
+           "unmappayload{1}=@par Unmap payload \n \1 \
+           @par  \
+            " \
+           "table{1}=@par \
+           \n" \
+           "tablens{1}=@par \
+           \n"

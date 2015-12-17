@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-16, The Linux Foundataion. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,50 +27,12 @@
  *
  */
 
-/** JSON string for the default configuration. Can be updated
- *  during runtime. */
-const char* default_config = R"****(
-{
-"cameras" : [
-  {
-    "id" : 0,
-    "name" : "imx214",
-    "settings" :
-    {
-      "fps" : 24,
-      "hfr" : 0,
-    },
-    "sessions" :
-    [
-      {
-        "name" : "720p_fpv",
-        "type" : "preview",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 1000000,
-          "width" : 1280,
-          "height" : 720,
-          "profile" : "baseline",
-          "level" : 1,
-        },
-      },
-      {
-        "name" : "4kuhd",
-        "type" : "recording",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 5000000,
-          "width" : 3840,
-          "height" : 2160,
-          "profile" : "high",
-          "level" : 1,
-        },
-        "file_format" : "h264"
-      },
-    ],
-  },
-],
-}
-)****";
+/**
+@page revision_history Revision History
+
+|Revision |  Date   | Description                                               |
+|:-------:|:-------:|:----------------------------------------------------------|
+|    A    |Dec 2015 | Initial release                                           |
+
+*/
+

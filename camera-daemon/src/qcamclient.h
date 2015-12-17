@@ -44,6 +44,7 @@ typedef std::shared_ptr<Client> ClientPtr;
 struct CmdConfig
 {
     bool interactive = false;
+    const char* input_file;
 };
 
 class Client {

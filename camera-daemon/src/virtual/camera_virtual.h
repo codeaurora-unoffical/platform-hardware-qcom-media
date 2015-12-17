@@ -27,50 +27,22 @@
  *
  */
 
-/** JSON string for the default configuration. Can be updated
- *  during runtime. */
-const char* default_config = R"****(
-{
-"cameras" : [
-  {
-    "id" : 0,
-    "name" : "imx214",
-    "settings" :
-    {
-      "fps" : 24,
-      "hfr" : 0,
-    },
-    "sessions" :
-    [
-      {
-        "name" : "720p_fpv",
-        "type" : "preview",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 1000000,
-          "width" : 1280,
-          "height" : 720,
-          "profile" : "baseline",
-          "level" : 1,
-        },
-      },
-      {
-        "name" : "4kuhd",
-        "type" : "recording",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 5000000,
-          "width" : 3840,
-          "height" : 2160,
-          "profile" : "high",
-          "level" : 1,
-        },
-        "file_format" : "h264"
-      },
-    ],
-  },
-],
-}
-)****";
+#ifndef __CAMERA_VIRTUAL_H__
+#define __CAMERA_VIRTUAL_H__
+#include <camera.h>
+
+/**
+ implements a virtual camera device over a physical device. In this the virtual
+ camera offers a limited use case to achieve 30fps concurrent video recording
+ and previewing streams. As the physical device isn't able to meet the processing
+ demand, this object manages the downscaling on the GPU. C2D is a linux library
+ wrapper over the firm that runs on the GPU.
+
+ @param [in] idx : index of the camera
+ @param [out] po : instance to the ICameraDevice
+
+ @return int : 0 on success
+ **/
+extern "C" int CameraVirtual_CreateInstance(int idx, camera::ICameraDevice** po);
+
+#endif /* __CAMERA_VIRTUAL_H__ */

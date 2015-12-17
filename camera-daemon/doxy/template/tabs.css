@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-16, The Linux Foundataion. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -27,50 +27,65 @@
  *
  */
 
-/** JSON string for the default configuration. Can be updated
- *  during runtime. */
-const char* default_config = R"****(
-{
-"cameras" : [
-  {
-    "id" : 0,
-    "name" : "imx214",
-    "settings" :
-    {
-      "fps" : 24,
-      "hfr" : 0,
-    },
-    "sessions" :
-    [
-      {
-        "name" : "720p_fpv",
-        "type" : "preview",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 1000000,
-          "width" : 1280,
-          "height" : 720,
-          "profile" : "baseline",
-          "level" : 1,
-        },
-      },
-      {
-        "name" : "4kuhd",
-        "type" : "recording",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 5000000,
-          "width" : 3840,
-          "height" : 2160,
-          "profile" : "high",
-          "level" : 1,
-        },
-        "file_format" : "h264"
-      },
-    ],
-  },
-],
+/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ tabs.css - Sytlesheet file used with Doxyfile 1.8.3.1 to format HTML output */
+
+.tabs, .tabs2, .tabs3 {
+    background-image: url('tab_b.png');
+    width: 100%;
+    z-index: 101;
+    font-size: 13px;
 }
-)****";
+
+.tabs2 {
+    font-size: 10px;
+}
+.tabs3 {
+    font-size: 9px;
+}
+
+.tablist {
+    margin: 0;
+    padding: 0;
+    display: table;
+}
+
+.tablist li {
+    float: left;
+    display: table-cell;
+    background-image: url('tab_b.png');
+    line-height: 36px;
+    list-style: none;
+}
+
+.tablist a {
+    display: block;
+    padding: 0 20px;
+    font-weight: bold;
+    background-image:url('tab_s.png');
+    background-repeat:no-repeat;
+    background-position:right;
+    color: #283A5D;
+    text-shadow: 0px 1px 1px rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    outline: none;
+}
+
+.tabs3 .tablist a {
+    padding: 0 10px;
+}
+
+.tablist a:hover {
+    background-image: url('tab_h.png');
+    background-repeat:repeat-x;
+    color: #fff;
+    text-shadow: 0px 1px 1px rgba(0, 0, 0, 1.0);
+    text-decoration: none;
+}
+
+.tablist li.current a {
+    background-image: url('tab_a.png');
+    background-repeat:repeat-x;
+    color: #fff;
+    text-shadow: 0px 1px 1px rgba(0, 0, 0, 1.0);
+}

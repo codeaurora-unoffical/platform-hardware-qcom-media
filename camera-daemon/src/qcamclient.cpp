@@ -172,8 +172,10 @@ int Client::create(const CmdConfig& cfg, ClientPtr* pa)
 static const char usageStr[] =
     "front end app for camera daemon\n"
     "\n"
-    "usage: qcamclient [options]\n"
+    "usage: camclient [options]\n"
     "\n"
+    "  -i              interactive shell\n"
+    "  -b <file>       batch mode operation\n"
     "  -h              print this message\n"
 ;
 
@@ -190,34 +192,53 @@ static camvid::CmdConfig getConfig(int argc, char* argv[])
     camvid::CmdConfig cfg;
     int c;
 
-    while ((c = getopt(argc, argv, "hi")) != -1) {
+    if (argc < 2) {
+        printUsageExit();
+    }
+
+    while ((c = getopt(argc, argv, "hib:")) != -1) {
         switch (c) {
         case 'i':
             cfg.interactive = true;
             break;
+        case 'b':
+            cfg.input_file = optarg;
+            break;
         case 'h':
         case '?':
-            printUsageExit();
         default:
-            exit(0);
+            printUsageExit();
         }
     }
     return cfg;
 }
 
-static bool cmd_help(char* arg)
+static int cmd_sleep(camvid::ClientPtr& inst, char* arg)
 {
-    return true;
+    unsigned int sleep_secs = strtol(arg, NULL, 10);
+
+    if (sleep_secs) {
+        sleep(sleep_secs);
+    }
+
+    return 0;
 }
 
-static bool cmd_quit(char* arg)
+static int cmd_help(camvid::ClientPtr& inst, char* arg);
+
+static int cmd_quit(camvid::ClientPtr& inst, char* arg)
 {
-    return false;
+    return -1;
+}
+
+static int cmd_send(camvid::ClientPtr& inst, char* arg)
+{
+    return inst->send(arg, strlen(arg));
 }
 
 typedef struct {
     const char* cmd;
-    bool (*cmd_handler)(char*);
+    int (*cmd_handler)(camvid::ClientPtr&, char*);
     const char* help;
 } cmd_t;
 
@@ -228,7 +249,9 @@ typedef struct {
 // supported table
 static cmd_t cmds[] = {
     CMD(quit,"Exits the interpreter"),
-    CMD(help,"Display this help")
+    CMD(help,"Display this help"),
+    CMD(send,"Send a jsonrpc message"),
+    CMD(sleep,"pause the interpretor for number of seconds"),
 };
 
 inline bool isSpace(char c)         { return c == ' ' ||  c == '\t' || c == '\r' || c == '\n'; }
@@ -263,19 +286,30 @@ static char* cmd_split(char* s, char** tail)
     return head;
 }
 
-static bool cmd_dispatch(const char* cmd, char* arg)
+static int cmd_help(camvid::ClientPtr& inst, char* arg)
+{
+    for (int i = 0; i < ARRSIZ(cmds); i++) {
+        fputs(cmds[i].cmd, stdout);
+        fputs("\t", stdout);
+        puts(cmds[i].help);
+    }
+
+    return 0;
+}
+
+static int cmd_dispatch(camvid::ClientPtr& inst, const char* cmd, char* arg)
 {
     if (cmd) {
         for (int i = 0; i < ARRSIZ(cmds); i++) {
-            if (!strcmp(cmd, cmds[i].cmd)) {
-                return cmds[i].cmd_handler(arg);
+            if (0 == strcmp(cmd, cmds[i].cmd)) {
+                return cmds[i].cmd_handler(inst, arg);
             }
         }
     }
 
     puts("ERR: Command not found");
 
-    return true;
+    return -1;
 }
 
 int main(int argc, char* argv[])
@@ -289,30 +323,27 @@ int main(int argc, char* argv[])
 
     rc = client->start();
     if (0 == rc && !cfg.interactive) {
-        client->batch_process();  /* process arguments */
+        /* batch process */
+        if (NULL == freopen(cfg.input_file, "r", stdin)) {
+            rc = errno;
+            fprintf(stderr, "open file(%s) : %s\n", cfg.input_file, strerror(rc));
+        }
     }
 
-    while(0 == rc && cfg.interactive 
-          && 0 != READLINE(cmd_line, sizeof(cmd_line))) {
+    while(0 == rc && 0 != READLINE(cmd_line, sizeof(cmd_line))) {
         const char* cmd;
         char* arg;
 
         cmd = cmd_split(cmd_line, &arg);
         if (cmd) {
-            if (0 == strcmp(cmd, "send")) {
-                if (client->send(arg, strlen(arg)) < 0) {
-                    break;
-                }
-            }
-            else {  /* other cmds */
-                cfg.interactive = cmd_dispatch(cmd, arg);
+            if (cmd_dispatch(client, cmd, arg) < 0) {
+                break;
             }
         }
     }
 
     client->stop();
+    puts("");
 
     return rc;
 }
-
-

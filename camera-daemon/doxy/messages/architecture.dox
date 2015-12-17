@@ -1,0 +1,117 @@
+/* Copyright (c) 2015-16, The Linux Foundataion. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of The Linux Foundation nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+/**
+@page messages_architecture Messaging Architecture
+
+# Overview
+
+This page discusses the wire protocol for interaction with Camera Daemon. Note this
+protocol is a draft and expected to change.
+
+This protocol design leverages JSON (Java Script Object Notation) and message
+layout is designed based on the concepts from jsonrpc. Following those principles
+this adaptation will support the following salient features:
+
+- A message is a JSON object of one of these types:
+  + Request
+  + Response
+  + Indication
+
+- A request contains two mandatory fields.
+  + Identifier field (`"id"`) which will be repeated with response. This enables
+client match the out of order responses.
+  + Operation field ("method") which will name the method for processing the
+parameters.
+
+- A message with no identifier (`"id"`) field is considered an indication.
+
+- A response contains the identifier (`"id"`) for which this corresponds.
+
+- Response may contain the `"result"` field or `"error"` field with the values that
+are to be interpreted in the context of the request.
+
+Notice that we are at this point not taking advantage of the batch commands and
+responses.
+
+# Request
+
+### Format
+
+    {
+        "id" : <number>,
+        "method" : <string>,
+        "params" : <a single value or an array or an object>
+    }
+
+### Field Details
+
+Field name | Values      | Description
+-----------|-------------|-------------
+id         |number       | a unique identifier for this session to repeat with the response
+method     |string       | name of the operation to perform.
+params     |any json type|	optional field; interpreted based on the method.
+
+# Response
+
+### Format
+
+    {
+        "id" : <number>,
+        "result" : <a single value or an array or an object>
+    }
+
+### Field Details
+
+Field name | Values      | Description
+-----------|-------------|-------------
+id         |number       | identifier corresponds to the request `"id"` field
+result     |any json type|	interpreted based on the associated request
+
+# Indication
+
+### Format
+
+    {
+        "method" : <string>,
+        "params" : <a single value or an array or an object>
+    }
+
+### Field Details
+
+Field name | Values      | Description
+-----------|-------------|-------------
+method     |string       | name of the operation to perform.
+params     |any json type|	optional field; interpreted based on the method.
+
+# Method naming Convention
+
+Method values shall use a dotted notation for namespace separation.
+
+*/

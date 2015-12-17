@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,51 +26,34 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef __JS_INVOKE_H__
+#define __JS_INVOKE_H__
 
-/** JSON string for the default configuration. Can be updated
- *  during runtime. */
-const char* default_config = R"****(
-{
-"cameras" : [
-  {
-    "id" : 0,
-    "name" : "imx214",
-    "settings" :
-    {
-      "fps" : 24,
-      "hfr" : 0,
-    },
-    "sessions" :
-    [
-      {
-        "name" : "720p_fpv",
-        "type" : "preview",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 1000000,
-          "width" : 1280,
-          "height" : 720,
-          "profile" : "baseline",
-          "level" : 1,
-        },
-      },
-      {
-        "name" : "4kuhd",
-        "type" : "recording",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 5000000,
-          "width" : 3840,
-          "height" : 2160,
-          "profile" : "high",
-          "level" : 1,
-        },
-        "file_format" : "h264"
-      },
-    ],
-  },
-],
-}
-)****";
+#include "json/json_parser.h"
+#include <stdint.h>
+
+struct jsCall {
+    const char* msg_;
+    uint32_t    msg_siz_;
+    JSONID      method_;
+    JSONID      id_;
+    JSONID      result_;
+    JSONID      error_;
+
+    enum Type {
+        Request,    /* request contains : id and method */
+        Result,     /* succesful result */
+        Error,      /* failed response */
+        Indication, /* indication contains just method */
+    } type_;
+
+    int ctor(const char* msg, int siz);
+    void dump(void);
+};
+
+void jsResult_Send(
+    int sock,
+    unsigned int uid,
+    int result /**< 0 is a successful, non zero is error */);
+
+#endif /* !__JS_INVOKE_H__ */

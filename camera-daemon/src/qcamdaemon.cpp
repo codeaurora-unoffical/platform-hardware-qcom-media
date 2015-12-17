@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-16, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -25,22 +25,23 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Copyright (C) 2007-2010 by the JSON-RPC Working Group
+ *  Copyright (C) 2007-2010 by the JSON-RPC Working Group
  *
- * This document and translations of it may be used to implement JSON-RPC, it
- * may be copied and furnished to others, and derivative works that comment on
- * or otherwise explain it or assist in its implementation may be prepared,
- * copied, published and distributed, in whole or in part, without restriction
- * of any kind, provided that the above copyright notice and this paragraph are
- * included on all such copies and derivative works. However, this document
- * itself may not bemodified in any way.
+ *  This document and translations of it may be used to implement JSON-RPC, it
+ *  may be copied and furnished to others, and derivative works that comment on
+ *  or otherwise explain it or assist in its implementation may be prepared,
+ *  copied, published and distributed, in whole or in part, without restriction
+ *  of any kind, provided that the above copyright notice and this paragraph are
+ *  included on all such copies and derivative works. However, this document
+ *  itself may not bemodified in any way.
  *
- * The limited permissions granted above are perpetual and will not be revoked.
- * This document and the information contained herein is provided "AS IS" and
- * ALL WARRANTIES, EXPRESS OR IMPLIED are DISCLAIMED, INCLUDING BUT NOT LIMITED
- * TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY
- * RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A
- * PARTICULAR PURPOSE.
+ *  The limited permissions granted above are perpetual and will not be revoked.
+ *  This document and the information contained herein is provided "AS IS" and
+ *  ALL WARRANTIES, EXPRESS OR IMPLIED are DISCLAIMED, INCLUDING BUT NOT LIMITED
+ *  TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY
+ *  RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A
+ *  PARTICULAR PURPOSE.
+ *
  */
 
 #include <stdio.h>
@@ -66,146 +67,13 @@
 #include "fpv_server.h"
 
 #include "json/json_parser.h"
-#include "json/json_gen.h"
+
+#include "js_invoke.h"
 
 #define METHOD_NAME_LEN_MAX 128
 
 namespace camerad
 {
-
-struct jsCall {
-    const char* msg_;
-    uint32_t    msg_siz_;
-    JSONID      method_;
-    JSONID      id_;
-    JSONID      result_;
-    JSONID      error_;
-
-    enum Type {
-        Request,    /* request contains : id and method */
-        Result,     /* succesful result */
-        Error,      /* failed response */
-        Indication, /* indication contains just method */
-    } type_;
-
-    int ctor(const char* msg, int siz);
-
-    void dump(void) {
-        JSONParser js;
-        const char* p;
-        int n;
-
-        JSONParser_Ctor(&js, msg_, msg_siz_);
-
-        switch (type_) {
-        case Request:
-            /* request */
-            JSONParser_GetJSON(&js, method_, &p, &n);
-            QCAM_INFO("request : %s", std::string(p, n).c_str());
-            break;
-        case Result:
-            /* succesful result */
-            JSONParser_GetJSON(&js, result_, &p, &n);
-            QCAM_INFO("response : %s", std::string(p, n).c_str());
-            break;
-        case Error:
-            /* failed response */
-            JSONParser_GetJSON(&js, error_, &p, &n);
-            QCAM_INFO("failed : %s", std::string(p, n).c_str());
-            break;
-        case Indication:
-            /* indication */
-            JSONParser_GetJSON(&js, method_, &p, &n);
-            QCAM_INFO("indication : %s", std::string(p, n).c_str());
-            break;
-        default:
-            QCAM_ERR("Unsupported message");
-        }
-    }
-};
-
-int jsCall::ctor(const char* msg, int siz)
-{
-    JSONParser js;
-    JSONType jt;
-    int rc = 0;
-
-    JSONParser_Ctor(&js, msg, siz);
-
-    if (JSONPARSER_SUCCESS != JSONParser_GetType(&js, 0, &jt)) {
-        QCAM_ERR("Invalid JSON type");
-        rc = 1;
-        goto bail;
-    }
-
-    msg_ = msg;
-    msg_siz_ = siz;
-
-    (void)JSONParser_Lookup(&js, 0, "method", 0, &method_);
-    (void)JSONParser_Lookup(&js, 0, "id", 0, &id_);
-
-    /* our valid messges are JSON objects, the method and id values
-       cannot be at 0 offset. */
-
-    /* check for method and id */
-    if (0 != id_) {
-        if (0 != method_) {
-            type_ = Request;
-        }
-        else {
-            if (JSONPARSER_SUCCESS == JSONParser_Lookup(&js, 0, "result", 0,
-                                                        &result_)) {
-                type_ = Result; /* succesful result */
-            }
-            else if (JSONPARSER_SUCCESS == JSONParser_Lookup(&js, 0, "error", 0,
-                                                             &error_)) {
-                type_ = Error; /* failed response */
-            }
-            else {
-                QCAM_ERR("Unsupported message");
-                rc = 1;
-                goto bail;
-            }
-        }
-    }
-    else if (0 != method_) {
-        type_ = Indication; /* indication */
-    }
-    else {
-        QCAM_ERR("Unsupported message");
-        rc = 1;
-        goto bail;
-    }
-
-bail:
-    return rc;
-}
-
-static void jsResult_Send(
-    int sock,
-    unsigned int uid, 
-    int result /**< 0 is a successful, non zero is error */)
-{
-    JSONGen gen;
-    char buf[128];
-    const char *psz;
-    int nsize = sizeof(buf);
-
-    JSONGen_Ctor(&gen, buf, nsize, 0, 0);
-    JSONGen_BeginObject(&gen);
-    JSONGen_PutKey(&gen, "id", 0);
-    JSONGen_PutUInt(&gen, uid);
-
-    JSONGen_PutKey(&gen, result == 0 ? "result" : "error", 0);
-    JSONGen_PutUInt(&gen, result);
-
-    JSONGen_EndObject(&gen);
-
-    JSONGen_GetJSON(&gen, &psz, &nsize);
-
-    write(sock, psz, nsize);
-    QCAM_INFO("RES : %s", psz);
-}
 
 #define CMD_SIZE 512
 
@@ -216,7 +84,7 @@ class QCamDaemon {
     size_t  cmd_buf_occupied_ = 0;  /* number of bytes occupied in the buffer */
     int sock_ = -1;
     int current_client_ = -1;
-    ISession* recSession_ = NULL;   /* video recording session */
+    std::shared_ptr<ISession> recSession_ = NULL;   /* video recording session */
     FpvServer* fpv_ = NULL;         /* fpv task */
 
     DaemonConfig cfg_;
@@ -231,7 +99,6 @@ class QCamDaemon {
 
     void camera_recording_start(unsigned int uid, const char* params,
                                 int param_siz) {
-        ISession* sess = recSession_;
         int rc = 0;
 
         /* TODO: support for mapping session and camera id */
@@ -242,11 +109,11 @@ class QCamDaemon {
             JSONParser_Ctor(&js, params, param_siz);
             if (JSONPARSER_SUCCESS == JSONParser_GetType(&js, 0, &jt)
                 && JSONObject == jt) {
-                TRY(rc, sess->setConfig(js));
+                TRY(rc, recSession_->setConfig(js));
             }
         }
 
-        TRY(rc, sess->start());
+        TRY(rc, recSession_->start());
 
         CATCH(rc) {}
 
@@ -283,7 +150,7 @@ public:
         int rc = initSock(port);
         if (0 == rc) {
             cfg_ = cfg;
-            recSession_ = createSession(QCAM_SESSION_RECORDING);
+            recSession_ = SessionMgr::get(QCAM_SESSION_RECORDING);
             if (NULL == recSession_) {
                 rc = ENOMEM;
             }
@@ -297,7 +164,7 @@ public:
     }
 
     void final(void) {
-        if (NULL != recSession_) { delete recSession_; recSession_ = NULL; }
+        recSession_.reset();
         if (-1 != sock_) {close(sock_); sock_ = -1; }
     }
 
@@ -335,6 +202,9 @@ public:
                 /** TODO: respond with error */
             }
         }
+        else {
+            jsResult_Send(current_client_, 0xFFFFFFFF, EBADMSG);
+        }
     }
 
     void handleMessage(uint8_t* arg, size_t arg_len, size_t& processed) {
@@ -356,7 +226,7 @@ public:
 
             /* todo: currently handling requests only, add support for other
                message types */
-            if (jsCall::Request == call.type_ ) {
+            if (jsCall::Request == call.type_) {
                 handleRequest(call);
             }
         }

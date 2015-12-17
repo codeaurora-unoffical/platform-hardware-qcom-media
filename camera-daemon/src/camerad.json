@@ -19,7 +19,7 @@
           "bit_rate" : 1000000,
           "width" : 1280,
           "height" : 720,
-          "profile" : 1,
+          "profile" : "baseline",
           "level" : 1,
         },
       },
@@ -32,7 +32,7 @@
           "bit_rate" : 5000000,
           "width" : 3840,
           "height" : 2160,
-          "profile" : 1,
+          "profile" : "high",
           "level" : 1,
         },
         "file_format" : "h264"

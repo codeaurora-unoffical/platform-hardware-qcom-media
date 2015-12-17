@@ -26,51 +26,29 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef __FRAME_SCALER_H__
+#define __FRAME_SCALER_H__
+#include <memory>
+#include <camera.h>
+#include <stdint.h>
 
-/** JSON string for the default configuration. Can be updated
- *  during runtime. */
-const char* default_config = R"****(
+namespace camerad
 {
-"cameras" : [
-  {
-    "id" : 0,
-    "name" : "imx214",
-    "settings" :
-    {
-      "fps" : 24,
-      "hfr" : 0,
-    },
-    "sessions" :
-    [
-      {
-        "name" : "720p_fpv",
-        "type" : "preview",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 1000000,
-          "width" : 1280,
-          "height" : 720,
-          "profile" : "baseline",
-          "level" : 1,
-        },
-      },
-      {
-        "name" : "4kuhd",
-        "type" : "recording",
-        "video_enc" :
-        {
-          "type" : "h264",
-          "bit_rate" : 5000000,
-          "width" : 3840,
-          "height" : 2160,
-          "profile" : "high",
-          "level" : 1,
-        },
-        "file_format" : "h264"
-      },
-    ],
-  },
-],
+
+class ICameraFrameScaler;
+typedef std::shared_ptr<ICameraFrameScaler> ICameraFrameScalerPtr;
+
+class ICameraFrameScaler {
+public:
+    virtual ~ICameraFrameScaler() {}
+    virtual int convert(camera::ICameraFrame* srcFrame,
+                        camera::ICameraFrame* outFrame) = 0;
+
+    static int create(uint32_t inWidth, uint32_t inHeight,
+                      uint32_t outWidth, uint32_t outHeight,
+                      ICameraFrameScalerPtr* pa);
+};
+
 }
-)****";
+
+#endif /* !__FRAME_SCALER_H__ */
