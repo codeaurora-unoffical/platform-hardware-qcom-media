@@ -244,6 +244,7 @@ class omx_video: public qc_omx_component
         virtual bool dev_get_vqzip_sei_info(OMX_U32 *) = 0;
         virtual bool dev_get_peak_bitrate(OMX_U32 *) = 0;
         virtual bool dev_get_batch_size(OMX_U32 *) = 0;
+        virtual bool dev_buffer_ready_to_queue(OMX_BUFFERHEADERTYPE *buffer) = 0;
 #ifdef _ANDROID_ICS_
         void omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer);
 #endif
@@ -632,6 +633,12 @@ class omx_video: public qc_omx_component
         OMX_SKYPE_VIDEO_CONFIG_QP m_sConfigQP;
         QOMX_EXTNINDEX_VIDEO_VENC_SAR m_sSar;
         PrependSPSPPSToIDRFramesParams m_sPrependSPSPPS;
+        struct timestamp_info {
+            OMX_U64 m_TimeStamp;
+            bool is_buffer_pending;
+            OMX_BUFFERHEADERTYPE *pending_buffer;
+            pthread_mutex_t m_lock;
+        } timestamp;
         OMX_U32 m_sExtraData;
         OMX_U32 m_input_msg_id;
         QOMX_EXTNINDEX_VIDEO_VENC_LOW_LATENCY_MODE m_slowLatencyMode;

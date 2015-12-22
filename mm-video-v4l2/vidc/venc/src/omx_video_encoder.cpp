@@ -1978,6 +1978,23 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 }
                 break;
             }
+
+        case OMX_IndexConfigTimePosition:
+            {
+                OMX_TIME_CONFIG_TIMESTAMPTYPE* pParam =
+                    (OMX_TIME_CONFIG_TIMESTAMPTYPE*) configData;
+                pthread_mutex_lock(&timestamp.m_lock);
+                timestamp.m_TimeStamp = (OMX_U64)pParam->nTimestamp;
+                DEBUG_PRINT_LOW("Buffer = %p, Timestamp = %llu", timestamp.pending_buffer, (OMX_U64)pParam->nTimestamp);
+                if (timestamp.is_buffer_pending && (OMX_U64)timestamp.pending_buffer->nTimeStamp == timestamp.m_TimeStamp) {
+                    DEBUG_PRINT_INFO("Queueing back pending buffer %p", timestamp.pending_buffer);
+                    this->post_event((unsigned long)hComp,(unsigned long)timestamp.pending_buffer,m_input_msg_id);
+                    timestamp.pending_buffer = NULL;
+                    timestamp.is_buffer_pending = false;
+                }
+                pthread_mutex_unlock(&timestamp.m_lock);
+                break;
+            }
         default:
             DEBUG_PRINT_ERROR("ERROR: unsupported index %d", (int) configIndex);
             break;
@@ -2097,6 +2114,24 @@ OMX_U32 omx_venc::dev_set_message_thread_id(pthread_t tid)
 bool omx_venc::dev_use_buf(void *buf_addr,unsigned port,unsigned index)
 {
     return handle->venc_use_buf(buf_addr,port,index);
+}
+
+bool omx_venc::dev_buffer_ready_to_queue(OMX_BUFFERHEADERTYPE *buffer)
+{
+    bool bRet = true;
+
+    pthread_mutex_lock(&timestamp.m_lock);
+
+    if ((!m_slowLatencyMode.bLowLatencyMode) || ((OMX_U64)buffer->nTimeStamp == (OMX_U64)timestamp.m_TimeStamp)) {
+        DEBUG_PRINT_LOW("ETB is ready to be queued");
+    } else {
+        DEBUG_PRINT_INFO("ETB is defeffed due to timeStamp mismatch");
+        timestamp.is_buffer_pending = true;
+        timestamp.pending_buffer = buffer;
+        bRet = false;
+    }
+    pthread_mutex_unlock(&timestamp.m_lock);
+    return bRet;
 }
 
 bool omx_venc::dev_free_buf(void *buf_addr,unsigned port)
