@@ -75,6 +75,7 @@ class omx_venc: public omx_video
         bool dev_free_buf( void *,unsigned);
         bool dev_empty_buf(void *, void *,unsigned,unsigned);
         bool dev_fill_buf(void *, void *,unsigned,unsigned);
+        bool dev_buffer_ready_to_queue(OMX_BUFFERHEADERTYPE *buffer);
         bool dev_get_buf_req(OMX_U32 *,OMX_U32 *,OMX_U32 *,OMX_U32);
         bool dev_set_buf_req(OMX_U32 *,OMX_U32 *,OMX_U32 *,OMX_U32);
         bool update_profile_level();

@@ -288,6 +288,8 @@ omx_video::omx_video():
 
     mUsesColorConversion = false;
     pthread_mutex_init(&m_lock, NULL);
+    pthread_mutex_init(&timestamp.m_lock, NULL);
+    timestamp.is_buffer_pending = false;
     sem_init(&m_cmd_lock,0,0);
     DEBUG_PRINT_LOW("meta_buffer_hdr = %p", meta_buffer_hdr);
 }
@@ -326,6 +328,7 @@ omx_video::~omx_video()
         pthread_join(async_thread_id,NULL);
 #endif
     pthread_mutex_destroy(&m_lock);
+    pthread_mutex_destroy(&timestamp.m_lock);
     sem_destroy(&m_cmd_lock);
     DEBUG_PRINT_HIGH("m_etb_count = %" PRIu64 ", m_fbd_count = %" PRIu64, m_etb_count,
             m_fbd_count);
@@ -2285,6 +2288,12 @@ OMX_ERRORTYPE  omx_video::get_extension_index(OMX_IN OMX_HANDLETYPE      hComp,
     if (!strncmp(paramName, "OMX.QTI.index.param.video.LowLatency",
             sizeof("OMX.QTI.index.param.video.LowLatency") - 1)) {
         *indexType = (OMX_INDEXTYPE)OMX_QTIIndexParamLowLatencyMode;
+        return OMX_ErrorNone;
+    }
+
+    if (!strncmp(paramName, OMX_QTI_INDEX_CONFIG_VIDEO_SETTIMEDATA,
+            sizeof(OMX_QTI_INDEX_CONFIG_VIDEO_SETTIMEDATA) - 1)) {
+        *indexType = (OMX_INDEXTYPE)OMX_IndexConfigTimePosition;
         return OMX_ErrorNone;
     }
 
@@ -4812,6 +4821,12 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         DEBUG_PRINT_ERROR("ERROR: ETBProxyA: Invalid buffer[%p]",buffer);
         return OMX_ErrorBadParameter;
     }
+
+    if (!dev_buffer_ready_to_queue(buffer)) {
+        DEBUG_PRINT_HIGH("Info: ETBProxyA: buffer[%p] is deffered", buffer);
+        return OMX_ErrorNone;
+    }
+
     nBufIndex = buffer - meta_buffer_hdr;
     if (nBufIndex >= m_sInPortDef.nBufferCountActual) {
         DEBUG_PRINT_ERROR("ERROR: ETBProxyA: Invalid bufindex = %u",
