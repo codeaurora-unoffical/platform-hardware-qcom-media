@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2014, The Linux Foundation. All rights reserved.
+Copyright (c) 2014, 2016 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -311,6 +311,38 @@ omx_core_cb_type core[] =
     "libOmxAmrEnc.so",
     {
       "audio_encoder.amrnb"
+    }
+  },
+  {
+    "OMX.qcom.audio.encoder.g711mlaw",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxG711Enc.so",
+    {
+      "audio_encoder.g711"
+    }
+  },
+  {
+    "OMX.qcom.audio.encoder.g711alaw",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxG711Enc.so",
+    {
+      "audio_encoder.g711"
     }
   },
  {
