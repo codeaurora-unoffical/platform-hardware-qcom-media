@@ -4988,13 +4988,12 @@ bool venc_dev::venc_set_perf_mode(OMX_U32 mode)
     }
 }
 
-bool venc_dev::venc_set_max_hierp(OMX_U32 hierp_layers)
+bool venc_dev::venc_set_max_hierp(OMX_U32 max_hierp_layers)
 {
     struct v4l2_control control;
-    if (hierp_layers && (hier_layers.hier_mode == HIER_P) &&
-            (hierp_layers <= hier_layers.numlayers)) {
+    if (max_hierp_layers) {
         control.id = V4L2_CID_MPEG_VIDC_VIDEO_MAX_HIERP_LAYERS;
-        control.value = hierp_layers;
+        control.value = max_hierp_layers;
         DEBUG_PRINT_LOW("Going to set V4L2_CID_MPEG_VIDC_VIDEO_MAX_HIERP_LAYERS");
         if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
             DEBUG_PRINT_ERROR("Failed to set MAX_HIERP_LAYERS");
@@ -5003,7 +5002,7 @@ bool venc_dev::venc_set_max_hierp(OMX_U32 hierp_layers)
         return true;
     } else {
         DEBUG_PRINT_ERROR("Invalid layers set for MAX_HIERP_LAYERS: %d",
-                hierp_layers);
+                max_hierp_layers);
         return false;
     }
 }
