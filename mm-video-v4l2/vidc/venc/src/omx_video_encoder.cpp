@@ -1936,6 +1936,14 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 memcpy(&m_sMaxHPlayers, pParam, sizeof(m_sMaxHPlayers));
                 break;
             }
+        case OMX_QcomIndexConfigH264Transform8x8:
+            {
+                if (!handle->venc_set_config(configData, (OMX_INDEXTYPE)OMX_QcomIndexConfigH264Transform8x8)) {
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_QcomIndexConfigH264Transform8x8 failed");
+                    return OMX_ErrorUnsupportedSetting;
+                }
+                break;
+            }
         default:
             DEBUG_PRINT_ERROR("ERROR: unsupported index %d", (int) configIndex);
             break;
