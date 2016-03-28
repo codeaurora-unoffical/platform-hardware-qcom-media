@@ -552,6 +552,8 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     /* QP range for I frame B frame P frame */
     OMX_QcomIndexParamVideoIPBQPRange = 0x7F000055,
 
+    /* H264 transform 8x8 mode */
+    OMX_QcomIndexConfigH264Transform8x8 = 0x7F000056,
 };
 
 /**
