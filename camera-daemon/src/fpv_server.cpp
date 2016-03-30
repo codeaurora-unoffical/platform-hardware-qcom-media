@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <ifaddrs.h>
+#include <errno.h>
 #include "fpv_server.h"
 #include "fpv_h264.h"
 #include "qcamvid_log.h"
@@ -56,23 +57,46 @@ FpvServer::FpvServer()
  **/
 static int useNetInterface(const std::string& iface_name)
 {
-    struct ifaddrs* ifAddrStruct = NULL;
+    struct ifaddrs*     ifAddrStart = NULL;
+    struct ifaddrs*     ifa         = NULL;
+    struct sockaddr_in* sock_addr   = NULL;
+    int                 found       = 0;
 
-    for (getifaddrs(&ifAddrStruct); NULL != ifAddrStruct;
-          ifAddrStruct = ifAddrStruct->ifa_next) {
-        if (AF_INET == ifAddrStruct->ifa_addr->sa_family
-            && 0 == strcmp(iface_name.c_str(), ifAddrStruct->ifa_name)) {
-            struct sockaddr_in* sock_addr
-                = (struct sockaddr_in*)ifAddrStruct->ifa_addr;
+    int result = getifaddrs(&ifAddrStart);
+    if (result != 0) {
+        ifAddrStart = NULL;
+        result = errno;
+        goto bailout;
+    }
+
+    for (ifa = ifAddrStart; NULL != ifa; ifa = ifa->ifa_next) {
+        if (NULL != ifa->ifa_addr &&
+            AF_INET == ifa->ifa_addr->sa_family &&
+            0 == strcmp(iface_name.c_str(), ifa->ifa_name)) {
+
+            sock_addr = (struct sockaddr_in*) ifa->ifa_addr;
 
             /* assign this interface address to the  global variable
                in GroupsockHelper.hh */
             ReceivingInterfaceAddr = sock_addr->sin_addr.s_addr;
-            return 0;
+            found = 1;
+            break;
         }
     }
 
-    return ENOENT;
+    if (found != 1) {
+        result = ENOENT;
+    } else {
+        result = 0;
+    }
+
+bailout:
+    if (ifAddrStart != NULL) {
+        freeifaddrs(ifAddrStart);
+        ifAddrStart = NULL;
+    }
+
+    return result;
 }
 
 void FpvServer::dispatchSignal(FpvServer* me) {
