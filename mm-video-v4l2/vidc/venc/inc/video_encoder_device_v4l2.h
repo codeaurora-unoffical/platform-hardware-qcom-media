@@ -39,6 +39,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "omx_video_encoder.h"
 #include <linux/videodev2.h>
 #include <poll.h>
+#include "perceptual_qp.h"
 
 #define TIMEOUT 5*60*1000
 #define BIT(num) (1 << (num))
@@ -232,7 +233,8 @@ struct extradata_buffer_info {
     char* uaddr;
     int count;
     int size;
-    int allocated;
+    OMX_BOOL allocated;
+    enum v4l2_ports port_index;
 #ifdef USE_ION
     struct venc_ion ion;
 #endif
@@ -301,6 +303,7 @@ class venc_dev
         bool venc_get_peak_bitrate(OMX_U32 *peakbitrate);
         bool venc_get_output_log_flag();
         int venc_output_log_buffers(const char *buffer_addr, int buffer_len);
+        int venc_perceptual_qp_log_buffers(struct OMX_OTHER_EXTRADATATYPE* data, OMX_U32 size);
         int venc_input_log_buffers(OMX_BUFFERHEADERTYPE *buffer, int fd, int plane_offset);
         int venc_extradata_log_buffers(char *buffer_addr);
 
@@ -308,7 +311,7 @@ class venc_dev
         OMX_U32 m_nDriver_fd;
         bool m_profile_set;
         bool m_level_set;
-        int num_planes;
+        int num_input_planes, num_output_planes;
         int etb, ebd, ftb, fbd;
         struct recon_buffer {
             unsigned char* virtual_address;
@@ -329,13 +332,17 @@ class venc_dev
         pthread_t m_tid;
         bool async_thread_created;
         class omx_venc *venc_handle;
-        OMX_ERRORTYPE allocate_extradata();
+        OMX_ERRORTYPE allocate_extradata(struct extradata_buffer_info *extradata_info);
         void free_extradata();
         int append_mbi_extradata(void *, struct msm_vidc_extradata_header*);
-        bool handle_extradata(void *, int);
+        bool handle_output_extradata(void *, int);
+        bool handle_input_extradata(void *, int, int);
         int venc_set_format(int);
         bool deinterlace_enabled;
         bool hw_overload;
+        OMX_U32 fd_list[64];
+        perceptual_qp *m_pqp_handle;
+
     private:
         OMX_U32                             m_codec;
         struct msm_venc_basecfg             m_sVenc_cfg;
@@ -410,6 +417,8 @@ class venc_dev
         bool venc_set_perf_mode(OMX_U32 mode);
 	bool venc_set_session_priority(OMX_U32 priority);
 	bool venc_set_operatingrate(OMX_U32 rate);
+        bool venc_populate_pqp_info_extradata(int fd, OMX_U32 offset, OMX_U32 size);
+        int venc_get_index_from_fd(OMX_U32 fd);
 
 #ifdef MAX_RES_1080P
         OMX_U32 pmem_free();
@@ -428,7 +437,8 @@ class venc_dev
         int metadatamode;
         bool streaming[MAX_PORT];
         bool extradata;
-        struct extradata_buffer_info extradata_info;
+        struct extradata_buffer_info input_extradata_info;
+        struct extradata_buffer_info output_extradata_info;
 
         pthread_mutex_t pause_resume_mlock;
         pthread_cond_t pause_resume_cond;

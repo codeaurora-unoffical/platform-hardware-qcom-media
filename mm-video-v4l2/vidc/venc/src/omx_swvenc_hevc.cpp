@@ -1304,6 +1304,12 @@ bool omx_swvenc::dev_get_vui_timing_info(OMX_U32 *enabled)
     return false;
 }
 
+bool omx_swvenc::dev_enable_pqp_extradata()
+{
+    DEBUG_PRINT_ERROR("QP extradata is not supported");
+    return false;
+}
+
 bool omx_swvenc::dev_get_peak_bitrate(OMX_U32 *peakbitrate)
 {
     DEBUG_PRINT_ERROR("Get peak bitrate is not supported");
@@ -1384,9 +1390,19 @@ bool omx_swvenc::dev_is_video_session_supported(OMX_U32 width, OMX_U32 height)
     return true;
 }
 
-
-int omx_swvenc::dev_handle_extradata(void *buffer, int index)
+int omx_swvenc::dev_handle_output_extradata(void *buffer, int index)
 {
+    (void) buffer;
+    (void) index;
+    return SWVENC_S_EUNSUPPORTED;
+}
+
+int omx_swvenc::dev_handle_input_extradata(void *buffer, int index, int fd)
+{
+
+    (void) buffer;
+    (void) index;
+    (void) fd;
     return SWVENC_S_EUNSUPPORTED;
 }
 

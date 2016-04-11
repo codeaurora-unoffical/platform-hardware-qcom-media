@@ -85,8 +85,9 @@ private:
     virtual bool dev_loaded_stop(void);
     virtual bool dev_loaded_start_done(void);
     virtual bool dev_loaded_stop_done(void);
+    virtual int dev_handle_input_extradata(void*, int, int);
+    virtual int dev_handle_output_extradata(void*, int);
 #ifdef _MSM8974_
-    virtual int dev_handle_extradata(void*, int);
     virtual int dev_set_format(int);
 #endif
     virtual bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height);
@@ -94,6 +95,7 @@ private:
     virtual bool dev_get_performance_level(OMX_U32 *);
     virtual bool dev_get_vui_timing_info(OMX_U32 *);
     virtual bool dev_get_peak_bitrate(OMX_U32 *);
+    virtual bool dev_enable_pqp_extradata();
     virtual bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height);
     virtual bool dev_get_output_log_flag();

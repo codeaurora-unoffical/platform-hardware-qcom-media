@@ -102,12 +102,12 @@ static const char* MEM_DEVICE = "/dev/pmem_smipool";
 #error MEM_DEVICE cannot be determined.
 #endif
 
+
 //////////////////////////////////////////////////////////////////////////////
 //                       Module specific globals
 //////////////////////////////////////////////////////////////////////////////
 
 #define OMX_SPEC_VERSION  0x00000101
-
 
 //////////////////////////////////////////////////////////////////////////////
 //               Macros
@@ -224,15 +224,15 @@ class omx_video: public qc_omx_component
         virtual bool dev_loaded_start_done(void) = 0;
         virtual bool dev_loaded_stop_done(void) = 0;
         virtual bool is_secure_session(void) = 0;
-#ifdef _MSM8974_
-        virtual int dev_handle_extradata(void*, int) = 0;
+        virtual int dev_handle_output_extradata(void*, int) = 0;
+        virtual int dev_handle_input_extradata(void*, int, int) = 0;
         virtual int dev_set_format(int) = 0;
-#endif
         virtual bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height) = 0;
         virtual bool dev_get_capability_ltrcount(OMX_U32 *, OMX_U32 *, OMX_U32 *) = 0;
         virtual bool dev_get_performance_level(OMX_U32 *) = 0;
         virtual bool dev_get_vui_timing_info(OMX_U32 *) = 0;
         virtual bool dev_get_peak_bitrate(OMX_U32 *) = 0;
+        virtual bool dev_enable_pqp_extradata() = 0;
 #ifdef _ANDROID_ICS_
         void omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer);
 #endif
@@ -506,6 +506,7 @@ class omx_video: public qc_omx_component
 
         bool release_output_done();
         bool release_input_done();
+        bool enable_perceptual_qp_extradata();
 
         OMX_ERRORTYPE send_command_proxy(OMX_HANDLETYPE  hComp,
                 OMX_COMMANDTYPE cmd,
