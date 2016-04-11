@@ -59,10 +59,9 @@ class omx_venc: public omx_video
         //OMX strucutres
         OMX_U32 m_nVenc_format;
         class venc_dev *handle;
-#ifdef _MSM8974_
-        int dev_handle_extradata(void *, int);
+        int dev_handle_output_extradata(void *, int);
+        int dev_handle_input_extradata(void *, int, int);
         int dev_set_format(int);
-#endif
     private:
         OMX_U32 dev_stop(void);
         OMX_U32 dev_pause(void);
@@ -86,6 +85,7 @@ class omx_venc: public omx_video
         bool dev_get_capability_ltrcount(OMX_U32 *, OMX_U32 *, OMX_U32 *);
         bool dev_get_performance_level(OMX_U32 *);
         bool dev_get_vui_timing_info(OMX_U32 *);
+        bool dev_enable_pqp_extradata();
         bool dev_get_peak_bitrate(OMX_U32 *);
         bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height);
         bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,

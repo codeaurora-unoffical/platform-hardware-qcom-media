@@ -1977,6 +1977,15 @@ bool omx_venc::dev_get_vui_timing_info(OMX_U32 *enabled)
     RETURN(false);
 }
 
+bool omx_venc:: dev_enable_pqp_extradata()
+{
+    ENTER_FUNC();
+
+    DEBUG_PRINT_ERROR("QP extradata is not supported");
+
+    RETURN(false);
+}
+
 bool omx_venc::dev_get_peak_bitrate(OMX_U32 *peakbitrate)
 {
     //TBD: store the peak bitrate in class and return here;

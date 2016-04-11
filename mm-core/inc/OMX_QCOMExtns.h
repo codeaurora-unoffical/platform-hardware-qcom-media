@@ -1280,6 +1280,7 @@ typedef enum OMX_QCOM_EXTRADATATYPE
     OMX_ExtraDataInputBitsInfo =           0x7F00000e,
     OMX_ExtraDataVideoEncoderMBInfo =      0x7F00000f,
     OMX_ExtraDataVQZipSEI  =               0x7F000010,
+    OMX_ExtraDataPQInfo    =               0x7F000011,
 } OMX_QCOM_EXTRADATATYPE;
 
 typedef struct  OMX_STREAMINTERLACEFORMATTYPE {

@@ -229,6 +229,7 @@ omx_video::omx_video():
     m_app_data(NULL),
     m_use_input_pmem(OMX_FALSE),
     m_use_output_pmem(OMX_FALSE),
+    m_sExtraData(0),
     m_input_msg_id(OMX_COMPONENT_GENERATE_ETB),
     m_inp_mem_ptr(NULL),
     m_out_mem_ptr(NULL),
@@ -723,6 +724,31 @@ OMX_ERRORTYPE  omx_video::send_command(OMX_IN OMX_HANDLETYPE hComp,
     return OMX_ErrorNone;
 }
 
+
+/* ======================================================================
+   FUNCTION
+   omx_venc::enable_perceptual_qp_extradata
+
+   DESCRIPTION
+   Internally enables Perceptual QP extradata.
+
+   PARAMETERS
+   None.
+
+   RETURN VALUE
+   true/false
+
+   ========================================================================== */
+bool omx_video::enable_perceptual_qp_extradata()
+{
+    bool rc = false;
+    char propertyValue[PROPERTY_VALUE_MAX] = {0};
+
+    rc = dev_enable_pqp_extradata();
+
+    return rc;
+}
+
 /* ======================================================================
    FUNCTION
    omx_venc::SendCommand
@@ -756,6 +782,7 @@ OMX_ERRORTYPE  omx_video::send_command_proxy(OMX_IN OMX_HANDLETYPE hComp,
         /***************************/
         if (m_state == OMX_StateLoaded) {
             if (eState == OMX_StateIdle) {
+                enable_perceptual_qp_extradata();
                 //if all buffers are allocated or all ports disabled
                 if (allocate_done() ||
                         ( m_sInPortDef.bEnabled == OMX_FALSE && m_sOutPortDef.bEnabled == OMX_FALSE)) {
@@ -3472,7 +3499,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
                     Input_pmem_info.fd, Input_pmem_info.offset,
                     Input_pmem_info.size);
         }
-        if (dev_use_buf(&Input_pmem_info,PORT_INDEX_IN,0) != true) {
+        if (dev_use_buf(&Input_pmem_info, PORT_INDEX_IN, nBufIndex) != true) {
             DEBUG_PRINT_ERROR("ERROR: in dev_use_buf");
             post_event ((unsigned long)buffer,0,OMX_COMPONENT_GENERATE_EBD);
             return OMX_ErrorBadParameter;
@@ -3504,6 +3531,9 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
                     return OMX_ErrorUndefined;
             }
     }
+    if (m_sExtraData && !dev_handle_input_extradata((void *)buffer, nBufIndex,fd))
+        DEBUG_PRINT_ERROR("Failed to parse input extradata\n");
+
 #ifdef _MSM8974_
     if (dev_empty_buf(buffer, pmem_data_buf,nBufIndex,fd) != true)
 #else
@@ -4022,15 +4052,13 @@ OMX_ERRORTYPE omx_video::fill_buffer_done(OMX_HANDLETYPE hComp,
                 dev_output_log_buffers((const char*)buffer->pBuffer, buffer->nFilledLen);
             }
         }
-#ifdef _MSM8974_
         if (buffer->nFlags & OMX_BUFFERFLAG_EXTRADATA) {
-            if (!dev_handle_extradata((void *)buffer, index))
-                DEBUG_PRINT_ERROR("Failed to parse extradata");
+            if (!dev_handle_output_extradata((void *)buffer, index))
+                DEBUG_PRINT_ERROR("Failed to parse output extradata");
 
             dev_extradata_log_buffers((char *)(((unsigned long)buffer->pBuffer + buffer->nOffset +
                         buffer->nFilledLen + 3) & (~3)));
         }
-#endif
         m_pCallbacks.FillBufferDone (hComp,m_app_data,buffer);
     } else {
         return OMX_ErrorBadParameter;
