@@ -212,6 +212,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&ltrinfo, 0, sizeof(ltrinfo));
     memset(&m_debug,0,sizeof(m_debug));
 
+    memset(&constrained_intra_pred, 0, sizeof(constrained_intra_pred));
 #ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.enc.log.in", property_value, "0");
@@ -1694,6 +1695,16 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 }
                 break;
             }
+        case OMX_QcomIndexParamConstrainedIntraPred:
+            {
+                QOMX_ENABLETYPE *pParam = (QOMX_ENABLETYPE*)paramData;
+
+                if (!venc_set_constrained_intra_pred(pParam->bEnable)) {
+                     DEBUG_PRINT_ERROR("Setting constrained intra pred failed");
+                     return OMX_ErrorUnsupportedSetting;
+                }
+                break;
+            }
         case OMX_IndexParamVideoSliceFMO:
         default:
             DEBUG_PRINT_ERROR("ERROR: Unsupported parameter in venc_set_param: %u",
@@ -2082,6 +2093,7 @@ void venc_dev::venc_config_print()
 
     DEBUG_PRINT_HIGH("ENC_CONFIG: LTR Enabled: %d, Count: %d",
             ltrinfo.enabled, ltrinfo.count);
+    DEBUG_PRINT_HIGH("ENC_CONFIG: constrained intra pred enabled: %d", constrained_intra_pred.enable);
 }
 
 bool venc_dev::venc_reconfig_reqbufs()
@@ -3246,7 +3258,12 @@ bool venc_dev::venc_set_intra_refresh(OMX_VIDEO_INTRAREFRESHTYPE ir_mode, OMX_U3
     } else if ((ir_mode == OMX_VIDEO_IntraRefreshBoth) &&
             (irMBs < ((m_sVenc_cfg.dvs_width * m_sVenc_cfg.dvs_height)>>8))) {
         control_mode.value = V4L2_CID_MPEG_VIDC_VIDEO_INTRA_REFRESH_CYCLIC_ADAPTIVE;
-    } else {
+    } else if ((ir_mode == OMX_VIDEO_IntraRefreshRandom) &&
+            (irMBs < ((m_sVenc_cfg.dvs_width * m_sVenc_cfg.dvs_height)>>8))) {
+        control_mode.value = V4L2_CID_MPEG_VIDC_VIDEO_INTRA_REFRESH_RANDOM;
+        control_mbs.id = V4L2_CID_MPEG_VIDC_VIDEO_AIR_MBS;
+        control_mbs.value = irMBs;
+    }else {
         DEBUG_PRINT_ERROR("ERROR: Invalid IntraRefresh Parameters:"
                 "mb count: %lu, mb mode:%d", irMBs, ir_mode);
         return false;
@@ -3746,6 +3763,45 @@ bool venc_dev::venc_set_ratectrl_cfg(OMX_VIDEO_CONTROLRATETYPE eControlRate)
 
     return status;
 }
+bool venc_dev::venc_set_constrained_intra_pred(OMX_BOOL enable)
+{
+    int rc = 0;
+    struct v4l2_control control;
+
+    /*
+     * avoid enabling again if constrained_intra_pred enabled already
+     * avoid disabling again if constrained_intra_pred desabled already
+     */
+    if (enable) {
+        if (constrained_intra_pred.enable)
+            return true;
+    } else {
+        if (!constrained_intra_pred.enable)
+            return true;
+    }
+
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_CONSTRAINED_INTRA_PRED;
+    if (enable)
+        control.value = V4L2_CID_MPEG_VIDC_VIDEO_CONSTRAINED_INTRA_PRED_ENABLE;
+    else
+        control.value = V4L2_CID_MPEG_VIDC_VIDEO_CONSTRAINED_INTRA_PRED_DISABLE;
+
+    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
+    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+    if (rc) {
+        DEBUG_PRINT_ERROR("Failed to set constrained_intra_pred control");
+        return false;
+    }
+    DEBUG_PRINT_LOW("Success IOCTL set control for id=%x, value=%d", control.id, control.value);
+
+    if (control.value == V4L2_CID_MPEG_VIDC_VIDEO_CONSTRAINED_INTRA_PRED_ENABLE)
+        constrained_intra_pred.enable = 1;
+    else
+        constrained_intra_pred.enable = 0;
+
+    return true;
+}
+
 
 bool venc_dev::venc_get_profile_level(OMX_U32 *eProfile,OMX_U32 *eLevel)
 {
