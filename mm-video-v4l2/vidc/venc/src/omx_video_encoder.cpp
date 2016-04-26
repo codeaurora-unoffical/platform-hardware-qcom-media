@@ -1253,6 +1253,15 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 break;
 
            }
+        case OMX_QcomIndexParamConstrainedIntraPred:
+            {
+                if(!handle->venc_set_param(paramData,
+                            (OMX_INDEXTYPE)OMX_QcomIndexParamConstrainedIntraPred)) {
+                    DEBUG_PRINT_ERROR("Request to Enable constrained intra pred failed");
+                    return OMX_ErrorUnsupportedSetting;
+                }
+                break;
+            }
         case OMX_IndexParamVideoSliceFMO:
         default:
             {

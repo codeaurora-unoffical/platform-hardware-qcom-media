@@ -183,6 +183,9 @@ struct msm_venc_ltrinfo {
     unsigned int count;
 };
 
+struct msm_venc_constrained_intra_pred {
+    unsigned int enable;
+};
 enum v4l2_ports {
     CAPTURE_PORT,
     OUTPUT_PORT,
@@ -303,6 +306,7 @@ class venc_dev
         struct msm_venc_slice_delivery      slice_mode;
         struct msm_venc_hierlayers          hier_p_layers;
         struct msm_venc_ltrinfo             ltrinfo;
+        struct msm_venc_constrained_intra_pred constrained_intra_pred;
 
         bool venc_set_profile_level(OMX_U32 eProfile,OMX_U32 eLevel);
         bool venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames);
@@ -333,6 +337,7 @@ class venc_dev
         bool venc_set_vpe_rotation(OMX_S32 rotation_angle);
         bool venc_set_deinterlace(OMX_U32 enable);
         bool venc_set_hier_layers(QOMX_VIDEO_HIERARCHICALCODINGTYPE type, OMX_U32 num_layers);
+        bool venc_set_constrained_intra_pred(OMX_BOOL enable);
 
 #ifdef MAX_RES_1080P
         OMX_U32 pmem_free();

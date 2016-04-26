@@ -440,6 +440,8 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /*"OMX.QCOM.index.config.video.LTRMark"*/
     OMX_QcomIndexConfigVideoLTRMark = QOMX_IndexConfigVideoLTRMark,
+    /* Enable constrained intra pred */
+    OMX_QcomIndexParamConstrainedIntraPred = 0x7F000056,
 };
 
 /**
