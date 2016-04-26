@@ -101,6 +101,8 @@ struct OMX_QCOM_PARAM_MEMMAPENTRYTYPE
  */
 #define QOMX_Video_ControlRateMaxBitrate (OMX_Video_ControlRateVendorStartUnused + 1)
 
+#define QOMX_Video_ControlRateMaxBitrateSkipFrames (OMX_Video_ControlRateVendorStartUnused + 2)
+
 #define QOMX_VIDEO_BUFFERFLAG_BFRAME 0x00100000
 
 #define QOMX_VIDEO_BUFFERFLAG_EOSEQ  0x00200000
