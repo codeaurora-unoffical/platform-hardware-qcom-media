@@ -969,6 +969,8 @@ OMX_ERRORTYPE omx_vdec::set_dpb(bool is_split_mode, int dpb_color_format)
 OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode(bool force_split_mode)
 {
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
+    struct v4l2_format fmt;
+    int rc = 0;
 
     bool cpu_access = capture_capability != V4L2_PIX_FMT_NV12_UBWC;
 
@@ -1015,6 +1017,21 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode(bool force_split_mode)
     if (eRet) {
         DEBUG_PRINT_HIGH("Failed to set DPB buffer mode: %d", eRet);
     }
+
+    //Restore the capture format again here, because
+    //in switching between different DPB-OPB modes, the pixelformat
+    //on capture port may be changed.
+    memset(&fmt, 0x0, sizeof(struct v4l2_format));
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
+    fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
+    fmt.fmt.pix_mp.pixelformat = capture_capability;
+    rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+    if (rc) {
+        DEBUG_PRINT_ERROR("%s: Failed set format on capture mplane", __func__);
+        return OMX_ErrorUnsupportedSetting;
+    }
+
     return eRet;
 }
 
