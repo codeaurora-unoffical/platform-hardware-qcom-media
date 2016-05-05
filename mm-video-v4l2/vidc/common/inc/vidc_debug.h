@@ -70,4 +70,16 @@ extern int debug_level;
 #undef DEBUG_PRINT_LOW
 #define DEBUG_PRINT_LOW(fmt, args...) do {} while (0)
 
+#define VALIDATE_OMX_PARAM_DATA(ptr, paramType)                                \
+    {                                                                          \
+			        if (ptr == NULL) { return OMX_ErrorBadParameter; }                     \
+        paramType *p = reinterpret_cast<paramType *>(ptr);                     \
+        if (p->nSize < sizeof(paramType)) {                                    \
+            ALOGE("Insufficient object size(%u) v/s expected(%zu) for type %s",\
+                    (unsigned int)p->nSize, sizeof(paramType), #paramType);    \
+            return OMX_ErrorBadParameter;                                      \
+        }                                                                      \
+    }
+
+
 #endif

@@ -294,6 +294,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
          else if (m_eCodec == OMX_VIDEO_CodingAVC)
          {
             OMX_VIDEO_PARAM_AVCTYPE avc;
+            avc.nSize = sizeof(avc);
             avc.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
             result = OMX_GetParameter(m_hEncoder,
                                       OMX_IndexParamVideoAvc,
@@ -536,6 +537,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
                if (m_eCodec == OMX_VIDEO_CodingAVC)
                {
                   OMX_VIDEO_PARAM_AVCTYPE avcdata;
+                  avcdata.nSize = sizeof(avcdata);
                   avcdata.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
                   result = OMX_GetParameter(m_hEncoder,
                                             OMX_IndexParamVideoAvc,
@@ -568,6 +570,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
 
                      // update input port definition
                      OMX_PARAM_PORTDEFINITIONTYPE inPortDef;
+                     inPortDef.nSize = sizeof(inPortDef);
                      inPortDef.nPortIndex = (OMX_U32) PORT_INDEX_IN;
                      result = OMX_GetParameter(m_hEncoder,
                                                OMX_IndexParamPortDefinition,
@@ -592,6 +595,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
 
                      // update output port definition
                      OMX_PARAM_PORTDEFINITIONTYPE outPortDef;
+                     outPortDef.nSize = sizeof(outPortDef);
                      outPortDef.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
                      result = OMX_GetParameter(m_hEncoder,
                                                OMX_IndexParamPortDefinition,
@@ -802,6 +806,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
       if (result == OMX_ErrorNone)
       {
          OMX_PARAM_PORTDEFINITIONTYPE inPortDef; // OMX_IndexParamPortDefinition
+         inPortDef.nSize = sizeof(inPortDef);
          inPortDef.nPortIndex = (OMX_U32) PORT_INDEX_IN; // input
          result = OMX_GetParameter(m_hEncoder,
                                    OMX_IndexParamPortDefinition,
@@ -852,6 +857,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
       if (result == OMX_ErrorNone)
       {
          OMX_PARAM_PORTDEFINITIONTYPE outPortDef; // OMX_IndexParamPortDefinition
+         outPortDef.nSize = sizeof(outPortDef);
          outPortDef.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
          result = OMX_GetParameter(m_hEncoder,
                                    OMX_IndexParamPortDefinition,
@@ -946,6 +952,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
         // QP Config
         ///////////////////////////////////////////////////////////
         OMX_VIDEO_PARAM_QUANTIZATIONTYPE qp; // OMX_IndexParamVideoQuantization
+        qp.nSize = sizeof(qp);
         qp.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
         result = OMX_GetParameter(m_hEncoder,
                                   OMX_IndexParamVideoQuantization,
@@ -1054,6 +1061,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
       if (result == OMX_ErrorNone)
       {
          OMX_VIDEO_PARAM_INTRAREFRESHTYPE ir; // OMX_IndexParamVideoIntraRefresh
+         ir.nSize = sizeof(ir);
          ir.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
          result = OMX_GetParameter(m_hEncoder,
                                    OMX_IndexParamVideoIntraRefresh,
