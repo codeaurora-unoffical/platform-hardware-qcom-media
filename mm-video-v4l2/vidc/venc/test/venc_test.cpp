@@ -562,6 +562,7 @@ OMX_ERRORTYPE ConfigureEncoder()
 #ifdef QCOM_EXT
     OMX_QCOM_PARAM_PORTDEFINITIONTYPE qPortDefnType;
 #endif
+    portdef.nSize = sizeof(portdef);
     portdef.nPortIndex = (OMX_U32) 0; // input
     result = OMX_GetParameter(m_hHandle,
             OMX_IndexParamPortDefinition,
@@ -721,6 +722,7 @@ OMX_ERRORTYPE ConfigureEncoder()
         /////////////C A B A C ///A N D/////D E B L O C K I N G /////////////////
 
         OMX_VIDEO_PARAM_AVCTYPE avcdata;
+        avcdata.nSize = sizeof(avcdata);
         avcdata.nPortIndex = (OMX_U32)PORT_INDEX_OUT;
         result = OMX_GetParameter(m_hHandle,
                 OMX_IndexParamVideoAvc,
@@ -875,6 +877,7 @@ OMX_ERRORTYPE ConfigureEncoder()
     if (eResyncMarkerType == RESYNC_MARKER_MB) {
         if (m_sProfile.eCodec == OMX_VIDEO_CodingAVC) {
             OMX_VIDEO_PARAM_AVCTYPE avcdata;
+            avcdata.nSize = sizeof(avcdata);
             avcdata.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
             result = OMX_GetParameter(m_hHandle,
                     OMX_IndexParamVideoAvc,
@@ -916,6 +919,7 @@ OMX_ERRORTYPE ConfigureEncoder()
 
     if (result == OMX_ErrorNone) {
         OMX_VIDEO_PARAM_INTRAREFRESHTYPE ir; // OMX_IndexParamVideoIntraRefresh
+        ir.nSize = sizeof(ir);
         ir.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
         result = OMX_GetParameter(m_hHandle,
                 OMX_IndexParamVideoIntraRefresh,
@@ -2028,7 +2032,7 @@ int main(int argc, char** argv)
                 NULL);
 
         OMX_PARAM_PORTDEFINITIONTYPE portDef;
-
+        portDef.nSize = sizeof(portDef);
         portDef.nPortIndex = 0;
         result = OMX_GetParameter(m_hHandle, OMX_IndexParamPortDefinition, &portDef);
         CHK(result);
@@ -2060,7 +2064,7 @@ int main(int argc, char** argv)
 
     int i;
     OMX_PARAM_PORTDEFINITIONTYPE portDef;
-
+    portDef.nSize = sizeof(portDef);
     portDef.nPortIndex = 1;
     result = OMX_GetParameter(m_hHandle, OMX_IndexParamPortDefinition, &portDef);
     CHK(result);

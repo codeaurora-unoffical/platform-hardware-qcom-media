@@ -1484,7 +1484,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
             }
         case OMX_IndexParamVideoIntraRefresh:
             {
-                DEBUG_PRINT_LOW("venc_set_param:OMX_IndexParamVideoIntraRefresh");
+                DEBUG_PRINT_HIGH("venc_set_param:OMX_IndexParamVideoIntraRefresh");
                 OMX_VIDEO_PARAM_INTRAREFRESHTYPE *intra_refresh =
                     (OMX_VIDEO_PARAM_INTRAREFRESHTYPE *)paramData;
 
@@ -3240,6 +3240,7 @@ bool venc_dev::venc_set_intra_refresh(OMX_VIDEO_INTRAREFRESHTYPE ir_mode, OMX_U3
     int rc;
     struct v4l2_control control_mode,control_mbs;
     control_mode.id = V4L2_CID_MPEG_VIDC_VIDEO_INTRA_REFRESH_MODE;
+    DEBUG_PRINT_ERROR("venc_dev::venc_set_intra_refresh ir_mode=%d, irMBs=%d",(int)ir_mode,(int)irMBs);
 
     // There is no disabled mode.  Disabled mode is indicated by a 0 count.
     if (irMBs == 0 || ir_mode == OMX_VIDEO_IntraRefreshMax) {
