@@ -93,6 +93,7 @@ endif
 
 include $(CLEAR_VARS)
 
+LOCAL_CLANG := false
 LOCAL_MODULE                    := libOmxVdec
 LOCAL_MODULE_TAGS               := optional
 LOCAL_CFLAGS                    := $(libmm-vdec-def) -Werror
@@ -132,6 +133,7 @@ LOCAL_CFLAGS                    := $(libmm-vdec-def)
 LOCAL_C_INCLUDES                += $(libmm-vdec-inc)
 LOCAL_ADDITIONAL_DEPENDENCIES   := $(libmm-vdec-add-dep)
 
+LOCAL_CLANG := false
 LOCAL_PRELINK_MODULE    := false
 LOCAL_SHARED_LIBRARIES  := liblog libutils libbinder libcutils libdl
 

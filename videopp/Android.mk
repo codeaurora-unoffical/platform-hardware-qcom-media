@@ -50,6 +50,7 @@ libmm-vidpp-inc          += $(vidpp-inc)
 libmm-vidpp-inc          += frameworks/av/include/media/stagefright
 
 LOCAL_MODULE                    := libOmxVdpp
+LOCAL_CLANG := false
 LOCAL_MODULE_TAGS               := optional
 LOCAL_CFLAGS                    := $(libOmxVdpp-def)
 LOCAL_C_INCLUDES                += $(libmm-vidpp-inc)
