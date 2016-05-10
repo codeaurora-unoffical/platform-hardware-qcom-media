@@ -49,8 +49,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstddef>
 #ifndef _LINUX_
 #include <cutils/atomic.h>
-#endif
 #include <qdMetaData.h>
+#endif
 
 static ptrdiff_t x;
 
@@ -81,7 +81,6 @@ extern "C" {
 #include <poll.h>
 #include "hevc_utils.h"
 #define TIMEOUT 5000
-#endif // _ANDROID_
 
 #if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
 #include <media/hardware/HardwareAPI.h>
@@ -686,12 +685,14 @@ class omx_vdec: public qc_omx_component
         void set_frame_rate(OMX_S64 act_timestamp);
         void handle_extradata_secure(OMX_BUFFERHEADERTYPE *p_buf_hdr);
         void handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr);
+#ifndef _LINUX_
         void convert_color_space_info(OMX_U32 primaries, OMX_U32 range,
             OMX_U32 transfer, OMX_U32 matrix, ColorSpace_t *color_space,
             ColorAspects *aspects);
         void handle_color_space_info(void *data, unsigned int buf_index);
         void set_colorspace_in_handle(ColorSpace_t color, unsigned int buf_index);
         void print_debug_color_aspects(ColorAspects *aspects, const char *prefix);
+#endif
         void print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra);
 #ifdef _MSM8974_
         void append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
@@ -1012,8 +1013,10 @@ class omx_vdec: public qc_omx_component
         bool m_smoothstreaming_mode;
 
         bool m_input_pass_buffer_fd;
+#ifndef _LINUX_
         DescribeColorAspectsParams m_client_color_space;
         DescribeColorAspectsParams m_internal_color_space;
+#endif
 
         OMX_U32 operating_frame_rate;
         bool high_fps;
@@ -1034,6 +1037,7 @@ class omx_vdec: public qc_omx_component
         unsigned int m_fill_output_msg;
         bool client_set_fps;
         unsigned int stereo_output_mode;
+#ifndef _LINUX_
         class allocate_color_convert_buf
         {
             public:
@@ -1094,6 +1098,7 @@ class omx_vdec: public qc_omx_component
         };
 #if  defined (_MSM8960_) || defined (_MSM8974_)
         allocate_color_convert_buf client_buffers;
+#endif
 #endif
         struct video_decoder_capability m_decoder_capability;
         struct debug_cap m_debug;

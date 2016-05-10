@@ -2,4 +2,4 @@
 #
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = mm-core mm-video-v4l2
+SUBDIRS = vidc

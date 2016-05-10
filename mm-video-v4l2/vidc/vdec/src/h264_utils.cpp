@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2013, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2013, 2016, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -56,7 +56,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #include<utils/Log.h>
 }
+#else
+#include "vidc_debug.h"
 
+#define ALOGD DEBUG_PRINT_HIGH
+#define ALOGI DEBUG_PRINT_INFO
+#define ALOGV DEBUG_PRINT_LOW
+#define ALOGE DEBUG_PRINT_ERROR
 #endif
 
 /* =======================================================================

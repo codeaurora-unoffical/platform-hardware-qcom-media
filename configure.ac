@@ -66,6 +66,9 @@ AC_SUBST([CC])
 
 AC_CONFIG_FILES([     \
 	Makefile \
-	mm-core/Makefile
+	mm-core/Makefile \
+	mm-video-v4l2/Makefile \
+	mm-video-v4l2/vidc/Makefile \
+	mm-video-v4l2/vidc/vdec/Makefile
 	])
 AC_OUTPUT

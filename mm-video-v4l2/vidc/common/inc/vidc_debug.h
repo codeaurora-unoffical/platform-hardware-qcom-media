@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2013 - 2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2013, 2016, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -29,19 +29,21 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __VIDC_DEBUG_H__
 #define __VIDC_DEBUG_H__
 
-#ifdef _ANDROID_
-#include <cstdio>
+#if defined (_ANDROID_) || defined (_LINUX_)
 #include <pthread.h>
-#include <sys/mman.h>
-
 enum {
    PRIO_ERROR=0x1,
    PRIO_INFO=0x1,
    PRIO_HIGH=0x2,
    PRIO_LOW=0x4
 };
+#endif
 
 extern int debug_level;
+
+#ifdef _ANDROID_
+#include <cstdio>
+#include <sys/mman.h>
 
 #undef DEBUG_PRINT_ERROR
 #define DEBUG_PRINT_ERROR(fmt, args...) ({ \
@@ -69,6 +71,7 @@ extern int debug_level;
 #include <sys/syscall.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #define gettid() syscall(SYS_gettid)
 #define getpid() syscall(SYS_getpid)
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -85,6 +88,7 @@ extern int debug_level;
 #define DEBUG_PRINT_HIGH(fmt, args...) DEBUG_PRINT_CTL(PRIO_HIGH, fmt, ##args)
 #endif
 
+#ifndef _LINUX_
 #define VALIDATE_OMX_PARAM_DATA(ptr, paramType)                                \
     {                                                                          \
         if (ptr == NULL) { return OMX_ErrorBadParameter; }                     \
@@ -94,7 +98,10 @@ extern int debug_level;
                     (unsigned int)p->nSize, sizeof(paramType), #paramType);    \
             return OMX_ErrorBadParameter;                                      \
         }                                                                      \
-    }                                                                          \
+    }
+#else
+#define VALIDATE_OMX_PARAM_DATA(ptr, paramType) {}
+#endif
 
 class auto_lock {
     public:
