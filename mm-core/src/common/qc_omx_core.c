@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2009, 2015, The Linux Foundation. All rights reserved.
+Copyright (c) 2009, 2015-2016, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -47,7 +47,14 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "qc_omx_core.h"
 #include "omx_core_cmp.h"
+#ifdef _LINUX_
+#define PROPERTY_VALUE_MAX 92
+#include <glib.h>
+#define strlcpy g_strlcpy
+#define strlcat g_strlcat
+#else
 #include <cutils/properties.h>
+#endif
 
 extern omx_core_cb_type core[];
 extern const unsigned int SIZE_OF_CORE;
@@ -459,6 +466,9 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
     if(cmp_index >= 0)
     {
       char value[PROPERTY_VALUE_MAX];
+#ifdef _LINUX_
+      value[0] = '\0';  //vpp property is disabled
+#else
       DEBUG_PRINT("getting fn pointer\n");
 
       // Load VPP omx component for decoder if vpp
@@ -476,6 +486,7 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
           }
         }
       }
+#endif
 
        // dynamically load the so
       core[cmp_index].fn_ptr =
