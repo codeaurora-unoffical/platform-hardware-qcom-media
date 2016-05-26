@@ -3056,6 +3056,8 @@ OMX_ERRORTYPE  omx_video::allocate_output_buffer(
                 if (!handle) {
                     DEBUG_PRINT_ERROR("ERROR: native handle creation failed");
                     return OMX_ErrorInsufficientResources;
+                m_pOutput_pmem[i].buffer = malloc(sizeof(OMX_U32) + sizeof(native_handle_t*));
+                (*bufferHdr)->nAllocLen = sizeof(OMX_U32) + sizeof(native_handle_t*);
                 }
                 m_pOutput_pmem[i].buffer = malloc(sizeof(output_metabuffer));
                 (*bufferHdr)->nAllocLen = sizeof(output_metabuffer);
