@@ -493,6 +493,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
       // error resilience
       //////////////////////////////////////////
 	   OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE errorCorrection; //OMX_IndexParamVideoErrorCorrection
+        errorCorrection.nSize = sizeof(errorCorrection);
 		errorCorrection.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
 		result = OMX_GetParameter(m_hEncoder,
 								(OMX_INDEXTYPE) OMX_IndexParamVideoErrorCorrection,
