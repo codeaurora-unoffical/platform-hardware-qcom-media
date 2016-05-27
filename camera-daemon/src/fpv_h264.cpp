@@ -47,6 +47,7 @@ fpvH264::~fpvH264(void)
 {
     if (m_pSDPLine) {
         free(m_pSDPLine);
+        m_pSDPLine = NULL;
     }
 }
 
@@ -73,7 +74,10 @@ FramedSource* fpvH264::createNewStreamSource(
         }
     }
 
-    rtpSession_->start();
+    int rc = rtpSession_->start();
+    if (rc != EXIT_SUCCESS) {
+        return NULL;
+    }
 
     estBitrate = 90000;
 
