@@ -736,6 +736,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     dynamic_buf_mode = false;
     out_dynamic_list = NULL;
     is_down_scalar_enabled = false;
+    force_crop_update = false;
     m_reconfig_height = 0;
     m_reconfig_width = 0;
     m_smoothstreaming_mode = false;
@@ -908,6 +909,7 @@ int omx_vdec::enable_downscalar()
         return rc;
     }
     is_down_scalar_enabled = 1;
+    force_crop_update = true;
 
     memset(&control, 0x0, sizeof(struct v4l2_control));
     control.id = V4L2_CID_MPEG_VIDC_VIDEO_KEEP_ASPECT_RATIO;
@@ -7851,7 +7853,7 @@ int omx_vdec::async_message_process (void *context, void* message)
                     /* filled length will be changed if resolution changed */
                     /* Crop parameters can be changed even without resolution change */
                     if (omxhdr->nFilledLen
-                        && ((omx->prev_n_filled_len != omxhdr->nFilledLen)
+                        && ((omx->prev_n_filled_len != omxhdr->nFilledLen || omx->force_crop_update)
                         || (omx->drv_ctx.frame_size.left != vdec_msg->msgdata.output_frame.framesize.left)
                         || (omx->drv_ctx.frame_size.top != vdec_msg->msgdata.output_frame.framesize.top)
                         || (omx->drv_ctx.frame_size.right != vdec_msg->msgdata.output_frame.framesize.right)
@@ -7859,7 +7861,8 @@ int omx_vdec::async_message_process (void *context, void* message)
                         || (omx->drv_ctx.video_resolution.frame_width != vdec_msg->msgdata.output_frame.picsize.frame_width)
                         || (omx->drv_ctx.video_resolution.frame_height != vdec_msg->msgdata.output_frame.picsize.frame_height) )) {
 
-                        DEBUG_PRINT_HIGH("Paramters Changed From: Len: %u, WxH: %dx%d, L: %u, T: %u, R: %u, B: %u --> Len: %u, WxH: %dx%d, L: %u, T: %u, R: %u, B: %u",
+                        DEBUG_PRINT_HIGH("Paramters Changed From: Len: %u, WxH: %dx%d, L: %u, T: %u, R: %u, B: %u --> Len: %u, WxH: %dx%d, L: %u, T: %u, R: %u, B: %u \
+                                force_crop_update = %d",
                                 omx->prev_n_filled_len,
                                 omx->drv_ctx.video_resolution.frame_width,
                                 omx->drv_ctx.video_resolution.frame_height,
@@ -7870,8 +7873,9 @@ int omx_vdec::async_message_process (void *context, void* message)
                                 vdec_msg->msgdata.output_frame.framesize.left,
                                 vdec_msg->msgdata.output_frame.framesize.top,
                                 vdec_msg->msgdata.output_frame.framesize.right,
-                                vdec_msg->msgdata.output_frame.framesize.bottom);
+                                vdec_msg->msgdata.output_frame.framesize.bottom, omx->force_crop_update);
 
+                        omx->force_crop_update = false;
                         omx->drv_ctx.video_resolution.frame_width =
                                 vdec_msg->msgdata.output_frame.picsize.frame_width;
                         omx->drv_ctx.video_resolution.frame_height =

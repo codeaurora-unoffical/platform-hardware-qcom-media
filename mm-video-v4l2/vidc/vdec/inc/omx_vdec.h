@@ -987,6 +987,7 @@ private:
         OMX_U32 prev_n_filled_len;
         bool is_down_scalar_enabled;
         bool is_downscalar_supported;
+        bool force_crop_update;
 #endif
         struct custom_buffersize {
             OMX_U32 input_buffersize;
