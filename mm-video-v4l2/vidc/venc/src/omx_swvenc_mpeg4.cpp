@@ -2004,6 +2004,34 @@ bool omx_venc::dev_get_vui_timing_info(OMX_U32 *enabled)
     RETURN(false);
 }
 
+bool omx_venc:: dev_enable_pqp_extradata()
+{
+    ENTER_FUNC();
+
+    DEBUG_PRINT_ERROR("QP extradata is not supported");
+
+    RETURN(false);
+}
+
+int omx_venc::dev_handle_output_extradata(void *buffer, int index)
+{
+    (void) buffer;
+    (void) index;
+	 DEBUG_PRINT_ERROR("QP extradata is not supported");
+    RETURN(false);
+}
+
+int omx_venc::dev_handle_input_extradata(void *buffer, int index, int fd)
+{
+
+    (void) buffer;
+    (void) index;
+    (void) fd;
+	 DEBUG_PRINT_ERROR("QP extradata is not supported");
+    RETURN(false);
+}
+
+
 bool omx_venc::dev_get_peak_bitrate(OMX_U32 *peakbitrate)
 {
     //TBD: store the peak bitrate in class and return here;

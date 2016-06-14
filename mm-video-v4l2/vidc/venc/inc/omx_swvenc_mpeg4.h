@@ -131,6 +131,9 @@ class omx_venc: public omx_video
         bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height);
         bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height);
+        bool dev_enable_pqp_extradata();
+        int dev_handle_output_extradata(void*, int);
+        int dev_handle_input_extradata(void*, int, int);
         bool dev_get_output_log_flag();
         int dev_output_log_buffers(const char *buffer_addr, int buffer_len);
         int dev_extradata_log_buffers(char *buffer);

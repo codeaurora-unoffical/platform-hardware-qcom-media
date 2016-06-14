@@ -2050,6 +2050,20 @@ bool omx_venc::dev_get_vui_timing_info(OMX_U32 *enabled)
 #endif
 }
 
+bool omx_venc::dev_enable_pqp_extradata()
+{
+    OMX_BOOL enable = OMX_TRUE;
+    if (handle->venc_set_param(&enable, (OMX_INDEXTYPE)OMX_ExtraDataPQInfo) != true) {
+        DEBUG_PRINT_ERROR("ERROR: enabling Extradata VEN_EXTRADATA_PQINFO");
+        return false;
+    }
+
+    m_sExtraData |= VEN_EXTRADATA_PQINFO;
+
+    return true;
+
+}
+
 bool omx_venc::dev_get_peak_bitrate(OMX_U32 *peakbitrate)
 {
 #ifdef _MSM8974_
@@ -2114,17 +2128,20 @@ bool omx_venc::dev_is_video_session_supported(OMX_U32 width, OMX_U32 height)
 #endif
 }
 
-#ifdef _MSM8974_
-int omx_venc::dev_handle_extradata(void *buffer, int index)
+int omx_venc::dev_handle_output_extradata(void *buffer, int index)
 {
-    return handle->handle_extradata(buffer, index);
+    return handle->handle_output_extradata(buffer, index);
+}
+
+int omx_venc::dev_handle_input_extradata(void *buffer, int index, int fd)
+{
+    return handle->handle_input_extradata(buffer, index, fd);
 }
 
 int omx_venc::dev_set_format(int color)
 {
     return handle->venc_set_format(color);
 }
-#endif
 
 int omx_venc::async_message_process (void *context, void* message)
 {
