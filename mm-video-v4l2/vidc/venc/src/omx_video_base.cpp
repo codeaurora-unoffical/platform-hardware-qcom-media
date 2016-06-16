@@ -2223,8 +2223,8 @@ OMX_ERRORTYPE  omx_video::use_input_buffer(
 
                 if (m_pInput_pmem[i].buffer == MAP_FAILED) {
                     DEBUG_PRINT_ERROR("ERROR: mmap() Failed");
-                    m_pInput_pmem[i].buffer = NULL;
-                    close(m_pInput_pmem[i].fd);
+                m_pInput_pmem[i].buffer = NULL;
+                close(m_pInput_pmem[i].fd);
 #ifdef USE_ION
                     free_ion_memory(&m_pInput_ion[i]);
 #endif
@@ -2420,8 +2420,8 @@ OMX_ERRORTYPE  omx_video::use_output_buffer(
 #endif
                     if (m_pOutput_pmem[i].buffer == MAP_FAILED) {
                         DEBUG_PRINT_ERROR("ERROR: mmap() Failed");
-                        m_pOutput_pmem[i].buffer = NULL;
-                        close(m_pOutput_pmem[i].fd);
+                    m_pOutput_pmem[i].buffer = NULL;
+                    close(m_pOutput_pmem[i].fd);
 #ifdef USE_ION
                         free_ion_memory(&m_pOutput_ion[i]);
 #endif
@@ -2822,8 +2822,8 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
                 MAP_SHARED,m_pInput_pmem[i].fd,0);
             if (m_pInput_pmem[i].buffer == MAP_FAILED) {
                 DEBUG_PRINT_ERROR("ERROR: mmap FAILED= %d", errno);
-                m_pInput_pmem[i].buffer = NULL;
-                close(m_pInput_pmem[i].fd);
+            m_pInput_pmem[i].buffer = NULL;
+            close(m_pInput_pmem[i].fd);
 #ifdef USE_ION
                 free_ion_memory(&m_pInput_ion[i]);
 #endif
@@ -2995,8 +2995,8 @@ OMX_ERRORTYPE  omx_video::allocate_output_buffer(
 #endif
                 if (m_pOutput_pmem[i].buffer == MAP_FAILED) {
                     DEBUG_PRINT_ERROR("ERROR: MMAP_FAILED in o/p alloc buffer");
-                    m_pOutput_pmem[i].buffer = NULL;
-                    close (m_pOutput_pmem[i].fd);
+                m_pOutput_pmem[i].buffer = NULL;
+                close (m_pOutput_pmem[i].fd);
 #ifdef USE_ION
                     free_ion_memory(&m_pOutput_ion[i]);
 #endif
