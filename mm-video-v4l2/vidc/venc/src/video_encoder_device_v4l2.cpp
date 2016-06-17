@@ -707,14 +707,13 @@ bool venc_dev::venc_populate_pqp_info_extradata(int fd, OMX_U32 offset, OMX_U32 
         pqinfoData = (struct msm_vidc_override_qp_payload *) data->data;
         pqinfoData->override_qp_info_size = pqp_data_size;
         pqinfoData->b_is_roi_info_available = 0;
-        pqinfoData->average_delta_qp = 0;
 
         if (perceptual_qp_enabled) {
             pqinfoData->b_is_pq_info_available = 1;
             luma = (unsigned char *)mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, offset);
 
             gettimeofday(&tv_start,NULL);
-            m_pqp_handle->pqp_calculate(luma, (signed char*)pqinfoData->pPQInfo);
+            m_pqp_handle->pqp_calculate(luma, (signed char*)pqinfoData->pPQInfo, &(pqinfoData->average_delta_qp));
             gettimeofday(&tv_end,NULL);
             OMX_U64 time_diff = (OMX_U64)((tv_end.tv_sec * 1000000 + tv_end.tv_usec) -
                 (tv_start.tv_sec * 1000000 + tv_start.tv_usec));
