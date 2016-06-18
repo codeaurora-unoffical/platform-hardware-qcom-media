@@ -699,6 +699,24 @@ typedef struct QOMX_EXTNINDEX_PARAMTYPE {
     OMX_PTR pData;
 } QOMX_EXTNINDEX_PARAMTYPE;
 
+// An enum OMX_COLOR_FormatAndroidOpaque to indicate an opaque colorformat
+// is declared in media/stagefright/openmax/OMX_IVCommon.h
+// This will inform the encoder that the actual
+// colorformat will be relayed by the GRalloc Buffers.
+// OMX_COLOR_FormatAndroidOpaque  = 0x7F000001,
+
+// A pointer to this struct is passed to OMX_SetParameter when the extension
+// index for the 'OMX.google.android.index.prependSPSPPSToIDRFrames' extension
+// is given.
+// A successful result indicates that future IDR frames will be prefixed by
+// SPS/PPS.
+typedef struct QOMX_PrependSPSPPSToIDRFramesParams {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_BOOL bEnable;
+}QOMX_PrependSPSPPSToIDRFramesParams;
+
+
 /**
  * Range index parameter.  This structure is used to enable
  * vendor specific extension on input/output port and

@@ -31,6 +31,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/prctl.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 #include "video_encoder_device_v4l2.h"
 #include "omx_video_encoder.h"
 #include <linux/android_pmem.h>
@@ -39,8 +40,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/msm_ion.h>
 #endif
 #include <media/msm_media_info.h>
+#ifdef _ANDROID_
 #include <cutils/properties.h>
 #include <media/hardware/HardwareAPI.h>
+#endif
 
 #ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
@@ -258,7 +261,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     sess_priority.priority = 1;
     operating_rate = 0;
     memset(&fd_list, 0, sizeof(fd_list));
-
+#ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.enc.log.in", property_value, "0");
     m_debug.in_buffer_log = atoi(property_value);
@@ -283,6 +286,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
             DEBUG_PRINT_HIGH("pqp_create failed");
     } else
         DEBUG_PRINT_LOW("Perceptual QP disabled through setprop");
+#endif
 }
 
 venc_dev::~venc_dev()
@@ -1046,6 +1050,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
     unsigned int alignment = 0,buffer_size = 0, temp =0;
     struct v4l2_control control;
     OMX_STRING device_name = (OMX_STRING)"/dev/video33";
+#ifdef _ANDROID_    
     char property_value[PROPERTY_VALUE_MAX] = {0};
     char platform_name[PROPERTY_VALUE_MAX] = {0};
 
@@ -1057,13 +1062,15 @@ bool venc_dev::venc_open(OMX_U32 codec)
         device_name = (OMX_STRING)"/dev/video/q6_enc";
         supported_rc_modes = (RC_ALL & ~RC_CBR_CFR);
     }
+#endif
     m_nDriver_fd = open (device_name, O_RDWR);
     if (m_nDriver_fd == 0) {
         DEBUG_PRINT_ERROR("ERROR: Got fd as 0 for msm_vidc_enc, Opening again");
         m_nDriver_fd = open (device_name, O_RDWR);
     }
     if ((int)m_nDriver_fd < 0) {
-        DEBUG_PRINT_ERROR("ERROR: Omx_venc::Comp Init Returning failure");
+        DEBUG_PRINT_ERROR("ERROR: Omx_venc::Comp Init Returning failure. m_nDriver_fd = %d",(int)m_nDriver_fd);
+        DEBUG_PRINT_ERROR("**print perror:%s errno=%d\r\n",strerror(errno),errno);  
         return false;
     }
     DEBUG_PRINT_LOW("m_nDriver_fd = %u", (unsigned int)m_nDriver_fd);
@@ -1253,7 +1260,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
         if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control))
             DEBUG_PRINT_ERROR("Failed to set V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAME\n");
     }
-
+#ifdef _ANDROID_    
     property_get("vidc.debug.turbo", property_value, "0");
     if (atoi(property_value)) {
         DEBUG_PRINT_HIGH("Turbo mode debug property enabled");
@@ -1263,9 +1270,9 @@ bool venc_dev::venc_open(OMX_U32 codec)
             DEBUG_PRINT_ERROR("Failed to set turbo mode");
         }
     }
-
+#endif
     sess_priority.priority = 1; /* default to non-real-time */
-    if (venc_set_session_priority(sess_priority.priority)) {
+    if (!venc_set_session_priority(sess_priority.priority)) {
         DEBUG_PRINT_ERROR("Setting session priority failed");
         return OMX_ErrorUnsupportedSetting;
     }
@@ -2045,8 +2052,13 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
             }
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
-                PrependSPSPPSToIDRFramesParams * pParam =
+#ifdef _ANDROID_
+				PrependSPSPPSToIDRFramesParams * pParam =
                     (PrependSPSPPSToIDRFramesParams *)paramData;
+#else
+                QOMX_PrependSPSPPSToIDRFramesParams * pParam =
+                    (QOMX_PrependSPSPPSToIDRFramesParams *)paramData;
+#endif
 
                 DEBUG_PRINT_LOW("set inband sps/pps: %d", pParam->bEnable);
                 if(venc_set_inband_video_header(pParam->bEnable) == false) {
@@ -2962,6 +2974,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         // CPU (Eg: MediaCodec)  0            --             0              bufhdr
         // ---------------------------------------------------------------------------------------
         if (metadatamode) {
+// Not supported in Linux, no meta mode
             plane[0].m.userptr = index;
             meta_buf = (encoder_media_buffer_type *)bufhdr->pBuffer;
 
@@ -2977,9 +2990,11 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                 }
             } else if (!color_format) {
                 if (meta_buf->buffer_type == kMetadataBufferTypeCameraSource) {
+#ifdef _ANDROID_ //zddbg                   
                     if (meta_buf->meta_handle->numFds + meta_buf->meta_handle->numInts > 3 &&
                         meta_buf->meta_handle->data[3] & private_handle_t::PRIV_FLAGS_ITU_R_709)
                         buf.flags = V4L2_MSM_BUF_FLAG_YUV_601_709_CLAMP;
+#endif                    
                     if (meta_buf->meta_handle->numFds + meta_buf->meta_handle->numInts > 2) {
                         plane[0].data_offset = meta_buf->meta_handle->data[1];
                         plane[0].length = meta_buf->meta_handle->data[2];
@@ -2987,7 +3002,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     }
                     DEBUG_PRINT_LOW("venc_empty_buf: camera buf: fd = %d filled %d of %d flag 0x%x",
                             fd, plane[0].bytesused, plane[0].length, buf.flags);
-                } else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
+                } 
+#ifdef _ANDROID_                
+                else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
                     private_handle_t *handle = (private_handle_t *)meta_buf->meta_handle;
                     fd = handle->fd;
                     plane[0].data_offset = 0;
@@ -2996,6 +3013,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d "
                                 ": filled %d of %d", fd, plane[0].bytesused, plane[0].length);
                 }
+#endif                
             } else {
                 plane[0].m.userptr = (unsigned long) bufhdr->pBuffer;
                 plane[0].length = bufhdr->nAllocLen;

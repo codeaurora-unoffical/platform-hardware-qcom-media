@@ -28,13 +28,24 @@
  */
 
 #include <C2DColorConverter.h>
+#ifndef _ANDROID_
+#include <arm_neon.h>
+#endif
 #include <stdlib.h>
 #include <fcntl.h>
 #include <linux/msm_kgsl.h>
 #include <sys/ioctl.h>
+#ifdef _ANDROID_
 #include <utils/Log.h>
+#endif
 #include <dlfcn.h>
-
+#ifndef _ANDROID_
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <syslog.h>
+#include <unistd.h>
+#endif
 #undef LOG_TAG
 #define LOG_TAG "C2DColorConvert"
 #define ALIGN( num, to ) (((num) + (to-1)) & (~(to-1)))
@@ -44,7 +55,10 @@
 #define ALIGN128 128
 #define ALIGN32 32
 #define ALIGN16 16
-
+#ifndef _ANDROID_
+#define ALOGE(format, ...) syslog(LOG_ERR, format, ## __VA_ARGS__)
+#define ALOGV(format, ...) syslog(LOG_DEBUG, format, ## __VA_ARGS__)
+#endif
 //-----------------------------------------------------
 namespace android {
 

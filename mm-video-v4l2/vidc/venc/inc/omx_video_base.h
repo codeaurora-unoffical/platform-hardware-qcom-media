@@ -48,10 +48,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/mman.h>
 #ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
+#endif // _ANDROID_
 #ifdef _ANDROID_ICS_
 #include "QComOMXMetadata.h"
 #endif
-#endif // _ANDROID_
+
 #include <pthread.h>
 #include <semaphore.h>
 #include <linux/msm_vidc_enc.h>
@@ -64,11 +65,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "extra_data_handler.h"
 #include <linux/videodev2.h>
 #include <dlfcn.h>
-#include "C2DColorConverter.h"
+#ifdef _ANDROID_
+#include "C2DColorConverter.h" 
+#endif
 #include "vidc_debug.h"
+using namespace android;
 
 #ifdef _ANDROID_
-using namespace android;
 // local pmem heap object
 class VideoHeap : public MemoryHeapBase
 {
@@ -156,7 +159,7 @@ class omx_video: public qc_omx_component
         bool hier_b_enabled;
         //intermediate conversion buffer queued to encoder in case of invalid EOS input
         OMX_BUFFERHEADERTYPE  *mEmptyEosBuffer;
-
+#ifdef _ANDROID_
         class omx_c2d_conv
         {
             public:
@@ -180,6 +183,7 @@ class omx_video: public qc_omx_component
                 destroyC2DColorConverter_t *mConvertClose;
         };
         omx_c2d_conv c2d_conv;
+#endif        
 #endif
     public:
 

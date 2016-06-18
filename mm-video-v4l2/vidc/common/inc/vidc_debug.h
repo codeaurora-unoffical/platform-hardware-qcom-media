@@ -29,10 +29,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __VIDC_DEBUG_H__
 #define __VIDC_DEBUG_H__
 
-#ifdef _ANDROID_
 #include <cstdio>
 #include <pthread.h>
+#include <stdio.h>
+#include <string.h>
 
+#ifdef _ANDROID_
 enum {
    PRIO_ERROR=0x1,
    PRIO_INFO=0x1,
@@ -59,12 +61,71 @@ extern int debug_level;
       if (debug_level & PRIO_HIGH) \
           ALOGD(fmt,##args)
 #else
-#define DEBUG_PRINT_ERROR printf
-#define DEBUG_PRINT_INFO printf
-#define DEBUG_PRINT_LOW printf
-#define DEBUG_PRINT_HIGH printf
+
+enum {
+   PRIO_ERROR=0x1,
+   PRIO_INFO=0x1,
+   PRIO_HIGH=0x2,
+   PRIO_LOW=0x4
+};
+
+extern int debug_level;
+
+/*#undef DEBUG_PRINT_ERROR
+#define DEBUG_PRINT_ERROR(fmt, args...) \
+      if (debug_level & PRIO_ERROR) \
+          ALOGE(fmt,##args)
+#undef DEBUG_PRINT_INFO
+#define DEBUG_PRINT_INFO(fmt, args...) \
+      if (debug_level & PRIO_INFO) \
+          ALOGI(fmt,##args)
+#undef DEBUG_PRINT_LOW
+#define DEBUG_PRINT_LOW(fmt, args...) \
+      if (debug_level & PRIO_LOW) \
+          ALOGD(fmt,##args)
+#undef DEBUG_PRINT_HIGH
+#define DEBUG_PRINT_HIGH(fmt, args...) \
+      if (debug_level & PRIO_HIGH) \
+          ALOGD(fmt,##args)*/
+
+#ifndef _ANDROID_
+#include <syslog.h>
+#define ALOGE(fmt, args...) syslog(LOG_ERR, fmt, ##args)
+#define ALOGD(fmt, args...) syslog(LOG_DEBUG, fmt, ##args)
 #endif
 
+
+#undef DEBUG_PRINT_ERROR
+#define DEBUG_PRINT_ERROR(fmt, args...) \
+                syslog(LOG_ERR,"%d: " fmt, __LINE__, ##args)
+      
+#undef DEBUG_PRINT_HIGH
+#define DEBUG_PRINT_HIGH(fmt, args...) \
+                syslog(LOG_ERR,"%d: " fmt, __LINE__, ##args)
+
+#undef DEBUG_PRINT_INFO
+#define DEBUG_PRINT_INFO(fmt, args...) \
+                syslog(LOG_INFO,"%d: " fmt, __LINE__, ##args)
+
+#undef DEBUG_PRINT_LOW
+#define DEBUG_PRINT_LOW(fmt, args...) do {} while (0)
+
+#define VIDC_MSG_CONSOLE(fmt, ...) fprintf(stderr, "VIDC_CONSOLE %s::%d \n" fmt"\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#undef DEBUG_PRINT_ERROR
+#define DEBUG_PRINT_ERROR VIDC_MSG_CONSOLE
+      
+#undef DEBUG_PRINT_HIGH
+#define DEBUG_PRINT_HIGH VIDC_MSG_CONSOLE
+
+#undef DEBUG_PRINT_INFO
+#define DEBUG_PRINT_INFO VIDC_MSG_CONSOLE
+
+#undef DEBUG_PRINT_LOW
+#define DEBUG_PRINT_LOW  VIDC_MSG_CONSOLE
+
+#endif
+
+#ifdef _ANDROID_
 #define VALIDATE_OMX_PARAM_DATA(ptr, paramType)                                \
     {                                                                          \
         if (ptr == NULL) { return OMX_ErrorBadParameter; }                     \
@@ -74,8 +135,19 @@ extern int debug_level;
                     (unsigned int)p->nSize, sizeof(paramType), #paramType);    \
             return OMX_ErrorBadParameter;                                      \
         }                                                                      \
-    }                                                                          \
-
+    }
+#else
+#define VALIDATE_OMX_PARAM_DATA(ptr, paramType)                                \
+    {                                                                          \
+        if (ptr == NULL) { return OMX_ErrorBadParameter; }                     \
+        paramType *p = reinterpret_cast<paramType *>(ptr);                     \
+        if (p->nSize < sizeof(paramType)) {                                    \
+            DEBUG_PRINT_ERROR("Insufficient object size(%u) v/s expected(%zu) for type %s",\
+                 (unsigned int)p->nSize, sizeof(paramType), #paramType);    \
+            return OMX_ErrorBadParameter;                                      \
+        }                                                                      \
+    }
+#endif    
 class auto_lock {
     public:
         auto_lock(pthread_mutex_t &lock)

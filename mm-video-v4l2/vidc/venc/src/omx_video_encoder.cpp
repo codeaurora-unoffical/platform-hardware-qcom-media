@@ -29,7 +29,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include "video_encoder_device.h"
 #include <stdio.h>
-#ifdef _ANDROID_ICS_
+#ifndef _ANDROID_
+#include "vidc_debug.h"
+#endif
+#ifdef _ANDROID_ICS_ 
 #include <media/hardware/HardwareAPI.h>
 #endif
 #ifdef _ANDROID_
@@ -53,6 +56,10 @@ extern int m_pipe;
 static int bframes;
 static int entropy;
 static int perfmode;
+#ifndef _ANDROID_
+int debug_level = 0;
+#endif
+
 // factory function executed by the core to create instances
 void *get_omx_component_factory_fn(void)
 {
@@ -71,6 +78,7 @@ omx_venc::omx_venc()
     mUseProxyColorFormat = false;
     get_syntaxhdr_enable = false;
 #endif
+#ifdef _ANDROID_
     bframes = entropy = 0;
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.debug.level", property_value, "1");
@@ -85,6 +93,7 @@ omx_venc::omx_venc()
     property_get("vidc.debug.perf.mode", property_value, "0");
     perfmode = atoi(property_value);
     property_value[0] = '\0';
+#endif    
 }
 
 omx_venc::~omx_venc()
@@ -603,6 +612,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     DEBUG_PRINT_LOW("i/p previous min cnt = %u", (unsigned int)m_sInPortDef.nBufferCountMin);
                     memcpy(&m_sInPortDef, portDefn,sizeof(OMX_PARAM_PORTDEFINITIONTYPE));
 
+#ifdef _ANDROID_
 #ifdef _ANDROID_ICS_
                     if (portDefn->format.video.eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
@@ -619,6 +629,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
                     } else
                         mUseProxyColorFormat = false;
+#endif
 #endif
                     /*Query Input Buffer Requirements*/
                     dev_get_buf_req   (&m_sInPortDef.nBufferCountMin,
@@ -692,6 +703,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                             portFmt->eColorFormat);
                     update_profile_level(); //framerate
 
+#ifdef _ANDROID_ 
 #ifdef _ANDROID_ICS_
                     if (portFmt->eColorFormat ==
                             (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FormatAndroidOpaque) {
@@ -707,6 +719,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         mUseProxyColorFormat = true;
                         m_input_msg_id = OMX_COMPONENT_GENERATE_ETB_OPQ;
                     } else
+#endif
 #endif
                     {
                         m_sInPortFormat.eColorFormat = portFmt->eColorFormat;
