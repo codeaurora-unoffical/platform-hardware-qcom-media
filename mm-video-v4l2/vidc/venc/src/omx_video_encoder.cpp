@@ -846,9 +846,10 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         avc_param.nRefFrames = (avc_param.nBFrames < 4)? avc_param.nBFrames + 1 : 4;
                     }
                     DEBUG_PRINT_HIGH("AVC: RefFrames: %u, BFrames: %u", (unsigned int)avc_param.nRefFrames, (unsigned int)avc_param.nBFrames);
-
+#ifdef _ANDROID_
                     avc_param.bEntropyCodingCABAC = (OMX_BOOL)(avc_param.bEntropyCodingCABAC && entropy);
                     avc_param.nCabacInitIdc = entropy ? avc_param.nCabacInitIdc : 0;
+#endif                    
 #endif
                 } else {
                     if (pParam->nRefFrames != 1) {
