@@ -5,6 +5,8 @@ include $(CLEAR_VARS)
 # 				Common definitons
 # ---------------------------------------------------------------------------------
 
+LOCAL_CLANG := false
+
 libmm-venc-def := -g -O3 -Dlrintf=_ffix_r
 libmm-venc-def += -D__align=__alignx
 libmm-venc-def += -D__alignx\(x\)=__attribute__\(\(__aligned__\(x\)\)\)
@@ -18,13 +20,13 @@ libmm-venc-def += -UINPUT_BUFFER_LOG
 libmm-venc-def += -UOUTPUT_BUFFER_LOG
 libmm-venc-def += -USINGLE_ENCODER_INSTANCE
 libmm-venc-def += -Werror
-libmm-venc-def += -Wno-error=literal-suffix
+libmm-venc-def += -Wno-reserved-user-defined-literal
 libmm-venc-def += -D_ANDROID_ICS_
 libmm-venc-def += -D_MSM8974_
 
 TARGETS_THAT_USE_FLAG_MSM8226 := msm8226 msm8916 msm8909 msm8952
 TARGETS_THAT_NEED_SW_VENC_MPEG4 := msm8909
-TARGETS_THAT_NEED_SW_VENC_HEVC := msm8992 msm8952
+TARGETS_THAT_NEED_SW_VENC_HEVC := msm8992
 
 ifeq ($(TARGET_BOARD_PLATFORM),msm8610)
 libmm-venc-def += -DMAX_RES_720P
@@ -49,14 +51,14 @@ endif
 # Common Includes
 libmm-venc-inc      := $(LOCAL_PATH)/inc
 libmm-venc-inc      += $(OMX_VIDEO_PATH)/vidc/common/inc
-libmm-venc-inc      += hardware/qcom/media/mm-core/inc
-libmm-venc-inc      += hardware/qcom/media/libstagefrighthw
+libmm-venc-inc      += hardware/bsp/qcom/media/mm-core/inc
+libmm-venc-inc      += hardware/bsp/qcom/media/libstagefrighthw
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/qcom/display
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/adreno
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/mm-video/perceptual-qp
 libmm-venc-inc      += frameworks/native/include/media/hardware
 libmm-venc-inc      += frameworks/native/include/media/openmax
-libmm-venc-inc      += hardware/qcom/media/libc2dcolorconvert
+libmm-venc-inc      += hardware/bsp/qcom/media/libc2dcolorconvert
 libmm-venc-inc      += frameworks/av/include/media/stagefright
 libmm-venc-inc      += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 

@@ -4229,7 +4229,7 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
               (property_get("media.msm8956hw", property_value, "0") && atoi(property_value))) {
         intra_period.num_pframes = intra_period.num_pframes + intra_period.num_bframes;
         intra_period.num_bframes = 0;
-        DEBUG_PRINT_LOW("Warning: Disabling B frames for UHD recording pFrames = %d bFrames = %d",
+        DEBUG_PRINT_LOW("Warning: Disabling B frames for UHD recording pFrames = %lu bFrames = %lu",
                          intra_period.num_pframes, intra_period.num_bframes);
     }
     control.id = V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAMES;
@@ -4485,6 +4485,7 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
 {
     bool status = true;
     struct venc_headerextension hec_cfg;
+    struct venc_multiclicecfg multislice_cfg;
     int rc;
     OMX_U32 resynchMarkerSpacingBytes = 0;
     struct v4l2_control control;
@@ -4518,19 +4519,25 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
     }
     if (( m_sVenc_cfg.codectype != V4L2_PIX_FMT_H263) &&
             (error_resilience->nResynchMarkerSpacing)) {
+        multislice_cfg.mslice_mode = VEN_MSLICE_CNT_BYTE;
+        multislice_cfg.mslice_size = resynchMarkerSpacingBytes;
         control.id = V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MODE;
         control.value = V4L2_MPEG_VIDEO_MULTI_SICE_MODE_MAX_BYTES;
     } else if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_H263 &&
             error_resilience->bEnableDataPartitioning) {
+        multislice_cfg.mslice_mode = VEN_MSLICE_GOB;
+        multislice_cfg.mslice_size = resynchMarkerSpacingBytes;
         control.id = V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MODE;
         control.value = V4L2_MPEG_VIDEO_MULTI_SLICE_GOB;
     } else {
+        multislice_cfg.mslice_mode = VEN_MSLICE_OFF;
+        multislice_cfg.mslice_size = 0;
         control.id = V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MODE;
         control.value =  V4L2_MPEG_VIDEO_MULTI_SLICE_MODE_SINGLE;
     }
 
     DEBUG_PRINT_LOW("%s(): mode = %lu, size = %lu", __func__,
-            control.id, control.value);
+            multislice_cfg.mslice_mode, multislice_cfg.mslice_size);
     DEBUG_PRINT_ERROR("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
     rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
 
@@ -4970,7 +4977,7 @@ bool venc_dev::venc_set_hybrid_hierp(QOMX_EXTNINDEX_VIDEO_HYBRID_HP_MODE* hhp)
             return false;
         }
     } else {
-        DEBUG_PRINT_ERROR("Failed : Unsupported codec for Hybrid Hier P : %d", m_sVenc_cfg.codectype);
+        DEBUG_PRINT_ERROR("Failed : Unsupported codec for Hybrid Hier P : %lu", m_sVenc_cfg.codectype);
         return false;
     }
 

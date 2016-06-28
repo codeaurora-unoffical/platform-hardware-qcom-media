@@ -5,6 +5,8 @@ include $(CLEAR_VARS)
 # 				Common definitons
 # ---------------------------------------------------------------------------------
 
+LOCAL_CLANG := false
+
 libmm-vdec-def := -D__alignx\(x\)=__attribute__\(\(__aligned__\(x\)\)\)
 libmm-vdec-def += -D__align=__alignx
 libmm-vdec-def += -Dinline=__inline
@@ -57,19 +59,19 @@ include $(CLEAR_VARS)
 # Common Includes
 libmm-vdec-inc          := $(LOCAL_PATH)/inc
 libmm-vdec-inc          += $(OMX_VIDEO_PATH)/vidc/common/inc
-libmm-vdec-inc          += $(TOP)/hardware/qcom/media/mm-core/inc
+libmm-vdec-inc          += $(TOP)/hardware/bsp/qcom/media/mm-core/inc
 libmm-vdec-inc          += $(TARGET_OUT_HEADERS)/qcom/display
 libmm-vdec-inc          += $(TARGET_OUT_HEADERS)/adreno
 libmm-vdec-inc          += $(TOP)/frameworks/native/include/media/openmax
 libmm-vdec-inc          += $(TOP)/frameworks/native/include/media/hardware
-libmm-vdec-inc      	+= $(TOP)/hardware/qcom/media/libc2dcolorconvert
+libmm-vdec-inc      	+= $(TOP)/hardware/bsp/qcom/media/libc2dcolorconvert
 libmm-vdec-inc      	+= $(TOP)/frameworks/av/include/media/stagefright
 libmm-vdec-inc      	+= $(TARGET_OUT_HEADERS)/mm-video/SwVdec
 libmm-vdec-inc      	+= $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 
 ifeq ($(PLATFORM_SDK_VERSION), 18)  #JB_MR2
 libmm-vdec-def += -DANDROID_JELLYBEAN_MR2=1
-libmm-vdec-inc += $(TOP)/hardware/qcom/media/libstagefrighthw
+libmm-vdec-inc += $(TOP)/hardware/bsp/qcom/media/libstagefrighthw
 endif
 
 # Common Dependencies
@@ -94,6 +96,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE                    := libOmxVdec
 LOCAL_MODULE_TAGS               := optional
 LOCAL_CFLAGS                    := $(libmm-vdec-def) -Werror
+LOCAL_CFLAGS                    += -Wno-absolute-value
 LOCAL_C_INCLUDES                += $(libmm-vdec-inc)
 LOCAL_ADDITIONAL_DEPENDENCIES   := $(libmm-vdec-add-dep)
 
