@@ -5,6 +5,9 @@ include $(CLEAR_VARS)
 # 				Common definitons
 # ---------------------------------------------------------------------------------
 
+DISABLE_VIDC_ENC_COMPILATION = true
+
+ifeq ($DISABLE_VIDC_ENC_COMPILATION, false)
 libmm-venc-def := -g -O3 -Dlrintf=_ffix_r
 libmm-venc-def += -D__align=__alignx
 libmm-venc-def += -D__alignx\(x\)=__attribute__\(\(__aligned__\(x\)\)\)
@@ -156,7 +159,7 @@ LOCAL_SRC_FILES   += src/omx_swvenc_hevc.cpp
 
 include $(BUILD_SHARED_LIBRARY)
 endif
-
+endif
 # ---------------------------------------------------------------------------------
 # 					END
 # ---------------------------------------------------------------------------------

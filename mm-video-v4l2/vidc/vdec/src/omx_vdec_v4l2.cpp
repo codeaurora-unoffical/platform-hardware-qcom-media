@@ -7091,9 +7091,9 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         buffer->nFilledLen = 0;
         buffer->nAllocLen = handle->size;
 
-        if (handle->flags & private_handle_t::PRIV_FLAGS_DISP_CONSUMER) {
+       /* if (handle->flags & private_handle_t::PRIV_FLAGS_DISP_CONSUMER) {
             m_is_display_session = true;
-        } else {
+        } else */ {
             m_is_display_session = false;
         }
         DEBUG_PRINT_LOW("%s: m_is_display_session = %d", __func__, m_is_display_session);
@@ -9999,10 +9999,10 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                         setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                                PP_PARAM_INTERLACED, (void*)&enable);
 
-                        if (interlace_color_format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m) {
+                       /* if (interlace_color_format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m) {
                             setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                                LINEAR_FORMAT, (void*)&interlace_color_format);
-                        }
+                        }*/
                     }
                     if (client_extradata & OMX_INTERLACE_EXTRADATA) {
                         append_interlace_extradata(p_extra, payload->format,
