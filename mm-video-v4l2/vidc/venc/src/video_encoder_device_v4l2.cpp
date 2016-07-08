@@ -869,6 +869,11 @@ bool venc_dev::venc_get_output_log_flag()
 
 int venc_dev::venc_output_log_buffers(const char *buffer_addr, int buffer_len)
 {
+    if (venc_handle->is_secure_session()) {
+        DEBUG_PRINT_ERROR("logging secure output buffers is not allowed!");
+        return -1;
+    }
+
     if (!m_debug.outfile) {
         int size = 0;
         if(m_sVenc_cfg.codectype == V4L2_PIX_FMT_MPEG4) {
@@ -985,6 +990,11 @@ int venc_dev::venc_perceptual_qp_log_buffers(OMX_OTHER_EXTRADATATYPE *data, OMX_
 }
 
 int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int plane_offset) {
+    if (venc_handle->is_secure_session()) {
+        DEBUG_PRINT_ERROR("logging secure input buffers is not allowed!");
+        return -1;
+    }
+
     if (!m_debug.infile) {
         int size = snprintf(m_debug.infile_name, PROPERTY_VALUE_MAX, "%s/input_enc_%lu_%lu_%p.yuv",
                             m_debug.log_loc, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height, this);
