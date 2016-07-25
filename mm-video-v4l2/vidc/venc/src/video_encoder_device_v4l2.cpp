@@ -3368,6 +3368,11 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
     buf.length = num_output_planes;
 
     extra_idx = EXTRADATA_IDX(num_output_planes);
+    if (venc_handle->is_secure_session()) {
+        output_metabuffer *meta_buf = (output_metabuffer *)(bufhdr->pBuffer);
+        native_handle_t *handle = meta_buf->nh;
+        plane[0].length = handle->data[3];
+    }
 
     if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
         plane[extra_idx].bytesused = 0;
