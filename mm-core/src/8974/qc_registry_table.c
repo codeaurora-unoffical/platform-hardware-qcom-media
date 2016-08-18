@@ -430,7 +430,20 @@ omx_core_cb_type core[] =
       "audio_decoder.aac"
     }
   },
-  
+ {
+    "OMX.qcom.file.muxer",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxMux.so",
+    {
+      "container_muxer.mp4"
+    }
+  },
+
 };
 
 const unsigned int SIZE_OF_CORE = sizeof(core) / sizeof(omx_core_cb_type);
