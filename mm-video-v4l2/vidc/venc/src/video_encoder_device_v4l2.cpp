@@ -1624,19 +1624,20 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
             }
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
-// Not supported in Linux, no HardwareAPI
 #ifdef _ANDROID_
                 PrependSPSPPSToIDRFramesParams * pParam =
                     (PrependSPSPPSToIDRFramesParams *)paramData;
+#else
+                QOMX_PrependSPSPPSToIDRFramesParams * pParam =
+                    (QOMX_PrependSPSPPSToIDRFramesParams *)paramData;
+#endif
 
                 DEBUG_PRINT_LOW("set inband sps/pps: %d", pParam->bEnable);
                 if(venc_set_inband_video_header(pParam->bEnable) == false) {
                     DEBUG_PRINT_ERROR("ERROR: set inband sps/pps failed");
                     return OMX_ErrorUnsupportedSetting;
                 }
-#else
-                DEBUG_PRINT_ERROR("ERROR: set inband sps/pps not supported");
-#endif
+
                 break;
             }
         case OMX_QcomIndexParamH264AUDelimiter:

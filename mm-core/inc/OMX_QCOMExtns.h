@@ -470,6 +470,18 @@ typedef struct QOMX_EXTNINDEX_PARAMTYPE {
     OMX_PTR pData;
 } QOMX_EXTNINDEX_PARAMTYPE;
 
+// A pointer to this struct is passed to OMX_SetParameter when the extension
+// index for the 'OMX.google.android.index.prependSPSPPSToIDRFrames' extension
+// is given.
+// A successful result indicates that future IDR frames will be prefixed by
+// SPS/PPS.
+typedef struct QOMX_PrependSPSPPSToIDRFramesParams {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_BOOL bEnable;
+}QOMX_PrependSPSPPSToIDRFramesParams;
+
+
 /**
  * Range index parameter.  This structure is used to enable
  * vendor specific extension on input/output port and
