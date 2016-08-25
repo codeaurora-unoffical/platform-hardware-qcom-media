@@ -2350,7 +2350,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264 &&
                     (m_sVenc_cfg.inputformat == V4L2_PIX_FMT_NV12 ||                         // NV12
                     m_sVenc_cfg.inputformat == V4L2_PIX_FMT_NV21) &&                         // NV12
-                    !venc_handle->is_secure_session() && m_pqp_handle && frame_rate <= 30 &&
+                    !venc_handle->is_secure_session() && m_pqp_handle && frame_rate <= 60 &&
                     (rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_CFR ||    // VBR_CFR
                     rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_VFR ||     // VBR_VFR
                     rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_CFR ||     // MBR_CFR
