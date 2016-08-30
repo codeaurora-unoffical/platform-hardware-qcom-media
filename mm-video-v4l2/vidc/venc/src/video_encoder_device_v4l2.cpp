@@ -808,6 +808,11 @@ bool venc_dev::venc_get_output_log_flag()
 
 int venc_dev::venc_output_log_buffers(const char *buffer_addr, int buffer_len)
 {
+    if (venc_handle->is_secure_session()) {
+        DEBUG_PRINT_ERROR("logging secure output buffers is not allowed!");
+        return -1;
+    }
+
     if (!m_debug.outfile) {
         int size = 0;
         if(m_sVenc_cfg.codectype == V4L2_PIX_FMT_MPEG4) {
@@ -936,6 +941,11 @@ int venc_dev::venc_roiqp_log_buffers(OMX_QTI_VIDEO_CONFIG_ROIINFO *roiInfo) {
 
 int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int plane_offset,
         unsigned long inputformat) {
+    if (venc_handle->is_secure_session()) {
+        DEBUG_PRINT_ERROR("logging secure input buffers is not allowed!");
+        return -1;
+    }
+
     if (!m_debug.infile) {
         int size = snprintf(m_debug.infile_name, PROPERTY_VALUE_MAX, "%s/input_enc_%lu_%lu_%p.yuv",
                             m_debug.log_loc, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height, this);
@@ -3485,6 +3495,12 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
     buf.m.planes = plane;
     buf.length = num_output_planes;
     buf.flags = 0;
+
+    if (venc_handle->is_secure_session()) {
+        output_metabuffer *meta_buf = (output_metabuffer *)(bufhdr->pBuffer);
+        native_handle_t *handle_t = meta_buf->nh;
+        plane[0].length = handle_t->data[3];
+    }
 
     if (mBatchSize) {
         // Should always mark first buffer as DEFER, since 0 % anything is 0, just offset by 1
