@@ -138,7 +138,7 @@ typedef struct OMX_PARAM_CONTENTURITYPE
     OMX_U32 nSize;                      /**< size of the structure in bytes, including
                                              actual URI name */
     OMX_VERSIONTYPE nVersion;           /**< OMX specification version information */
-    OMX_U8 contentURI[1];               /**< The URI name */
+    OMX_U8 contentURI[128];               /**< The URI name */
 } OMX_PARAM_CONTENTURITYPE;
 
 /* Parameter specifying the pipe to use. */
