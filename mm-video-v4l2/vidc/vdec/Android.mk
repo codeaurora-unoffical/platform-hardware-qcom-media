@@ -31,7 +31,6 @@ libmm-vdec-def += -DMAX_RES_1080P_EBI
 TARGETS_THAT_USE_HEVC_ADSP_HEAP := msm8226 msm8974
 TARGETS_THAT_HAVE_VENUS_HEVC := apq8084 msm8994
 TARGETS_THAT_NEED_HEVC_LIB := msm8974 msm8610 msm8226 msm8916
-TARGETS_THAT_NEED_SW_HEVC := msm8974 msm8226 msm8916
 
 ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_USE_HEVC_ADSP_HEAP)),true)
 libmm-vdec-def += -D_HEVC_USE_ADSP_HEAP_
@@ -142,14 +141,6 @@ LOCAL_SRC_FILES         := src/frameparser.cpp
 LOCAL_SRC_FILES         += src/h264_utils.cpp
 LOCAL_SRC_FILES         += src/ts_parser.cpp
 LOCAL_SRC_FILES         += src/mp4_utils.cpp
-
-ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_NEED_SW_HEVC)),true)
-LOCAL_SHARED_LIBRARIES  += libHevcSwDecoder
-LOCAL_SRC_FILES         += src/omx_vdec_hevc_swvdec.cpp
-else
-LOCAL_SRC_FILES         += src/omx_vdec_hevc.cpp
-endif
-
 LOCAL_SRC_FILES         += src/hevc_utils.cpp
 
 LOCAL_STATIC_LIBRARIES  := libOmxVidcCommon
@@ -158,7 +149,6 @@ include $(BUILD_SHARED_LIBRARY)
 
 endif
 endif
-
 
 # ---------------------------------------------------------------------------------
 #                END
