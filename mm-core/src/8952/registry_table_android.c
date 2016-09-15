@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2015, The Linux Foundation. All rights reserved.
+Copyright (c) 2015, 2016 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -337,19 +337,6 @@ omx_core_cb_type core[] =
     "libOmxVenc.so",
     {
       "video_encoder.vp8"
-    }
-  },
-  {
-    "OMX.qti.video.encoder.hevc",
-    NULL,   // Create instance function
-    // Unique instance handle
-    {
-      NULL
-    },
-    NULL,   // Shared object library handle
-    "libOmxSwVencHevc.so",
-    {
-      "video_encoder.hevc"
     }
   },
   {
