@@ -969,6 +969,8 @@ OMX_ERRORTYPE omx_vdec::set_dpb(bool is_split_mode, int dpb_color_format)
 OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode(bool force_split_mode)
 {
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
+    struct v4l2_format fmt;
+    int rc = 0;
 
     bool cpu_access = capture_capability != V4L2_PIX_FMT_NV12_UBWC;
 
@@ -1015,6 +1017,20 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode(bool force_split_mode)
     if (eRet) {
         DEBUG_PRINT_HIGH("Failed to set DPB buffer mode: %d", eRet);
     }
+
+    //Restore the capture format again here, because
+    //in switching between different DPB-OPB modes, the pixelformat
+    //on capture port may be changed. Don't change resolutions.
+    memset(&fmt, 0x0, sizeof(struct v4l2_format));
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
+    fmt.fmt.pix_mp.pixelformat = capture_capability;
+    rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+    if (rc) {
+        DEBUG_PRINT_ERROR("%s: Failed set format on capture mplane", __func__);
+        return OMX_ErrorUnsupportedSetting;
+    }
+
     return eRet;
 }
 
@@ -1074,6 +1090,7 @@ int omx_vdec::decide_downscalar()
     int rc = 0;
     struct v4l2_format fmt;
     enum color_fmts color_format;
+    OMX_U32 width, height;
 
     if  (!m_downscalar_width || !m_downscalar_height) {
         DEBUG_PRINT_LOW("%s: downscalar not supported", __func__);
@@ -1094,19 +1111,22 @@ int omx_vdec::decide_downscalar()
        return rc;
     }
 
+    height = fmt.fmt.pix_mp.height;
+    width = fmt.fmt.pix_mp.width;
+
     DEBUG_PRINT_HIGH("%s: driver wxh = %dx%d, downscalar wxh = %dx%d", __func__,
         fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height, m_downscalar_width, m_downscalar_height);
 
-    if (fmt.fmt.pix_mp.width * fmt.fmt.pix_mp.height > m_downscalar_width * m_downscalar_height) {
+    if (fmt.fmt.pix_mp.width * fmt.fmt.pix_mp.height >= m_downscalar_width * m_downscalar_height) {
         rc = enable_downscalar();
         if (rc < 0) {
             DEBUG_PRINT_ERROR("%s: enable_downscalar failed\n", __func__);
             return rc;
         }
 
-        OMX_U32 width = m_downscalar_width > fmt.fmt.pix_mp.width ?
+        width = m_downscalar_width > fmt.fmt.pix_mp.width ?
                             fmt.fmt.pix_mp.width : m_downscalar_width;
-        OMX_U32 height = m_downscalar_height > fmt.fmt.pix_mp.height ?
+        height = m_downscalar_height > fmt.fmt.pix_mp.height ?
                             fmt.fmt.pix_mp.height : m_downscalar_height;
         switch (capture_capability) {
             case V4L2_PIX_FMT_NV12:
@@ -1123,13 +1143,6 @@ int omx_vdec::decide_downscalar()
                 rc = OMX_ErrorUndefined;
                 return rc;
         }
-
-        rc = update_resolution(width, height,
-                VENUS_Y_STRIDE(color_format, width), VENUS_Y_SCANLINES(color_format, height));
-        if (rc < 0) {
-            DEBUG_PRINT_ERROR("%s: update_resolution WxH %dx%d failed \n", __func__, width, height);
-            return rc;
-        }
     } else {
 
         rc = disable_downscalar();
@@ -1137,20 +1150,12 @@ int omx_vdec::decide_downscalar()
             DEBUG_PRINT_ERROR("%s: disable_downscalar failed\n", __func__);
             return rc;
         }
-
-        rc = update_resolution(fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
-                fmt.fmt.pix_mp.plane_fmt[0].bytesperline, fmt.fmt.pix_mp.plane_fmt[0].reserved[0]);
-        if (rc < 0) {
-            DEBUG_PRINT_ERROR("%s: update_resolution WxH %dx%d failed\n", __func__, fmt.fmt.pix_mp.width,
-                fmt.fmt.pix_mp.height);
-            return rc;
-        }
     }
 
     memset(&fmt, 0x0, sizeof(struct v4l2_format));
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
-    fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
+    fmt.fmt.pix_mp.height = height;
+    fmt.fmt.pix_mp.width = width;
     fmt.fmt.pix_mp.pixelformat = capture_capability;
     rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
     if (rc) {
@@ -3913,10 +3918,6 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                                (portDefn->format.video.nFrameWidth != (unsigned int)fmt.fmt.pix_mp.width)) {
                                                    port_format_changed = true;
                                            }
-                                           update_resolution(portDefn->format.video.nFrameWidth,
-                                                   portDefn->format.video.nFrameHeight,
-                                                   portDefn->format.video.nFrameWidth,
-                                                   portDefn->format.video.nFrameHeight);
 
                                            /* set crop info */
                                            rectangle.nLeft = 0;
@@ -3929,8 +3930,8 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                                break;
                                            memset(&fmt, 0x0, sizeof(struct v4l2_format));
                                            fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-                                           fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
-                                           fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
+                                           fmt.fmt.pix_mp.height = (unsigned int)portDefn->format.video.nFrameHeight;
+                                           fmt.fmt.pix_mp.width = (unsigned int)portDefn->format.video.nFrameWidth;
                                            fmt.fmt.pix_mp.pixelformat = capture_capability;
                                            DEBUG_PRINT_LOW("fmt.fmt.pix_mp.height = %d , fmt.fmt.pix_mp.width = %d",
                                                fmt.fmt.pix_mp.height, fmt.fmt.pix_mp.width);
@@ -4006,19 +4007,16 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                            break;
                                        }
 
-                                       if ( portDefn->nBufferCountActual >= drv_ctx.op_buf.mincount &&
-                                               portDefn->nBufferSize >=  drv_ctx.op_buf.buffer_size ) {
-                                           drv_ctx.op_buf.actualcount = portDefn->nBufferCountActual;
-                                           drv_ctx.op_buf.buffer_size = portDefn->nBufferSize;
-                                           drv_ctx.extradata_info.count = drv_ctx.op_buf.actualcount;
-                                           drv_ctx.extradata_info.size = drv_ctx.extradata_info.count *
-                                               drv_ctx.extradata_info.buffer_size;
-                                           eRet = set_buffer_req(&drv_ctx.op_buf);
-                                           if (eRet == OMX_ErrorNone)
-                                               m_port_def = *portDefn;
+                                       // route updating of buffer requirements via c2d proxy.
+                                       // Based on whether c2d is enabled, requirements will be handed
+                                       // to the vidc driver appropriately
+                                       eRet = client_buffers.set_buffer_req(portDefn->nBufferSize,
+                                                portDefn->nBufferCountActual);
+                                       if (eRet == OMX_ErrorNone) {
+                                           m_port_def = *portDefn;
                                        } else {
                                            DEBUG_PRINT_ERROR("ERROR: OP Requirements(#%d: %u) Requested(#%u: %u)",
-                                                   drv_ctx.op_buf.mincount, (unsigned int)drv_ctx.op_buf.buffer_size,
+                                                   drv_ctx.op_buf.mincount, (unsigned int)buffer_size,
                                                    (unsigned int)portDefn->nBufferCountActual, (unsigned int)portDefn->nBufferSize);
                                            eRet = OMX_ErrorBadParameter;
                                        }
@@ -4091,13 +4089,28 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                            eRet = is_video_session_supported();
                                            if (eRet)
                                                break;
-                                           memset(&fmt, 0x0, sizeof(struct v4l2_format));
-                                           fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-                                           fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
-                                           fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
-                                           fmt.fmt.pix_mp.pixelformat = output_capability;
-                                           DEBUG_PRINT_LOW("fmt.fmt.pix_mp.height = %d , fmt.fmt.pix_mp.width = %d",fmt.fmt.pix_mp.height,fmt.fmt.pix_mp.width);
-                                           ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+                                           if (is_down_scalar_enabled) {
+                                               memset(&fmt, 0x0, sizeof(struct v4l2_format));
+                                               fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+                                               fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
+                                               fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
+                                               fmt.fmt.pix_mp.pixelformat = output_capability;
+                                               DEBUG_PRINT_LOW("DS Enabled : height = %d , width = %d",
+                                                   fmt.fmt.pix_mp.height,fmt.fmt.pix_mp.width);
+                                               ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+                                           } else {
+                                               memset(&fmt, 0x0, sizeof(struct v4l2_format));
+                                               fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+                                               fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
+                                               fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
+                                               fmt.fmt.pix_mp.pixelformat = output_capability;
+                                               DEBUG_PRINT_LOW("DS Disabled : height = %d , width = %d",
+                                                   fmt.fmt.pix_mp.height,fmt.fmt.pix_mp.width);
+                                               ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+                                               fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+                                               fmt.fmt.pix_mp.pixelformat = capture_capability;
+                                               ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+                                           }
                                            if (ret) {
                                                DEBUG_PRINT_ERROR("Set Resolution failed");
                                                eRet = OMX_ErrorUnsupportedSetting;
@@ -4164,24 +4177,27 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                 memset(&fmt, 0x0, sizeof(struct v4l2_format));
                                 if (1 == portFmt->nPortIndex) {
                                     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-                                    fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
-                                    fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
+                                    ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
+                                    if (ret < 0) {
+                                        DEBUG_PRINT_ERROR("%s: Failed to get format on capture mplane", __func__);
+                                        return OMX_ErrorBadParameter;
+                                    }
                                     enum vdec_output_fromat op_format;
                                     if (portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
-                                                QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m ||
+                                            QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m ||
                                             portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
-                                                QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView ||
+                                            QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView ||
                                             portFmt->eColorFormat == OMX_COLOR_FormatYUV420Planar ||
                                             portFmt->eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar) {
                                         op_format = (enum vdec_output_fromat)VDEC_YUV_FORMAT_NV12;
                                     } else if (portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
-                                                QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed) {
+                                            QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed) {
                                         op_format = (enum vdec_output_fromat)VDEC_YUV_FORMAT_NV12_UBWC;
                                     } else
                                         eRet = OMX_ErrorBadParameter;
 
                                     if (portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
-                                                QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed) {
+                                            QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed) {
                                         fmt.fmt.pix_mp.pixelformat = capture_capability = V4L2_PIX_FMT_NV12_UBWC;
                                     } else {
                                         fmt.fmt.pix_mp.pixelformat = capture_capability = V4L2_PIX_FMT_NV12;
@@ -9456,15 +9472,8 @@ OMX_ERRORTYPE omx_vdec::get_buffer_req(vdec_allocatorproperty *buffer_prop)
     DEBUG_PRINT_LOW("GetBufReq IN: ActCnt(%d) Size(%u)",
             buffer_prop->actualcount, (unsigned int)buffer_prop->buffer_size);
 
-    fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
-    fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
-
     ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
 
-    update_resolution(fmt.fmt.pix_mp.width,
-            fmt.fmt.pix_mp.height,
-            fmt.fmt.pix_mp.plane_fmt[0].bytesperline,
-            fmt.fmt.pix_mp.plane_fmt[0].reserved[0]);
     if (fmt.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
         drv_ctx.num_planes = fmt.fmt.pix_mp.num_planes;
     DEBUG_PRINT_HIGH("Buffer Size = %d",fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
@@ -9527,9 +9536,9 @@ OMX_ERRORTYPE omx_vdec::set_buffer_req(vdec_allocatorproperty *buffer_prop)
 {
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
     unsigned buf_size = 0;
-    struct v4l2_format fmt;
+    struct v4l2_format fmt, c_fmt;
     struct v4l2_requestbuffers bufreq;
-    int ret;
+    int ret = 0;
     DEBUG_PRINT_LOW("SetBufReq IN: ActCnt(%d) Size(%u)",
             buffer_prop->actualcount, (unsigned int)buffer_prop->buffer_size);
     buf_size = (buffer_prop->buffer_size + buffer_prop->alignment - 1)&(~(buffer_prop->alignment - 1));
@@ -9539,6 +9548,7 @@ OMX_ERRORTYPE omx_vdec::set_buffer_req(vdec_allocatorproperty *buffer_prop)
         eRet = OMX_ErrorBadParameter;
     } else {
         memset(&fmt, 0x0, sizeof(struct v4l2_format));
+        memset(&c_fmt, 0x0, sizeof(struct v4l2_format));
         fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
         fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
         fmt.fmt.pix_mp.plane_fmt[0].sizeimage = buf_size;
@@ -9546,14 +9556,17 @@ OMX_ERRORTYPE omx_vdec::set_buffer_req(vdec_allocatorproperty *buffer_prop)
         if (buffer_prop->buffer_type == VDEC_BUFFER_TYPE_INPUT) {
             fmt.type =V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
             fmt.fmt.pix_mp.pixelformat = output_capability;
+            ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
         } else if (buffer_prop->buffer_type == VDEC_BUFFER_TYPE_OUTPUT) {
-            fmt.type =V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-            fmt.fmt.pix_mp.pixelformat = capture_capability;
+            c_fmt.type =V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+            c_fmt.fmt.pix_mp.pixelformat = capture_capability;
+            ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &c_fmt);
+            c_fmt.fmt.pix_mp.plane_fmt[0].sizeimage = buf_size;
+            ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &c_fmt);
         } else {
             eRet = OMX_ErrorBadParameter;
         }
 
-        ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
         if (ret) {
             /*TODO: How to handle this case */
             DEBUG_PRINT_ERROR("Setting buffer requirements (format) failed %d", ret);
@@ -9630,15 +9643,18 @@ OMX_ERRORTYPE omx_vdec::update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn)
 
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         fmt.fmt.pix_mp.pixelformat = output_capability;
+        ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
     } else if (1 == portDefn->nPortIndex) {
         unsigned int buf_size = 0;
         int ret = 0;
-        if (!client_buffers.update_buffer_req()) {
-            DEBUG_PRINT_ERROR("client_buffers.update_buffer_req Failed");
-            return OMX_ErrorHardware;
-        }
+       if (!is_down_scalar_enabled) {
+           fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+           ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
+           fmt.fmt.pix_mp.pixelformat = capture_capability;
+           fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+           ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_FMT, &fmt);
+       }
 
-       memset(&fmt, 0x0, sizeof(struct v4l2_format));
        fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
        fmt.fmt.pix_mp.pixelformat = capture_capability;
        ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
@@ -9673,24 +9689,13 @@ OMX_ERRORTYPE omx_vdec::update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn)
                 (int)portDefn->nPortIndex);
         eRet = OMX_ErrorBadPortIndex;
     }
-    if (is_down_scalar_enabled) {
-        int ret = 0;
-        ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
-        if (ret) {
-            DEBUG_PRINT_ERROR("update_portdef : Error in getting port resolution");
-            return OMX_ErrorHardware;
-        } else {
-            portDefn->format.video.nFrameWidth = fmt.fmt.pix_mp.width;
-            portDefn->format.video.nFrameHeight = fmt.fmt.pix_mp.height;
-            portDefn->format.video.nStride = fmt.fmt.pix_mp.plane_fmt[0].bytesperline;
-            portDefn->format.video.nSliceHeight = fmt.fmt.pix_mp.plane_fmt[0].reserved[0];
-        }
-    } else {
+    update_resolution(fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
+        fmt.fmt.pix_mp.plane_fmt[0].bytesperline, fmt.fmt.pix_mp.plane_fmt[0].reserved[0]);
+
         portDefn->format.video.nFrameHeight =  drv_ctx.video_resolution.frame_height;
         portDefn->format.video.nFrameWidth  =  drv_ctx.video_resolution.frame_width;
         portDefn->format.video.nStride = drv_ctx.video_resolution.stride;
         portDefn->format.video.nSliceHeight = drv_ctx.video_resolution.scan_lines;
-    }
 
     if ((portDefn->format.video.eColorFormat == OMX_COLOR_FormatYUV420Planar) ||
        (portDefn->format.video.eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar)) {
@@ -10981,6 +10986,8 @@ omx_vdec::allocate_color_convert_buf::allocate_color_convert_buf()
     init_members();
     ColorFormat = OMX_COLOR_FormatMax;
     dest_format = YCbCr420P;
+    m_c2d_width = 0;
+    m_c2d_height = 0;
 }
 
 void omx_vdec::allocate_color_convert_buf::set_vdec_client(void *client)
@@ -10993,6 +11000,7 @@ void omx_vdec::allocate_color_convert_buf::init_members()
     allocated_count = 0;
     buffer_size_req = 0;
     buffer_alignment_req = 0;
+    m_c2d_width = m_c2d_height = 0;
     memset(m_platform_list_client,0,sizeof(m_platform_list_client));
     memset(m_platform_entry_client,0,sizeof(m_platform_entry_client));
     memset(m_pmem_info_client,0,sizeof(m_pmem_info_client));
@@ -11013,7 +11021,10 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
 {
     bool status = true;
     unsigned int src_size = 0, destination_size = 0;
+    unsigned int height, width;
+    struct v4l2_format fmt;
     OMX_COLOR_FORMATTYPE drv_color_format;
+
     if (!omx) {
         DEBUG_PRINT_ERROR("Invalid client in color convert");
         return false;
@@ -11023,6 +11034,27 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
         return status;
     }
     pthread_mutex_lock(&omx->c_lock);
+
+    memset(&fmt, 0x0, sizeof(struct v4l2_format));
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    fmt.fmt.pix_mp.pixelformat = omx->capture_capability;
+    ioctl(omx->drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
+    width = fmt.fmt.pix_mp.width;
+    height =  fmt.fmt.pix_mp.height;
+
+    bool resolution_upgrade = (height > m_c2d_height ||
+            width > m_c2d_width);
+    if (resolution_upgrade) {
+        // resolution upgraded ? ensure we are yet to allocate;
+        // failing which, c2d buffers will never be reallocated and bad things will happen
+        if (allocated_count > 0) {
+            DEBUG_PRINT_ERROR("Cannot change C2D buffer requirements with %d active allocations",
+                    allocated_count);
+            status = false;
+            goto fail_update_buf_req;
+        }
+    }
+
     if (omx->drv_ctx.output_format != VDEC_YUV_FORMAT_NV12 &&
             ColorFormat != OMX_COLOR_FormatYUV420Planar) {
         DEBUG_PRINT_ERROR("update_buffer_req: Unsupported color conversion");
@@ -11030,8 +11062,8 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
         goto fail_update_buf_req;
     }
     c2d.close();
-    status = c2d.open(omx->drv_ctx.video_resolution.frame_height,
-            omx->drv_ctx.video_resolution.frame_width,
+    status = c2d.open(height,
+            width,
             NV12_128m,dest_format);
     if (status) {
         status = c2d.get_buffer_size(C2D_INPUT,src_size);
@@ -11048,12 +11080,12 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
             status = false;
             c2d.close();
             buffer_size_req = 0;
+            // TODO: make this fatal. Driver is not supposed to quote size
+            //  smaller than what C2D needs !!
         } else {
             buffer_size_req = destination_size;
-            if (buffer_size_req < omx->drv_ctx.op_buf.buffer_size)
-                buffer_size_req = omx->drv_ctx.op_buf.buffer_size;
-            if (buffer_alignment_req < omx->drv_ctx.op_buf.alignment)
-                buffer_alignment_req = omx->drv_ctx.op_buf.alignment;
+            m_c2d_height = height;
+            m_c2d_width = width;
         }
     }
 fail_update_buf_req:
@@ -11204,14 +11236,57 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr()
             goto fail_get_buffer_size;
         }
     }
-    if (buffer_size < omx->drv_ctx.op_buf.buffer_size)
-        buffer_size = omx->drv_ctx.op_buf.buffer_size;
-    if (buffer_alignment_req < omx->drv_ctx.op_buf.alignment)
-        buffer_alignment_req = omx->drv_ctx.op_buf.alignment;
 fail_get_buffer_size:
     pthread_mutex_unlock(&omx->c_lock);
     return status;
 }
+
+OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::set_buffer_req(
+        OMX_U32 buffer_size, OMX_U32 actual_count) {
+    OMX_U32 expectedSize = enabled ? buffer_size_req : omx->drv_ctx.op_buf.buffer_size;
+
+    if (buffer_size < expectedSize) {
+        DEBUG_PRINT_ERROR("OP Requirements: Client size(%u) insufficient v/s requested(%u)",
+                buffer_size, expectedSize);
+        return OMX_ErrorBadParameter;
+    }
+    if (actual_count < omx->drv_ctx.op_buf.actualcount) {
+        DEBUG_PRINT_ERROR("OP Requirements: Client count(%u) insufficient v/s requested(%u)",
+                actual_count, omx->drv_ctx.op_buf.actualcount);
+        return OMX_ErrorBadParameter;
+    }
+
+    bool reqs_updated = false;
+    if (enabled) {
+        // disallow changing buffer size/count while we have active allocated buffers
+        if (allocated_count > 0) {
+            DEBUG_PRINT_ERROR("Cannot change C2D buffer size from %u to %u with %d active allocations",
+                    buffer_size_req, buffer_size, allocated_count);
+            return OMX_ErrorInvalidState;
+        }
+
+        buffer_size_req = buffer_size;
+    } else {
+        if (buffer_size > omx->drv_ctx.op_buf.buffer_size) {
+            omx->drv_ctx.op_buf.buffer_size = buffer_size;
+            reqs_updated = true;
+        }
+    }
+
+    if (actual_count > omx->drv_ctx.op_buf.actualcount) {
+        omx->drv_ctx.op_buf.actualcount = actual_count;
+        reqs_updated = true;
+    }
+
+    if (reqs_updated) {
+        omx->drv_ctx.extradata_info.count = omx->drv_ctx.op_buf.actualcount;
+        omx->drv_ctx.extradata_info.size = omx->drv_ctx.extradata_info.count *
+                omx->drv_ctx.extradata_info.buffer_size;
+        return omx->set_buffer_req(&(omx->drv_ctx.op_buf));
+    }
+    return OMX_ErrorNone;
+}
+
 OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::free_output_buffer(
         OMX_BUFFERHEADERTYPE *bufhdr)
 {
