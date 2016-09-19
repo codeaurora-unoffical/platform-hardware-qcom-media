@@ -57,25 +57,25 @@ libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVenc_la_CXXFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVenc_la_LDFLAGS = -shared -version-info $(OMXVIDEO_LIBRARY_VERSION)
 
-#bin_PROGRAMS = mm-venc-omx-test
+bin_PROGRAMS = mm-venc-omx-test
 
-#mm_venc_omx_test_CPPFLAGS = -I$(top_srcdir)/mm-video-v4l2/vidc/venc/inc
-#mm_venc_omx_test_CPPFLAGS += -I$(top_srcdir)/mm-core/inc
-#mm_venc_omx_test_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc
+mm_venc_omx_test_CPPFLAGS = -I$(top_srcdir)/mm-video-v4l2/vidc/venc/inc
+mm_venc_omx_test_CPPFLAGS += -I$(top_srcdir)/mm-core/inc
+mm_venc_omx_test_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc
 
 if TARGET_MSM8974
-#mm_venc_omx_test_CPPFLAGS += -DMAX_RES_1080P
-#mm_venc_omx_test_CPPFLAGS += -DMAX_RES_1080P_EBI
-#mm_venc_omx_test_CPPFLAGS += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
-#mm_venc_omx_test_CPPFLAGS += -D_MSM8974_
-#mm_venc_omx_test_CPPFLAGS += -DUSE_ION
-#mm_venc_omx_test_CPPFLAGS += -D_METAMODE_
+mm_venc_omx_test_CPPFLAGS += -DMAX_RES_1080P
+mm_venc_omx_test_CPPFLAGS += -DMAX_RES_1080P_EBI
+mm_venc_omx_test_CPPFLAGS += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
+mm_venc_omx_test_CPPFLAGS += -D_MSM8974_
+mm_venc_omx_test_CPPFLAGS += -DUSE_ION
+mm_venc_omx_test_CPPFLAGS += -D_METAMODE_
 endif
 
-#mm_venc_omx_test_SOURCES = test/venc_test.cpp
-#mm_venc_omx_test_SOURCES += test/camera_test.cpp
-#mm_venc_omx_test_SOURCES += test/venc_util.c
-#mm_venc_omx_test_SOURCES += test/fb_test.c
-#mm_venc_omx_test_LDADD = -ldl -lpthread
-#mm_venc_omx_test_LDADD += ../../../mm-core/libOmxCore.la
-#mm_venc_omx_test_LDADD += ./libOmxVenc.la
+mm_venc_omx_test_SOURCES = test/venc_test.cpp
+mm_venc_omx_test_SOURCES += test/camera_test.cpp
+mm_venc_omx_test_SOURCES += test/venc_util.c
+mm_venc_omx_test_SOURCES += test/fb_test.c
+mm_venc_omx_test_LDADD = -ldl -lpthread
+mm_venc_omx_test_LDADD += ../../../mm-core/libOmxCore.la
+mm_venc_omx_test_LDADD += ./libOmxVenc.la
