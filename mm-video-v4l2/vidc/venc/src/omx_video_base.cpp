@@ -327,7 +327,6 @@ void omx_video::process_event_cb(void *ctxt, unsigned char id)
     }
 
     // Protect the shared queue data structure
-    do {
         /*Read the message id's from the queue*/
 
         pthread_mutex_lock(&pThis->m_lock);
@@ -628,13 +627,6 @@ void omx_video::process_event_cb(void *ctxt, unsigned char id)
             }
         }
 
-        pthread_mutex_lock(&pThis->m_lock);
-        qsize = pThis->m_cmd_q.m_size + pThis->m_ftb_q.m_size +\
-                pThis->m_etb_q.m_size;
-
-        pthread_mutex_unlock(&pThis->m_lock);
-
-    } while (qsize>0);
     DEBUG_PRINT_LOW("exited the while loop");
 
 }
