@@ -3213,19 +3213,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
                         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
-                            if ((handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) &&
-                                 is_gralloc_source_ubwc) {
-                                 m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_UBWC;
-                            } else {
                                 m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
-                            }
                         } else if (handle->format == HAL_PIXEL_FORMAT_RGBA_8888) {
-                            if ((handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) &&
-                                 is_gralloc_source_ubwc) {
-                                 m_sVenc_cfg.inputformat = V4L2_PIX_FMT_RGBA8888_UBWC;
-                            } else {
                                 m_sVenc_cfg.inputformat = V4L2_PIX_FMT_RGB32;
-                            }
                         } else if (  handle->format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m) {
                                 m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
                         }

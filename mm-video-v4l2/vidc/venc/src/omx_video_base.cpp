@@ -1712,12 +1712,7 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 comp_role->nSize = sizeof(*comp_role);
 
                 DEBUG_PRINT_LOW("Getparameter: OMX_IndexParamStandardComponentRole %d",paramIndex);
-                if (NULL != comp_role->cRole) {
-                    strlcpy((char*)comp_role->cRole,(const char*)m_cRole,OMX_MAX_STRINGNAME_SIZE);
-                } else {
-                    DEBUG_PRINT_ERROR("ERROR: Getparameter: OMX_IndexParamStandardComponentRole %d is passed with NULL parameter for role",paramIndex);
-                    eRet =OMX_ErrorBadParameter;
-                }
+                strlcpy((char*)comp_role->cRole,(const char*)m_cRole,OMX_MAX_STRINGNAME_SIZE);
                 break;
             }
             /* Added for parameter test */
@@ -4857,18 +4852,11 @@ bool omx_video::omx_c2d_conv::get_buffer_size(int port,unsigned int &buf_size)
     }
     return ret;
 }
-
 bool omx_video::is_conv_needed(int hal_fmt, int hal_flags)
 {
+   (void)hal_flags;
     bool bRet = false;
-
-    if (!strncmp(m_platform, "msm8996", 7)) {
-        bRet = hal_fmt == HAL_PIXEL_FORMAT_RGBA_8888 &&
-            !(hal_flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED);
-    } else {
-        bRet = hal_fmt == HAL_PIXEL_FORMAT_RGBA_8888;
-    }
-
+    bRet = hal_fmt == HAL_PIXEL_FORMAT_RGBA_8888;
 #ifdef _HW_RGBA
     bRet = false;
 #endif
