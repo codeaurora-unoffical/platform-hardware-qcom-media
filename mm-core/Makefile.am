@@ -18,8 +18,8 @@ AM_CPPFLAGS += -DFEATURE_NATIVELINUX
 AM_CPPFLAGS += -DFEATURE_DSM_DUP_ITEMS
 AM_CPPFLAGS += -D_ENABLE_QC_MSG_LOG_
 AM_CPPFLAGS += -DVERBOSE
-AM_CPPFLAGS += -Iinc
-AM_CPPFLAGS += -Isrc/common
+AM_CPPFLAGS += -I${WORKSPACE}/mm-video-oss/mm-core/inc
+AM_CPPFLAGS += -I${WORKSPACE}/mm-video-oss/mm-core/src/common
 
 h_sources  =inc/OMX_Audio.h
 h_sources +=inc/OMX_Component.h
@@ -66,6 +66,10 @@ TARGET_REGISTRY = 8226
 endif
 
 if TARGET_MSM8916
+TARGET_REGISTRY = 8916
+endif
+
+if TARGET_APQ8016
 TARGET_REGISTRY = 8916
 endif
 
