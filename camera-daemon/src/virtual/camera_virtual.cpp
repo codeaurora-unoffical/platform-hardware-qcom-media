@@ -939,6 +939,10 @@ public:
         return icd_->takePicture();
     }
 
+    /* added for ICameraDevice new changes */
+    virtual int startAutoFocus() { return 0; }
+    virtual void stopAutoFocus() { ; }
+
     static int create(int idx, ICameraDevice** device) {
         int rc = 0;
         ICameraDevice* icd = 0;
