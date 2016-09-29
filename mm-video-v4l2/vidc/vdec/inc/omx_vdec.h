@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2017, The Linux Foundation. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
@@ -1037,6 +1037,7 @@ class omx_vdec: public qc_omx_component
         unsigned int m_fill_output_msg;
         bool client_set_fps;
         unsigned int stereo_output_mode;
+        bool m_hypervisor;
 #ifndef _LINUX_
         class allocate_color_convert_buf
         {

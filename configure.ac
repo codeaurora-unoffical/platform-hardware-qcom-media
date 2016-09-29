@@ -45,8 +45,15 @@ AC_ARG_ENABLE([target-msm8974],
 	[target_msm8974="${enableval}"],
 	target_msm8974=no)
 
+AC_ARG_ENABLE([target-hypervisor],
+	AC_HELP_STRING([--enable-target-hypervisor],
+		[Enable conditional compile for target hypervisor [default=no]]),
+	[target_hypervisor="${enableval}"],
+	target_hypervisor=no)
+
 AM_CONDITIONAL(TARGET_MSM8960, test "x$target_msm8960" = "xyes")
 AM_CONDITIONAL(TARGET_MSM8974, test "x$target_msm8974" = "xyes")
+AM_CONDITIONAL(TARGET_HYPERVISOR, test "x$target_hypervisor" = "xyes")
 
 AC_ARG_WITH([sanitized-headers],
 	[AS_HELP_STRING([--with-sanitized-headers=DIR],[location of the sanitized Linux headers])],

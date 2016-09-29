@@ -97,6 +97,10 @@ ifeq ($(TARGET_USES_MEDIA_EXTENSIONS),true)
 libmm-vdec-def += -DALLOCATE_OUTPUT_NATIVEHANDLE
 endif
 
+# Hypervisor
+ifneq (,$(filter $(MACHINE), "8x96quinhyp" "8x96redhyp"))
+libmm-vdec-def += -D_HYPERVISOR_
+endif
 # ---------------------------------------------------------------------------------
 # 			Make the Shared library (libOmxVdec)
 # ---------------------------------------------------------------------------------
@@ -121,6 +125,7 @@ LOCAL_SRC_FILES         += src/mp4_utils.cpp
 LOCAL_SRC_FILES         += src/hevc_utils.cpp
 LOCAL_STATIC_LIBRARIES  := libOmxVidcCommon
 LOCAL_SRC_FILES         += src/omx_vdec_v4l2.cpp
+LOCAL_SRC_FILES         += ../common/src/hypv_intercept.cpp
 
 include $(BUILD_SHARED_LIBRARY)
 

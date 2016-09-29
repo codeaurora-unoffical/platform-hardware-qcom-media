@@ -20,6 +20,11 @@ AM_CPPFLAGS += -UINPUT_BUFFER_LOG
 AM_CPPFLAGS += -UOUTPUT_BUFFER_LOG
 AM_CPPFLAGS += -Wno-parentheses
 
+#Hypervisor
+if TARGET_HYPERVISOR
+AM_CPPFLAGS += -D_HYPERVISOR_
+endif
+
 if TARGET_MSM8960
 AM_CPPFLAGS += -DMAX_RES_1080P
 AM_CPPFLAGS += -DMAX_RES_1080P_EBI
@@ -54,7 +59,8 @@ if TARGET_MSM8974
 c_sources += src/omx_vdec_v4l2.cpp
 endif
 c_sources += ../common/src/extra_data_handler.cpp
-
+#Hypervisor
+c_sources += ../common/src/hypv_intercept.cpp
 
 lib_LTLIBRARIES = libOmxVdec.la
 libOmxVdec_la_SOURCES = $(c_sources)

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -51,6 +51,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
+#include "hypv_intercept.h"
 #ifndef _LINUX_
 #include <media/hardware/HardwareAPI.h>
 #endif
@@ -154,6 +155,13 @@ extern "C" {
 #define SECURE_ALIGN SZ_1M
 #define SECURE_FLAGS_INPUT_BUFFER ION_SECURE
 #define SECURE_FLAGS_OUTPUT_BUFFER ION_SECURE
+#endif
+
+#ifdef _HYPERVISOR_
+#define ioctl(x, y, z) hypv_ioctl(x, y, z)
+#define HYPERVISOR 1
+#else
+#define HYPERVISOR 0
 #endif
 
 static OMX_U32 maxSmoothStreamingWidth = 1920;
@@ -820,6 +828,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     m_internal_color_space.sAspects.mTransfer = ColorAspects::TransferUnspecified;
     m_internal_color_space.nSize = sizeof(DescribeColorAspectsParams);
 #endif
+    m_hypervisor = !!HYPERVISOR;
 }
 
 static const int event_type[] = {
@@ -929,7 +938,12 @@ omx_vdec::~omx_vdec()
         pthread_join(async_thread_id,NULL);
     unsubscribe_to_events(drv_ctx.video_driver_fd);
     close(m_poll_efd);
-    close(drv_ctx.video_driver_fd);
+    if (m_hypervisor) {
+        hypv_close(drv_ctx.video_driver_fd);
+        hypv_deinit();
+    } else {
+        close(drv_ctx.video_driver_fd);
+    }
     pthread_mutex_destroy(&m_lock);
     pthread_mutex_destroy(&c_lock);
     pthread_mutex_destroy(&buf_lock);
@@ -2164,7 +2178,18 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         role = (OMX_STRING)"OMX.qcom.video.decoder.vp8";
     }
 
-    drv_ctx.video_driver_fd = open(device_name, O_RDWR);
+    if (m_hypervisor) {
+        if (hypv_init() < 0) {
+            DEBUG_PRINT_ERROR("hypervisor init failed");
+            return OMX_ErrorInsufficientResources;
+        }
+        v4l2fe_callback_t v4l2cb;
+        v4l2cb.handler = async_message_process;
+        v4l2cb.context = (void *)this;
+        drv_ctx.video_driver_fd = hypv_open(device_name, O_RDWR, &v4l2cb);
+    } else {
+        drv_ctx.video_driver_fd = open(device_name, O_RDWR);
+    }
 
     DEBUG_PRINT_INFO("component_init: %s : fd=%d", role, drv_ctx.video_driver_fd);
 
@@ -2182,15 +2207,18 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         return OMX_ErrorInsufficientResources;
     }
     ret = subscribe_to_events(drv_ctx.video_driver_fd);
-    if (!ret) {
-        async_thread_created = true;
-        ret = pthread_create(&async_thread_id,0,async_message_thread,this);
+    if (!m_hypervisor) {
+        if (!ret) {
+            async_thread_created = true;
+            ret = pthread_create(&async_thread_id,0,async_message_thread,this);
+        }
+        if (ret) {
+            DEBUG_PRINT_ERROR("Failed to create async_message_thread");
+            async_thread_created = false;
+            return OMX_ErrorInsufficientResources;
+        }
     }
-    if (ret) {
-        DEBUG_PRINT_ERROR("Failed to create async_message_thread");
-        async_thread_created = false;
-        return OMX_ErrorInsufficientResources;
-    }
+
 
 #ifdef OUTPUT_EXTRADATA_LOG
     outputExtradataFile = fopen (output_extradata_filename, "ab");
@@ -9680,7 +9708,10 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
         return fd;
     }
 
-    alloc_data->flags = flag;
+    if (m_hypervisor)
+        alloc_data->flags = 0;
+    else
+        alloc_data->flags = flag;
     alloc_data->len = buffer_size;
     alloc_data->align = clip2(alignment);
     if (alloc_data->align < 4096) {
