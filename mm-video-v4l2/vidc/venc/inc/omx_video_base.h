@@ -150,6 +150,11 @@ enum omx_venc_extradata_types {
     VENC_EXTRADATA_VQZIP = 0x02000000,
 };
 
+struct output_metabuffer {
+    OMX_U32 type;
+    native_handle_t *nh;
+};
+
 // OMX video class
 class omx_video: public qc_omx_component
 {
