@@ -530,9 +530,20 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         omx_report_unsupported_setting();
                         return OMX_ErrorUnsupportedSetting;
                     }
-                    DEBUG_PRINT_LOW("i/p actual cnt requested = %lu", portDefn->nBufferCountActual);
-                    DEBUG_PRINT_LOW("i/p min cnt requested = %lu", portDefn->nBufferCountMin);
-                    DEBUG_PRINT_LOW("i/p buffersize requested = %lu", portDefn->nBufferSize);
+                    DEBUG_PRINT_LOW("i/p actual cnt requested = %u", (unsigned int)portDefn->nBufferCountActual);
+                    DEBUG_PRINT_LOW("i/p min cnt requested = %u", (unsigned int)portDefn->nBufferCountMin);
+                    DEBUG_PRINT_LOW("i/p buffersize requested = %u", (unsigned int)portDefn->nBufferSize);
+                    if (portDefn->nBufferCountActual > MAX_NUM_INPUT_BUFFERS) {
+                        DEBUG_PRINT_ERROR("ERROR: (In_PORT) actual count (%u) exceeds max(%u)",
+                                (unsigned int)portDefn->nBufferCountActual, (unsigned int)MAX_NUM_INPUT_BUFFERS);
+                        return OMX_ErrorUnsupportedSetting;
+                    }
+                    if (m_inp_mem_ptr &&
+                            (portDefn->nBufferCountActual != m_sInPortDef.nBufferCountActual ||
+                            portDefn->nBufferSize != m_sInPortDef.nBufferSize)) {
+                        DEBUG_PRINT_ERROR("ERROR: (In_PORT) buffer count/size can change only if port is unallocated !");
+                        return OMX_ErrorInvalidState;
+                    }
                     if (portDefn->nBufferCountMin > portDefn->nBufferCountActual) {
                         DEBUG_PRINT_ERROR("ERROR: (In_PORT) Min buffers (%lu) > actual count (%lu)",
                                 portDefn->nBufferCountMin, portDefn->nBufferCountActual);
@@ -575,9 +586,21 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                             m_sOutPortDef.nPortIndex);
                     m_sInPortDef.nBufferCountActual = portDefn->nBufferCountActual;
                 } else if (PORT_INDEX_OUT == portDefn->nPortIndex) {
-                    DEBUG_PRINT_LOW("o/p actual cnt requested = %lu", portDefn->nBufferCountActual);
-                    DEBUG_PRINT_LOW("o/p min cnt requested = %lu", portDefn->nBufferCountMin);
-                    DEBUG_PRINT_LOW("o/p buffersize requested = %lu", portDefn->nBufferSize);
+                    DEBUG_PRINT_LOW("o/p actual cnt requested = %u", (unsigned int)portDefn->nBufferCountActual);
+                    DEBUG_PRINT_LOW("o/p min cnt requested = %u", (unsigned int)portDefn->nBufferCountMin);
+                    DEBUG_PRINT_LOW("o/p buffersize requested = %u", (unsigned int)portDefn->nBufferSize);
+
+                    if (portDefn->nBufferCountActual > MAX_NUM_OUTPUT_BUFFERS) {
+                        DEBUG_PRINT_ERROR("ERROR: (Out_PORT) actual count (%u) exceeds max(%u)",
+                                (unsigned int)portDefn->nBufferCountActual, (unsigned int)MAX_NUM_OUTPUT_BUFFERS);
+                        return OMX_ErrorUnsupportedSetting;
+                    }
+                    if (m_out_mem_ptr &&
+                            (portDefn->nBufferCountActual != m_sOutPortDef.nBufferCountActual ||
+                            portDefn->nBufferSize != m_sOutPortDef.nBufferSize)) {
+                        DEBUG_PRINT_ERROR("ERROR: (Out_PORT) buffer count/size can change only if port is unallocated !");
+                        return OMX_ErrorInvalidState;
+                    }
                     if (portDefn->nBufferCountMin > portDefn->nBufferCountActual) {
                         DEBUG_PRINT_ERROR("ERROR: (Out_PORT) Min buffers (%lu) > actual count (%lu)",
                                 portDefn->nBufferCountMin, portDefn->nBufferCountActual);
