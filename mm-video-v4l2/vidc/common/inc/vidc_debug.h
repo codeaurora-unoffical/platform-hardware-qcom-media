@@ -29,6 +29,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __VIDC_DEBUG_H__
 #define __VIDC_DEBUG_H__
 
+#include <pthread.h>
+
 enum {
    PRIO_ERROR=0x1,
    PRIO_HIGH=0x2,
@@ -61,5 +63,18 @@ extern "C" {
 #define DEBUG_PRINT_LOW printf
 #define DEBUG_PRINT_HIGH printf
 #endif
+
+class auto_lock {
+    public:
+        auto_lock(pthread_mutex_t &lock)
+            : mLock(lock) {
+                pthread_mutex_lock(&mLock);
+            }
+        ~auto_lock() {
+            pthread_mutex_unlock(&mLock);
+        }
+    private:
+        pthread_mutex_t &mLock;
+};
 
 #endif
