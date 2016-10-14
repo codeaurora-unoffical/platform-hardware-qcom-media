@@ -1,3 +1,9 @@
+ifeq ($(BRILLO),)
+  BASEPORT_PATH := hardware/qcom
+else
+  BASEPORT_PATH := hardware/bsp/qcom
+endif
+
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
@@ -51,14 +57,14 @@ endif
 # Common Includes
 libmm-venc-inc      := $(LOCAL_PATH)/inc
 libmm-venc-inc      += $(OMX_VIDEO_PATH)/vidc/common/inc
-libmm-venc-inc      += hardware/bsp/qcom/media/mm-core/inc
-libmm-venc-inc      += hardware/bsp/qcom/media/libstagefrighthw
+libmm-venc-inc      += $(BASEPORT_PATH)/media/mm-core/inc
+libmm-venc-inc      += $(BASEPORT_PATH)/media/libstagefrighthw
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/qcom/display
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/adreno
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/mm-video/perceptual-qp
 libmm-venc-inc      += frameworks/native/include/media/hardware
 libmm-venc-inc      += frameworks/native/include/media/openmax
-libmm-venc-inc      += hardware/bsp/qcom/media/libc2dcolorconvert
+libmm-venc-inc      += $(BASEPORT_PATH)/media/libc2dcolorconvert
 libmm-venc-inc      += frameworks/av/include/media/stagefright
 libmm-venc-inc      += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 

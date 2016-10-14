@@ -1,5 +1,11 @@
 ROOT_DIR := $(call my-dir)
 
+ifeq ($(BRILLO),)
+  BASEPORT_PATH := hardware/qcom
+else
+  BASEPORT_PATH := hardware/bsp/qcom
+endif
+
 include $(CLEAR_VARS)
 LOCAL_PATH:= $(ROOT_DIR)
 
@@ -23,9 +29,9 @@ libmm-vidc-def += -D_ANDROID_ICS_
 # ---------------------------------------------------------------------------------
 
 libmm-vidc-inc      := $(LOCAL_PATH)/inc
-libmm-vidc-inc      += $(TOP)/hardware/bsp/qcom/media/mm-core/inc
+libmm-vidc-inc      += $(TOP)/$(BASEPORT_PATH)/media/mm-core/inc
 libmm-vidc-inc      += $(TARGET_OUT_HEADERS)/qcom/display
-libmm-vidc-inc      += $(TOP)/hardware/bsp/qcom/media/libc2dcolorconvert
+libmm-vidc-inc      += $(TOP)/$(BASEPORT_PATH)/media/libc2dcolorconvert
 libmm-vidc-inc      += $(TOP)/frameworks/av/include/media/stagefright
 libmm-vidc-inc      += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 
