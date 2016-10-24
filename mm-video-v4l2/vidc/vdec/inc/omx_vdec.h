@@ -47,7 +47,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <inttypes.h>
 #include <cstddef>
+#ifndef _LINUX_
 #include <cutils/atomic.h>
+#endif
 #include <qdMetaData.h>
 
 static ptrdiff_t x;
@@ -71,6 +73,10 @@ static ptrdiff_t x;
 extern "C" {
 #include <utils/Log.h>
 }
+#endif // _ANDROID_
+#ifdef USE_ION
+#include <linux/msm_ion.h>
+#endif
 #include <linux/videodev2.h>
 #include <poll.h>
 #include "hevc_utils.h"
@@ -111,6 +117,7 @@ extern "C" {
 #include <cutils/properties.h>
 #else
 #define PROPERTY_VALUE_MAX 92
+#include <dlfcn.h>
 #endif
 extern "C" {
     OMX_API void * get_omx_component_factory_fn(void);
@@ -183,7 +190,7 @@ class VideoHeap : public MemoryHeapBase
 
 #define DESC_BUFFER_SIZE (8192 * 16)
 
-#ifdef _ANDROID_
+#if defined (_ANDROID_) || defined (_LINUX_)
 #define MAX_NUM_INPUT_OUTPUT_BUFFERS 64
 #endif
 

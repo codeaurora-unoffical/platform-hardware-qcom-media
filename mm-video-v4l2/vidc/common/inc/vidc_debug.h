@@ -64,10 +64,25 @@ extern int debug_level;
           ALOGD(fmt,##args); \
       })
 #else
-#define DEBUG_PRINT_ERROR printf
-#define DEBUG_PRINT_INFO printf
-#define DEBUG_PRINT_LOW printf
-#define DEBUG_PRINT_HIGH printf
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <string.h>
+#include <stdlib.h>
+#define gettid() syscall(SYS_gettid)
+#define getpid() syscall(SYS_getpid)
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define DEBUG_PRINT_CTL(level, fmt, args...) \
+    do {                                       \
+        if ( level & debug_level )     \
+        printf("[%ld:%ld]:[%s:%d] " fmt" \n", getpid(), \
+                gettid(), __FILENAME__, __LINE__, ##args); \
+    } while (0)
+
+#define DEBUG_PRINT_ERROR(fmt, args...) DEBUG_PRINT_CTL(PRIO_ERROR, fmt, ##args)
+#define DEBUG_PRINT_INFO(fmt, args...)  DEBUG_PRINT_CTL(PRIO_INFO, fmt, ##args)
+#define DEBUG_PRINT_LOW(fmt, args...)  DEBUG_PRINT_CTL(PRIO_LOW, fmt, ##args)
+#define DEBUG_PRINT_HIGH(fmt, args...) DEBUG_PRINT_CTL(PRIO_HIGH, fmt, ##args)
 #endif
 
 #define VALIDATE_OMX_PARAM_DATA(ptr, paramType)                                \
