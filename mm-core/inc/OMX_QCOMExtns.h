@@ -261,7 +261,11 @@ struct OMX_QCOM_PLATFORMPRIVATE_EXTN
 typedef struct OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO
 {
     /** pmem file descriptor */
+#ifdef _ANDORID_
     unsigned long pmem_fd;
+#else
+    OMX_S32 pmem_fd;
+#endif
     /** Offset from pmem device base address */
     OMX_U32 offset;
     OMX_U32 size;
