@@ -70,6 +70,7 @@ AC_CONFIG_FILES([     \
 	mm-video-v4l2/Makefile \
 	mm-video-v4l2/vidc/Makefile \
 	mm-video-v4l2/vidc/vdec/Makefile \
+	mm-video-v4l2/vidc/venc/Makefile \
 	libc2dcolorconvert/Makefile \
 	])
 AC_OUTPUT
