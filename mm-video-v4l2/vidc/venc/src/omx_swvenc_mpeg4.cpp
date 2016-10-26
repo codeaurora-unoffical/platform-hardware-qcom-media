@@ -63,9 +63,11 @@ omx_venc::omx_venc()
 {
     ENTER_FUNC();
 
+#ifndef _LINUX_
     char property_value[PROPERTY_VALUE_MAX] = {0};
 
     memset(&m_debug,0,sizeof(m_debug));
+#endif
 
     property_value[0] = '\0';
     property_get("vidc.debug.level", property_value, "1");
@@ -1805,6 +1807,11 @@ bool omx_venc::dev_empty_buf
     (void)pmem_data_buf;
     (void)index;
 
+#ifdef _LINUX_
+    ipbuffer.p_buffer = bufhdr->pBuffer;
+    ipbuffer.size = bufhdr->nAllocLen;
+    ipbuffer.filled_length = bufhdr->nFilledLen;
+#else
     if (meta_mode_enable)
     {
         LEGACY_CAM_METADATA_TYPE *meta_buf = NULL;
@@ -1907,6 +1914,8 @@ bool omx_venc::dev_empty_buf
        ipbuffer.size = bufhdr->nAllocLen;
        ipbuffer.filled_length = bufhdr->nFilledLen;
     }
+#endif
+
     ipbuffer.flags = 0;
     if (bufhdr->nFlags & OMX_BUFFERFLAG_EOS)
     {

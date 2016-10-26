@@ -31,6 +31,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/prctl.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#ifdef _LINUX_
+#include <errno.h>
+#endif
 #include <fcntl.h>
 #include "video_encoder_device_v4l2.h"
 #include "omx_video_encoder.h"
@@ -40,15 +43,14 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #include <math.h>
 #include <media/msm_media_info.h>
-#include <cutils/properties.h>
-#include <media/hardware/HardwareAPI.h>
 
 #ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
+#include <cutils/properties.h>
 #include <gralloc_priv.h>
+#include <qdMetaData.h>
 #endif
 
-#include <qdMetaData.h>
 
 #define ALIGN(x, to_align) ((((unsigned long) x) + (to_align - 1)) & ~(to_align - 1))
 #define EXTRADATA_IDX(__num_planes) ((__num_planes) ? (__num_planes) - 1 : 0)
@@ -314,6 +316,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&color_space, 0x0, sizeof(color_space));
     memset(&temporal_layers_config, 0x0, sizeof(temporal_layers_config));
 
+#ifndef _LINUX_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.enc.log.in", property_value, "0");
     m_debug.in_buffer_log = atoi(property_value);
@@ -359,6 +362,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
         // Non UBWC case. May be CPU
     #endif // _UBWC_
 #endif // _PQ_
+#endif // _ANDROID_
 
     snprintf(m_debug.log_loc, PROPERTY_VALUE_MAX,
              "%s", BUFFER_LOG_LOC);
@@ -1271,9 +1275,11 @@ bool venc_dev::venc_open(OMX_U32 codec)
     FILE *soc_file = NULL;
     char buffer[10];
 
+#ifndef _LINUX_
     property_get("ro.board.platform", platform_name, "0");
     property_get("vidc.enc.narrow.searchrange", property_value, "0");
     enable_mv_narrow_searchrange = atoi(property_value);
+#endif
 
     if (!strncmp(platform_name, "msm8610", 7)) {
         device_name = (OMX_STRING)"/dev/video/q6_enc";
@@ -1500,6 +1506,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
             DEBUG_PRINT_ERROR("Failed to set V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAME\n");
     }
 
+#ifndef _LINUX_
     property_get("vidc.debug.turbo", property_value, "0");
     if (atoi(property_value)) {
         DEBUG_PRINT_HIGH("Turbo mode debug property enabled");
@@ -1509,6 +1516,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
             DEBUG_PRINT_ERROR("Failed to set turbo mode");
         }
     }
+#endif
 
 #ifdef _PQ_
     if (codec == OMX_VIDEO_CodingAVC) {
@@ -2360,6 +2368,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 extradata = true;
                 break;
             }
+#ifndef _LINUX_
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
                 PrependSPSPPSToIDRFramesParams * pParam =
@@ -2373,6 +2382,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
 
                 break;
             }
+#endif
         case OMX_QcomIndexParamH264AUDelimiter:
             {
                 OMX_QCOM_VIDEO_CONFIG_H264_AUD * pParam =
@@ -2936,6 +2946,7 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
             }
             break;
         }
+#ifndef _LINUX_
         case OMX_QTIIndexConfigDescribeColorAspects:
             {
                 DescribeColorAspectsParams *params = (DescribeColorAspectsParams *)configData;
@@ -3047,6 +3058,7 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                 }
                 break;
             }
+#endif
         case OMX_QTIIndexConfigVideoRoiInfo:
         {
             if(!venc_set_roi_qp_info((OMX_QTI_VIDEO_CONFIG_ROIINFO *)configData)) {
@@ -3171,6 +3183,7 @@ unsigned venc_dev::venc_set_message_thread_id(pthread_t tid)
     return 0;
 }
 
+#ifdef _VQZIP_
 bool venc_dev::venc_set_vqzip_defaults()
 {
     struct v4l2_control control;
@@ -3225,6 +3238,7 @@ bool venc_dev::venc_set_vqzip_defaults()
 
     return true;
 }
+#endif
 
 unsigned venc_dev::venc_start(void)
 {
@@ -3256,8 +3270,10 @@ unsigned venc_dev::venc_start(void)
     venc_try_enable_pq();
 #endif // _PQ_
 
+#ifdef _VQZIP_
     if (vqzip_sei_info.enabled && !venc_set_vqzip_defaults())
         return 1;
+#endif
 
     if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264)
         venc_set_low_latency((OMX_BOOL)!intra_period.num_bframes);
@@ -3759,7 +3775,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     struct v4l2_plane plane[VIDEO_MAX_PLANES];
     int rc = 0, extra_idx;
     struct OMX_BUFFERHEADERTYPE *bufhdr;
+#ifndef _LINUX_
     LEGACY_CAM_METADATA_TYPE * meta_buf = NULL;
+#endif
     temp_buffer = (struct pmem *)buffer;
 
     memset (&buf, 0, sizeof(buf));
@@ -3777,6 +3795,14 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
     DEBUG_PRINT_LOW("Input buffer length %u, Timestamp = %lld", (unsigned int)bufhdr->nFilledLen, bufhdr->nTimeStamp);
 
+#ifdef _LINUX_
+    plane[0].m.userptr = (unsigned long) bufhdr->pBuffer;
+    plane[0].data_offset = bufhdr->nOffset;
+    plane[0].length = bufhdr->nAllocLen;
+    plane[0].bytesused = bufhdr->nFilledLen;
+    DEBUG_PRINT_LOW("venc_empty_buf: non-camera buf: fd = %d filled %d of %d",
+            fd, plane[0].bytesused, plane[0].length);
+#else
     if (pmem_data_buf) {
         DEBUG_PRINT_LOW("\n Internal PMEM addr for i/p Heap UseBuf: %p", pmem_data_buf);
         plane[0].m.userptr = (unsigned long)pmem_data_buf;
@@ -4025,6 +4051,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     fd, plane[0].bytesused, plane[0].length);
         }
     }
+#endif
 
     extra_idx = EXTRADATA_IDX(num_input_planes);
 
@@ -4113,6 +4140,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     return true;
 }
 
+#ifndef _LINUX_
 bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
 {
     struct v4l2_buffer buf;
@@ -4268,6 +4296,7 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
 
     return status;
 }
+#endif
 
 bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,unsigned fd)
 {
@@ -4307,11 +4336,13 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
     buf.length = num_output_planes;
     buf.flags = 0;
 
+#ifndef _LINUX_
     if (venc_handle->is_secure_session()) {
         output_metabuffer *meta_buf = (output_metabuffer *)(bufhdr->pBuffer);
         native_handle_t *handle_t = meta_buf->nh;
         plane[0].length = handle_t->data[3];
     }
+#endif
 
     if (mBatchSize) {
         // Should always mark first buffer as DEFER, since 0 % anything is 0, just offset by 1
@@ -5320,6 +5351,7 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
         return false;
     }
 
+#ifndef _LINUX_
     if (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height >= 3840 * 2160 &&
         (property_get("vidc.enc.disable_bframes", property_value, "0") && atoi(property_value))) {
         intra_period.num_pframes = intra_period.num_pframes + intra_period.num_bframes;
@@ -5327,6 +5359,7 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
         DEBUG_PRINT_LOW("Warning: Disabling B frames for UHD recording pFrames = %lu bFrames = %lu",
                          intra_period.num_pframes, intra_period.num_bframes);
     }
+#endif
 
     control.id = V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAMES;
     control.value = intra_period.num_pframes;
@@ -7763,6 +7796,7 @@ bool venc_dev::BatchInfo::isPending(int bufferId) {
     return existsId < kMaxBufs;
 }
 
+#ifndef _LINUX_
 int venc_dev::BatchInfo::getFdAt(native_handle_t *hnd, int index) {
     int fd = hnd && index < hnd->numFds ? hnd->data[index] : -1;
     return fd;
@@ -7796,6 +7830,7 @@ int venc_dev::BatchInfo::getTimeStampAt(native_handle_t *hnd, int index) {
             hnd->data[4*hnd->numFds + index] : -1;
     return size;
 }
+#endif
 
 #ifdef _VQZIP_
 venc_dev::venc_dev_vqzip::venc_dev_vqzip()

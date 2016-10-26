@@ -29,6 +29,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
 #include<unistd.h>
+#ifdef _LINUX_
+#include <errno.h>
+#endif
 #include <fcntl.h>
 #include "video_encoder_device.h"
 #include "omx_video_encoder.h"
@@ -142,6 +145,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     pthread_cond_init (&loaded_start_stop_cond, NULL);
     memset(&m_debug,0,sizeof(m_debug));
 
+#ifndef _LINUX_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_value[0] = '\0';
     property_get("vidc.enc.log.in", property_value, "0");
@@ -152,6 +156,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     m_debug.out_buffer_log = atoi(property_value);
     snprintf(m_debug.log_loc, PROPERTY_VAL_MAX,
              "%s", BUFFER_LOG_LOC);
+#endif
 
     DEBUG_PRINT_LOW("venc_dev constructor");
 }

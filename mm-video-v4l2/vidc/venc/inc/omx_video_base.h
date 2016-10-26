@@ -48,6 +48,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/mman.h>
 #ifdef _ANDROID_
 #include <binder/MemoryHeapBase.h>
+#include <media/hardware/HardwareAPI.h>
 #ifdef _ANDROID_ICS_
 #include "QComOMXMetadata.h"
 #endif
@@ -55,7 +56,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pthread.h>
 #include <semaphore.h>
 #include <linux/msm_vidc_enc.h>
-#include <media/hardware/HardwareAPI.h>
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "OMX_Skype_VideoExtensions.h"
@@ -162,19 +162,23 @@ enum omx_venc_extradata_types {
     VENC_EXTRADATA_ROI = 0x04000000,
 };
 
+#ifndef _LINUX_
 struct output_metabuffer {
     OMX_U32 type;
     native_handle_t *nh;
 };
+#endif
 
 // OMX video class
 class omx_video: public qc_omx_component
 {
     protected:
-#ifdef _ANDROID_ICS_
+#if defined (_ANDROID_ICS_) || defined (_LINUX_)
         bool meta_mode_enable;
         bool c2d_opened;
+#ifndef _LINUX_
         LEGACY_CAM_METADATA_TYPE meta_buffers[MAX_NUM_INPUT_BUFFERS];
+#endif
         OMX_BUFFERHEADERTYPE *opaque_buffer_hdr[MAX_NUM_INPUT_BUFFERS];
         bool get_syntaxhdr_enable;
         OMX_BUFFERHEADERTYPE  *psource_frame;
@@ -184,6 +188,7 @@ class omx_video: public qc_omx_component
         //intermediate conversion buffer queued to encoder in case of invalid EOS input
         OMX_BUFFERHEADERTYPE  *mEmptyEosBuffer;
 
+#ifndef _LINUX_
         class omx_c2d_conv
         {
             public:
@@ -207,6 +212,7 @@ class omx_video: public qc_omx_component
                 destroyC2DColorConverter_t *mConvertClose;
         };
         omx_c2d_conv c2d_conv;
+#endif
 #endif
     public:
 
@@ -579,7 +585,9 @@ class omx_video: public qc_omx_component
 
         void complete_pending_buffer_done_cbs();
         bool is_conv_needed(int, int);
+#ifndef _LINUX_
         void print_debug_color_aspects(ColorAspects *aspects, const char *prefix);
+#endif
 
 #ifdef USE_ION
         int alloc_map_ion_memory(int size,
@@ -653,7 +661,9 @@ class omx_video: public qc_omx_component
         OMX_SKYPE_VIDEO_CONFIG_QP m_sConfigQP;
         QOMX_EXTNINDEX_VIDEO_VENC_SAR m_sSar;
         QOMX_VIDEO_H264ENTROPYCODINGTYPE m_sParamEntropy;
+#ifndef _LINUX_
         PrependSPSPPSToIDRFramesParams m_sPrependSPSPPS;
+#endif
         struct timestamp_info {
             OMX_U64 m_TimeStamp;
             bool is_buffer_pending;
@@ -667,7 +677,9 @@ class omx_video: public qc_omx_component
         OMX_VIDEO_CONFIG_ANDROID_INTRAREFRESHTYPE m_sConfigIntraRefresh;
 #endif
         OMX_QTI_VIDEO_CONFIG_BLURINFO       m_blurInfo;
+#ifndef _LINUX_
         DescribeColorAspectsParams m_sConfigColorAspects;
+#endif
         OMX_VIDEO_PARAM_ANDROID_TEMPORALLAYERINGTYPE m_sParamTemporalLayers;
         OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE m_sConfigTemporalLayers;
 
