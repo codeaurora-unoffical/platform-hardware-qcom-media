@@ -538,12 +538,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                 (unsigned int)portDefn->nBufferCountActual, (unsigned int)MAX_NUM_INPUT_BUFFERS);
                         return OMX_ErrorUnsupportedSetting;
                     }
-                    if (m_inp_mem_ptr &&
-                            (portDefn->nBufferCountActual != m_sInPortDef.nBufferCountActual ||
-                            portDefn->nBufferSize != m_sInPortDef.nBufferSize)) {
-                        DEBUG_PRINT_ERROR("ERROR: (In_PORT) buffer count/size can change only if port is unallocated !");
-                        return OMX_ErrorInvalidState;
-                    }
                     if (portDefn->nBufferCountMin > portDefn->nBufferCountActual) {
                         DEBUG_PRINT_ERROR("ERROR: (In_PORT) Min buffers (%lu) > actual count (%lu)",
                                 portDefn->nBufferCountMin, portDefn->nBufferCountActual);
@@ -594,12 +588,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         DEBUG_PRINT_ERROR("ERROR: (Out_PORT) actual count (%u) exceeds max(%u)",
                                 (unsigned int)portDefn->nBufferCountActual, (unsigned int)MAX_NUM_OUTPUT_BUFFERS);
                         return OMX_ErrorUnsupportedSetting;
-                    }
-                    if (m_out_mem_ptr &&
-                            (portDefn->nBufferCountActual != m_sOutPortDef.nBufferCountActual ||
-                            portDefn->nBufferSize != m_sOutPortDef.nBufferSize)) {
-                        DEBUG_PRINT_ERROR("ERROR: (Out_PORT) buffer count/size can change only if port is unallocated !");
-                        return OMX_ErrorInvalidState;
                     }
                     if (portDefn->nBufferCountMin > portDefn->nBufferCountActual) {
                         DEBUG_PRINT_ERROR("ERROR: (Out_PORT) Min buffers (%lu) > actual count (%lu)",
@@ -1705,7 +1693,14 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     if (m_out_mem_ptr) {
         DEBUG_PRINT_LOW("Freeing the Output Memory");
         for (i=0; i< m_sOutPortDef.nBufferCountActual; i++ ) {
-            free_output_buffer (&m_out_mem_ptr[i]);
+            if (BITMASK_PRESENT(&m_out_bm_count, i)) {
+                BITMASK_CLEAR(&m_out_bm_count, i);
+                free_output_buffer (&m_out_mem_ptr[i]);
+            }
+
+            if (release_output_done()) {
+                break;
+            }
         }
         free(m_out_mem_ptr);
         m_out_mem_ptr = NULL;
@@ -1715,7 +1710,14 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     if (m_inp_mem_ptr && !meta_mode_enable) {
         DEBUG_PRINT_LOW("Freeing the Input Memory");
         for (i=0; i<m_sInPortDef.nBufferCountActual; i++ ) {
-            free_input_buffer (&m_inp_mem_ptr[i]);
+            if (BITMASK_PRESENT(&m_inp_bm_count, i)) {
+                BITMASK_CLEAR(&m_inp_bm_count, i);
+                free_input_buffer (&m_inp_mem_ptr[i]);
+            }
+
+            if (release_input_done()) {
+                break;
+            }
         }
 
 
@@ -1988,7 +1990,7 @@ int omx_venc::async_message_process (void *context, void* message)
                     omxhdr->nFlags = m_sVenc_msg->buf.flags;
 
                     /*Use buffer case*/
-                    if (omx->output_use_buffer && !omx->m_use_output_pmem) {
+                    if (omx->output_use_buffer && !omx->m_use_output_pmem && !omx->is_secure_session()) {
                         DEBUG_PRINT_LOW("memcpy() for o/p Heap UseBuffer");
                         memcpy(omxhdr->pBuffer,
                                 (m_sVenc_msg->buf.ptrbuffer),
