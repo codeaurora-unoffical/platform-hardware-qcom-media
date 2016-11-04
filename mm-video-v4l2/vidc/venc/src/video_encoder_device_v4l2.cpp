@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2015, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2016, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -3287,7 +3287,10 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         return false;
     }
 
-    venc_populate_pqp_info_extradata(fd, plane[0].data_offset, plane[0].bytesused);
+    /* Calculate PQ information only if data is present */
+    if (plane[0].bytesused) {
+        venc_populate_pqp_info_extradata(fd, plane[0].data_offset, plane[0].bytesused);
+    }
 
     buf.index = index;
     buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
