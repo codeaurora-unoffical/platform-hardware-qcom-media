@@ -29,7 +29,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __VIDC_DEBUG_H__
 #define __VIDC_DEBUG_H__
 
-#if defined (_ANDROID_) || defined (_LINUX_)
 #include <pthread.h>
 enum {
    PRIO_ERROR=0x1,
@@ -37,7 +36,6 @@ enum {
    PRIO_HIGH=0x2,
    PRIO_LOW=0x4
 };
-#endif
 
 extern int debug_level;
 

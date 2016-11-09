@@ -11,6 +11,7 @@ AM_CPPFLAGS += -D_LINUX_
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc
 
 h_sources = C2DColorConverter.h
+h_sources += $(top_srcdir)/mm-video-v4l2/vidc/common/inc/vidc_debug.h
 c_sources = C2DColorConverter.cpp
 
 include_HEADERS = $(h_sources)
