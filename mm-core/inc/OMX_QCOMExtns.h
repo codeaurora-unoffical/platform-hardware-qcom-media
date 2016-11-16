@@ -554,6 +554,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     /* Force OPB to UnCompressed mode */
     OMX_QTIIndexParamForceUnCompressedForOPB = 0x7F00005B,
 
+    /* Custom extension provided to IMS-VT to set meta-mode */
+    OMX_QTIIndexParamIMSVTVideoMetaBufferMode = 0x7F00005C,
+
 };
 
 /**
