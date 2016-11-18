@@ -439,62 +439,14 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
             }
 #endif
          }
-         else if (m_eCodec == OMX_VIDEO_CodingVPX)
-         {
-            OMX_VIDEO_PARAM_VP8TYPE vp8;
-            vp8.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
-            result = OMX_GetParameter(m_hEncoder,
-                                      (OMX_INDEXTYPE)OMX_IndexParamVideoVp8,
-                                      (OMX_PTR) &vp8);
-            if (result == OMX_ErrorNone)
-            {
-               if(pConfig->eCodecProfile == VP8ProfileMain)
-               {
-                  vp8.eProfile = OMX_VIDEO_VP8ProfileMain;
-               }
-               else
-               {
-                  VENC_TEST_MSG_ERROR("Invalid VP8 Profile set defaulting to OMX_VIDEO_VP8ProfileMain");
-                  vp8.eProfile = OMX_VIDEO_VP8ProfileMain;
-               }
-
-               if(pConfig->eCodecLevel == VP8Version0)
-               {
-                  vp8.eLevel = OMX_VIDEO_VP8Level_Version0;
-               }
-               else if(pConfig->eCodecLevel == VP8Version1)
-               {
-                  vp8.eLevel = OMX_VIDEO_VP8Level_Version1;
-               }
-               else if(!pConfig->eCodecLevel == DefaultLevel)
-               {
-                  VENC_TEST_MSG_ERROR("Invalid VP8 Level using default");
-               }
-
-               result = OMX_SetParameter(m_hEncoder,
-                                         (OMX_INDEXTYPE)OMX_IndexParamVideoVp8,
-                                         (OMX_PTR) &vp8);
-               if(result == OMX_ErrorNone)
-               {
-                  result = SetHierPNumLayers(pConfig->nHierPNumLayers);
-               }
-
-               if (pConfig->nIntraPeriod)
-                   SetIntraPeriod(pConfig->nIntraPeriod);
-            }
-            else
-            {
-               VENC_TEST_MSG_ERROR("Failed to OMX_GetParameter(OMX_IndexParamVideoVp8), error = 0x%x", result);
-            }
-         }
       }
 
       //////////////////////////////////////////
       // error resilience
       //////////////////////////////////////////
 	   OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE errorCorrection; //OMX_IndexParamVideoErrorCorrection
-        errorCorrection.nSize = sizeof(errorCorrection);
 		errorCorrection.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
+        errorCorrection.nSize = sizeof(errorCorrection);
 		result = OMX_GetParameter(m_hEncoder,
 								(OMX_INDEXTYPE) OMX_IndexParamVideoErrorCorrection,
 								(OMX_PTR) &errorCorrection);
@@ -911,6 +863,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
       if (result == OMX_ErrorNone)
       {
          OMX_VIDEO_PARAM_BITRATETYPE bitrate; // OMX_IndexParamVideoBitrate
+         bitrate.nSize = sizeof(bitrate);
          bitrate.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
          result = OMX_GetParameter(m_hEncoder,
                                    OMX_IndexParamVideoBitrate,
@@ -953,7 +906,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
         // QP Config
         ///////////////////////////////////////////////////////////
         OMX_VIDEO_PARAM_QUANTIZATIONTYPE qp; // OMX_IndexParamVideoQuantization
-        qp.nSize = sizeof(qp);
+        qp.nSize = sizeof(OMX_VIDEO_PARAM_QUANTIZATIONTYPE);
         qp.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
         result = OMX_GetParameter(m_hEncoder,
                                   OMX_IndexParamVideoQuantization,
@@ -1008,13 +961,6 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
             if(qprange.maxQP > 51)
               qprange.maxQP = 51;
           }
-          else if (m_eCodec == OMX_VIDEO_CodingVPX)
-          {
-            if(qprange.minQP < 2)
-              qprange.minQP = 2;
-            if(qprange.maxQP > 128)
-              qprange.maxQP = 128;
-          }
           else
           {
             if(qprange.minQP < 2)
@@ -1062,7 +1008,7 @@ fprintf(stderr, "%s : %d\n", "nLTRPeriod",                   pConfig->nLTRPeriod
       if (result == OMX_ErrorNone)
       {
          OMX_VIDEO_PARAM_INTRAREFRESHTYPE ir; // OMX_IndexParamVideoIntraRefresh
-         ir.nSize = sizeof(ir);
+         ir.nSize = sizeof(OMX_VIDEO_PARAM_INTRAREFRESHTYPE);
          ir.nPortIndex = (OMX_U32) PORT_INDEX_OUT; // output
          result = OMX_GetParameter(m_hEncoder,
                                    OMX_IndexParamVideoIntraRefresh,

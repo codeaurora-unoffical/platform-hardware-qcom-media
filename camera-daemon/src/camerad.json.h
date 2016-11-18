@@ -37,8 +37,129 @@ const char* default_config = R"****(
     "name" : "imx214",
     "settings" :
     {
-      "fps" : 24,
+      "fps" : 30,
       "hfr" : 0,
+      "cameratype": "RegularCam",
+    },
+    "sessions" :
+    [
+      {
+        "name" : "720p_fpv",
+        "type" : "preview",
+        "video_enc" :
+        {
+          "type" : "h264",
+          "bit_rate" : 1000000,
+          "width" : 1280,
+          "height" : 720,
+          "profile" : "baseline",
+          "level" : 1,
+        },
+      },
+      {
+        "name" : "4kuhd",
+        "type" : "recording",
+        "video_enc" :
+        {
+          "type" : "h264",
+          "bit_rate" : 5000000,
+          "width" : 3840,
+          "height" : 2160,
+          "profile" : "high",
+          "level" : 1,
+        },
+        "file_format" : "h264"
+      },
+    ],
+  },
+  {
+    "id" : 1,
+    "name" : "imx214",
+    "settings" :
+    {
+      "fps" : 30,
+      "hfr" : 0,
+      "cameratype": "RegularCam",
+    },
+    "sessions" :
+    [
+      {
+        "name" : "720p_fpv",
+        "type" : "preview",
+        "video_enc" :
+        {
+          "type" : "h264",
+          "bit_rate" : 1000000,
+          "width" : 1280,
+          "height" : 720,
+          "profile" : "baseline",
+          "level" : 1,
+        },
+      },
+      {
+        "name" : "4kuhd",
+        "type" : "recording",
+        "video_enc" :
+        {
+          "type" : "h264",
+          "bit_rate" : 5000000,
+          "width" : 3840,
+          "height" : 2160,
+          "profile" : "high",
+          "level" : 1,
+        },
+        "file_format" : "h264"
+      },
+    ],
+  },
+  {
+    "id" : 2,
+    "name" : "imx214",
+    "settings" :
+    {
+      "fps" : 30,
+      "hfr" : 0,
+      "cameratype": "RegularCam",
+    },
+    "sessions" :
+    [
+      {
+        "name" : "720p_fpv",
+        "type" : "preview",
+        "video_enc" :
+        {
+          "type" : "h264",
+          "bit_rate" : 1000000,
+          "width" : 1280,
+          "height" : 720,
+          "profile" : "baseline",
+          "level" : 1,
+        },
+      },
+      {
+        "name" : "4kuhd",
+        "type" : "recording",
+        "video_enc" :
+        {
+          "type" : "h264",
+          "bit_rate" : 5000000,
+          "width" : 3840,
+          "height" : 2160,
+          "profile" : "high",
+          "level" : 1,
+        },
+        "file_format" : "h264"
+      },
+    ],
+  },
+  {
+    "id" : 3,
+    "name" : "imx214",
+    "settings" :
+    {
+      "fps" : 30,
+      "hfr" : 0,
+      "cameratype": "RegularCam",
     },
     "sessions" :
     [
