@@ -550,6 +550,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /* Encoder Low Latency mode */
     OMX_QcomIndexConfigVideoVencLowLatencyMode = 0x7F00005A,
+
+    /* Custom extension provided to IMS-VT to set meta-mode */
+    OMX_QTIIndexParamIMSVTVideoMetaBufferMode = 0x7F00005B,
 };
 
 /**
