@@ -2368,7 +2368,6 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 extradata = true;
                 break;
             }
-#ifndef _LINUX_
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
                 PrependSPSPPSToIDRFramesParams * pParam =
@@ -2382,7 +2381,6 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
 
                 break;
             }
-#endif
         case OMX_QcomIndexParamH264AUDelimiter:
             {
                 OMX_QCOM_VIDEO_CONFIG_H264_AUD * pParam =

@@ -632,6 +632,22 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
 };
 
+#ifndef _ANDROID_
+/**
+* A pointer to this struct is passed to OMX_SetParameter when the extension
+* index for the 'OMX.google.android.index.prependSPSPPSToIDRFrames' extension
+* is given.
+* A successful result indicates that future IDR frames will be prefixed by
+* SPS/PPS.
+*/
+typedef struct PrependSPSPPSToIDRFramesParams {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+   OMX_BOOL bEnable;
+} PrependSPSPPSToIDRFramesParams;
+#endif
+
+
 /**
 * This is custom extension to configure Low Latency Mode.
 *

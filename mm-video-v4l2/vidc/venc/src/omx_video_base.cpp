@@ -2088,7 +2088,6 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 batch->nPortIndex = PORT_INDEX_IN;
                 break;
             }
-#ifndef _LINUX_
         case OMX_QcomIndexParamSequenceHeaderWithIDR:
             {
                 VALIDATE_OMX_PARAM_DATA(paramData, PrependSPSPPSToIDRFramesParams);
@@ -2098,7 +2097,6 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 memcpy(pParam, &m_sPrependSPSPPS, sizeof(m_sPrependSPSPPS));
                 break;
             }
-#endif
         case OMX_QcomIndexParamVencAspectRatio:
             {
                 VALIDATE_OMX_PARAM_DATA(paramData, QOMX_EXTNINDEX_VIDEO_VENC_SAR);
