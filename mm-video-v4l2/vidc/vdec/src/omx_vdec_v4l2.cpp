@@ -148,6 +148,8 @@ extern "C" {
 #define SECURE_FLAGS_OUTPUT_BUFFER ION_SECURE
 #endif
 
+#define LUMINANCE_DIV_FACTOR 10000.0
+
 static OMX_U32 maxSmoothStreamingWidth = 1920;
 static OMX_U32 maxSmoothStreamingHeight = 1088;
 
@@ -236,6 +238,14 @@ void* async_message_thread (void *input)
                 if(ptr[2] & V4L2_EVENT_PICSTRUCT_FLAG) {
                     omx->m_progressive = ptr[4];
                     DEBUG_PRINT_HIGH("VIDC Port Reconfig PicStruct change - %d", ptr[4]);
+                }
+                if(ptr[2] & V4L2_EVENT_COLOUR_SPACE_FLAG) {
+                    if (ptr[5] == MSM_VIDC_BT2020) {
+                        omx->m_color_space = omx_vdec::BT2020;
+                    } else {
+                        omx->m_color_space = omx_vdec::EXCEPT_BT2020;
+                    }
+                    DEBUG_PRINT_HIGH("VIDC Port Reconfig ColorSpace change - %d", omx->m_color_space);
                 }
                 if (omx->async_message_process(input,&vdec_msg) < 0) {
                     DEBUG_PRINT_HIGH("async_message_thread Exited");
@@ -559,7 +569,7 @@ bool is_platform_tp10capture_supported()
 {
     char platform_name[PROPERTY_VALUE_MAX] = {0};
     property_get("ro.board.platform", platform_name, "0");
-    if (!strncmp(platform_name, "msmcobalt", 9)) {
+    if (!strncmp(platform_name, "msm8998", 9)) {
         DEBUG_PRINT_HIGH("TP10 on capture port is supported");
         return true;
     }
@@ -671,7 +681,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 #ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.debug.level", property_value, "1");
-    debug_level = atoi(property_value);
+    debug_level = strtoul(property_value, NULL, 16);
     property_value[0] = '\0';
 
     DEBUG_PRINT_HIGH("In OMX vdec Constructor");
@@ -828,7 +838,17 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     m_internal_hdr_info.nPortIndex = (OMX_U32)OMX_CORE_OUTPUT_PORT_INDEX;
     m_change_client_hdr_info = false;
     pthread_mutex_init(&m_hdr_info_client_lock, NULL);
-    m_dither_config = is_platform_tp10capture_supported() ? DITHER_DISABLE : DITHER_ALL_COLORSPACE;
+
+    char dither_value[PROPERTY_VALUE_MAX] = {0};
+    property_get("vidc.dec.dither", dither_value, "0");
+    if ((atoi(dither_value) > DITHER_ALL_COLORSPACE) ||
+        (atoi(dither_value) < DITHER_DISABLE)) {
+        m_dither_config = DITHER_ALL_COLORSPACE;
+    } else {
+        m_dither_config = is_platform_tp10capture_supported() ? (dither_type)atoi(dither_value) : DITHER_ALL_COLORSPACE;
+    }
+
+    DEBUG_PRINT_HIGH("Dither config is %d", m_dither_config);
     m_color_space = EXCEPT_BT2020;
 }
 
@@ -3337,6 +3357,7 @@ bool omx_vdec::execute_input_flush()
             m_cb.EmptyBufferDone(&m_cmp ,m_app_data, (OMX_BUFFERHEADERTYPE *)p2);
         } else if (ident == OMX_COMPONENT_GENERATE_ETB) {
             pending_input_buffers++;
+            VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
             DEBUG_PRINT_LOW("Flush Input OMX_COMPONENT_GENERATE_ETB %p, pending_input_buffers %d",
                     (OMX_BUFFERHEADERTYPE *)p2, pending_input_buffers);
             empty_buffer_done(&m_cmp,(OMX_BUFFERHEADERTYPE *)p2);
@@ -3921,6 +3942,16 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 (QOMX_VIDEO_CLIENT_EXTRADATATYPE *)paramData;
             pParam->nExtradataSize = VENUS_EXTRADATA_SIZE(4096, 2160);
             pParam->nExtradataAllocSize = pParam->nExtradataSize * MAX_NUM_INPUT_OUTPUT_BUFFERS;
+            eRet = OMX_ErrorNone;
+            break;
+        }
+        case OMX_QTIIndexParamDitherControl:
+        {
+            VALIDATE_OMX_PARAM_DATA(paramData, QOMX_VIDEO_DITHER_CONTROL);
+            DEBUG_PRINT_LOW("get_parameter: QOMX_VIDEO_DITHER_CONTROL");
+            QOMX_VIDEO_DITHER_CONTROL *pParam =
+                (QOMX_VIDEO_DITHER_CONTROL *) paramData;
+            pParam->eDitherType = (QOMX_VIDEO_DITHERTYPE) m_dither_config;
             eRet = OMX_ErrorNone;
             break;
         }
@@ -5106,7 +5137,22 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             }
             break;
         }
-
+        case OMX_QTIIndexParamDitherControl:
+        {
+            VALIDATE_OMX_PARAM_DATA(paramData, QOMX_VIDEO_DITHER_CONTROL);
+            DEBUG_PRINT_LOW("set_parameter: OMX_QTIIndexParamDitherControl");
+            QOMX_VIDEO_DITHER_CONTROL *pParam = (QOMX_VIDEO_DITHER_CONTROL *)paramData;
+            DEBUG_PRINT_LOW("set_parameter: Dither Config from client is: %d", pParam->eDitherType);
+            if (( pParam->eDitherType < QOMX_DITHER_DISABLE ) ||
+                ( pParam->eDitherType > QOMX_DITHER_ALL_COLORSPACE)) {
+                DEBUG_PRINT_ERROR("set_parameter: DitherType outside the range");
+                eRet = OMX_ErrorBadParameter;
+                break;
+            }
+            m_dither_config = is_platform_tp10capture_supported() ? (dither_type)pParam->eDitherType : DITHER_ALL_COLORSPACE;
+            DEBUG_PRINT_LOW("set_parameter: Final Dither Config is: %d", m_dither_config);
+            break;
+        }
         default: {
                  DEBUG_PRINT_ERROR("Setparameter: unknown param %d", paramIndex);
                  eRet = OMX_ErrorUnsupportedIndex;
@@ -7268,6 +7314,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* buffer)
 {
+    VIDC_TRACE_NAME_HIGH("ETB");
     (void) hComp;
     int push_cnt = 0,i=0;
     unsigned nPortIndex = 0;
@@ -7292,6 +7339,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     }
 
     pending_input_buffers++;
+    VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
 
     /* return zero length and not an EOS buffer */
     if (!arbitrary_bytes && (buffer->nFilledLen == 0) &&
@@ -7334,6 +7382,8 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         }
     }
 
+    VIDC_TRACE_INT_LOW("ETB-TS", buffer->nTimeStamp / 1000);
+    VIDC_TRACE_INT_LOW("ETB-size", buffer->nFilledLen);
     DEBUG_PRINT_LOW("ETBProxy: bufhdr = %p, bufhdr->pBuffer = %p", buffer, buffer->pBuffer);
     /*for use buffer we need to memcpy the data*/
     temp_buffer->buffer_len = buffer->nFilledLen;
@@ -7606,6 +7656,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
         OMX_IN OMX_HANDLETYPE        hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* bufferAdd)
 {
+    VIDC_TRACE_NAME_HIGH("FTB");
     OMX_ERRORTYPE nRet = OMX_ErrorNone;
     OMX_BUFFERHEADERTYPE *buffer = bufferAdd;
     unsigned nPortIndex = 0;
@@ -7639,6 +7690,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
     }
 
     pending_output_buffers++;
+    VIDC_TRACE_INT_LOW("FTB-pending", pending_output_buffers);
     buffer = client_buffers.get_dr_buf_hdr(bufferAdd);
     if (!buffer) {
        DEBUG_PRINT_ERROR("err: client_buffer ptr invalid");
@@ -7654,6 +7706,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
         buffer->nFilledLen = 0;
         m_cb.FillBufferDone (hComp,m_app_data,buffer);
         pending_output_buffers--;
+        VIDC_TRACE_INT_LOW("FTB-pending", pending_output_buffers);
         return OMX_ErrorBadParameter;
     }
 
@@ -8264,6 +8317,7 @@ bool omx_vdec::release_input_done(void)
 OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
         OMX_BUFFERHEADERTYPE * buffer)
 {
+    VIDC_TRACE_NAME_HIGH("FBD");
     OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *pPMEMInfo = NULL;
     if (!buffer || (buffer - m_out_mem_ptr) >= (int)drv_ctx.op_buf.actualcount) {
         DEBUG_PRINT_ERROR("[FBD] ERROR in ptr(%p)", buffer);
@@ -8295,6 +8349,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
     DEBUG_PRINT_LOW("fill_buffer_done: bufhdr = %p, bufhdr->pBuffer = %p, flags: 0x%x, timestamp: %lld",
             buffer, buffer->pBuffer, buffer->nFlags, buffer->nTimeStamp);
     pending_output_buffers --;
+    VIDC_TRACE_INT_LOW("FTB-pending", pending_output_buffers);
 
     if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
         DEBUG_PRINT_HIGH("Output EOS has been reached");
@@ -8376,6 +8431,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
             }
         }
     }
+    VIDC_TRACE_INT_LOW("FBD-TS", buffer->nTimeStamp / 1000);
 
     if (m_cb.FillBufferDone) {
         if (buffer->nFilledLen > 0) {
@@ -8449,21 +8505,35 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
         }
 
         // add current framerate to gralloc meta data
-        if (buffer->nFilledLen > 0 && m_drc_enable && m_enable_android_native_buffers && m_out_mem_ptr) {
-            //If valid fps was received, directly send it to display for the 1st fbd.
-            //Otherwise, calculate fps using fbd timestamps,
-            //  when received 2 fbds, send a coarse fps,
-            //  when received 30 fbds, update fps again as it should be
-            //  more accurate than the one when only 2 fbds received.
-            //For other frames, set value 0 to inform that refresh rate has no update
+        if ((buffer->nFilledLen > 0) && m_enable_android_native_buffers && m_out_mem_ptr) {
+            // If valid fps was received, directly send it to display for the 1st fbd.
+            // Otherwise, calculate fps using fbd timestamps
             float refresh_rate = m_fps_prev;
             if (m_fps_received) {
                 if (1 == proc_frms) {
                     refresh_rate = m_fps_received / (float)(1<<16);
                 }
             } else {
-                if (2 == proc_frms || 30 == proc_frms) {
-                    refresh_rate = drv_ctx.frame_rate.fps_numerator / (float) drv_ctx.frame_rate.fps_denominator;
+                // check if dynamic refresh rate change feature enabled or not
+                if (m_drc_enable) {
+                    // set coarse fps when 2 fbds received and
+                    // set fps again when 30 fbds received as it should be
+                    // more accurate than the one set when only 2 fbds received.
+                    if (2 == proc_frms || 30 == proc_frms) {
+                        if (drv_ctx.frame_rate.fps_denominator) {
+                            refresh_rate = drv_ctx.frame_rate.fps_numerator /
+                                    (float) drv_ctx.frame_rate.fps_denominator;
+                        }
+                    }
+                } else {
+                    // calculate and set refresh rate for every frame from second frame onwards
+                    // display will assume the default refresh rate for first frame (which is 60 fps)
+                    if (m_fps_prev) {
+                        if (drv_ctx.frame_rate.fps_denominator) {
+                            refresh_rate = drv_ctx.frame_rate.fps_numerator /
+                                    (float) drv_ctx.frame_rate.fps_denominator;
+                        }
+                    }
                 }
             }
             if (refresh_rate > 60) {
@@ -8542,7 +8612,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
 OMX_ERRORTYPE omx_vdec::empty_buffer_done(OMX_HANDLETYPE         hComp,
         OMX_BUFFERHEADERTYPE* buffer)
 {
-
+    VIDC_TRACE_NAME_HIGH("EBD");
     int nBufferIndex = buffer - m_inp_mem_ptr;
 
     if (buffer == NULL || (nBufferIndex >= (int)drv_ctx.ip_buf.actualcount)) {
@@ -8553,6 +8623,7 @@ OMX_ERRORTYPE omx_vdec::empty_buffer_done(OMX_HANDLETYPE         hComp,
     DEBUG_PRINT_LOW("empty_buffer_done: bufhdr = %p, bufhdr->pBuffer = %p, bufhdr->nFlags = 0x%x",
             buffer, buffer->pBuffer, buffer->nFlags);
     pending_input_buffers--;
+    VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
 
     if (arbitrary_bytes) {
         if (pdest_frame == NULL && input_flush_progress == false) {
@@ -10821,7 +10892,12 @@ bool omx_vdec::handle_mastering_display_color_info(void* data)
     internal_disp_changed_flag |= (hdr_info->sType1.mW.x != mastering_display_payload->nWhitePointX) ||
         (hdr_info->sType1.mW.y != mastering_display_payload->nWhitePointY);
 
-    internal_disp_changed_flag != (hdr_info->sType1.mMaxDisplayLuminance != mastering_display_payload->nMaxDisplayMasteringLuminance) ||
+    /* Maximum Display Luminance from the bitstream is in 0.0001 cd/m2 while the HDRStaticInfo extension
+       requires it in cd/m2, so dividing by 10000 and rounding the value after division
+    */
+    uint16_t max_display_luminance_cd_m2 =
+        static_cast<int>((mastering_display_payload->nMaxDisplayMasteringLuminance / LUMINANCE_DIV_FACTOR) + 0.5);
+    internal_disp_changed_flag |= (hdr_info->sType1.mMaxDisplayLuminance != max_display_luminance_cd_m2) ||
         (hdr_info->sType1.mMinDisplayLuminance != mastering_display_payload->nMinDisplayMasteringLuminance);
 
     if (internal_disp_changed_flag) {
@@ -10834,7 +10910,7 @@ bool omx_vdec::handle_mastering_display_color_info(void* data)
         hdr_info->sType1.mW.x = mastering_display_payload->nWhitePointX;
         hdr_info->sType1.mW.y = mastering_display_payload->nWhitePointY;
 
-        hdr_info->sType1.mMaxDisplayLuminance = mastering_display_payload->nMaxDisplayMasteringLuminance;
+        hdr_info->sType1.mMaxDisplayLuminance = max_display_luminance_cd_m2;
         hdr_info->sType1.mMinDisplayLuminance = mastering_display_payload->nMinDisplayMasteringLuminance;
     }
 
@@ -12617,6 +12693,7 @@ void omx_vdec::send_codec_config() {
                     }
                 } else {
                     pending_input_buffers++;
+                    VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
                     DEBUG_PRINT_LOW("\n Flush Input OMX_COMPONENT_GENERATE_ETB %p, pending_input_buffers %d",
                             (OMX_BUFFERHEADERTYPE *)p2, pending_input_buffers);
                     empty_buffer_done(&m_cmp,(OMX_BUFFERHEADERTYPE *)p2);
