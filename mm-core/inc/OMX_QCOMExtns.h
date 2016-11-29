@@ -536,6 +536,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     /* Set Prefer-adaptive playback*/
     /* "OMX.QTI.index.param.video.PreferAdaptivePlayback" */
     OMX_QTIIndexParamVideoPreferAdaptivePlayback = 0x7F000055,
+
+    /* Custom extension provided to IMS-VT to set meta-mode */
+    OMX_QTIIndexParamIMSVTVideoMetaBufferMode = 0x7F00005C,
 };
 
 /**
