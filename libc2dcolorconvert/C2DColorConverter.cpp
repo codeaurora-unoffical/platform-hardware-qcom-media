@@ -202,7 +202,7 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mBlit.target_rect.y = 0 << 16;
     mBlit.target_rect.width = dstWidth << 16;
     mBlit.target_rect.height = dstHeight << 16;
-    mBlit.config_mask = C2D_ALPHA_BLEND_NONE | C2D_NO_BILINEAR_BIT | C2D_NO_ANTIALIASING_BIT | C2D_TARGET_RECT_BIT;
+    mBlit.config_mask = C2D_ALPHA_BLEND_NONE | C2D_NO_BILINEAR_BIT | C2D_NO_ANTIALIASING_BIT | C2D_TARGET_RECT_BIT | mFlags;
     mBlit.surface_id = mSrcSurface;
 }
 
