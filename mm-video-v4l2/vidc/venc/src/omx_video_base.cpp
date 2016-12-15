@@ -2144,6 +2144,15 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                 memcpy(pParam, &m_sConfigAVCIDRPeriod, sizeof(m_sConfigAVCIDRPeriod));
                 break;
             }
+        case OMX_IndexConfigVideoIntraVOPRefresh:
+            {
+                VALIDATE_OMX_PARAM_DATA(configData, OMX_CONFIG_INTRAREFRESHVOPTYPE);
+                OMX_CONFIG_INTRAREFRESHVOPTYPE *pParam =
+                    reinterpret_cast<OMX_CONFIG_INTRAREFRESHVOPTYPE*>(configData);
+                DEBUG_PRINT_LOW("get_config: OMX_IndexConfigVideoIntraVOPRefresh");
+                memcpy(pParam, &m_sConfigIntraRefreshVOP, sizeof(m_sConfigIntraRefreshVOP));
+                break;
+            }
         case OMX_IndexConfigCommonDeinterlace:
             {
                 VALIDATE_OMX_PARAM_DATA(configData, OMX_VIDEO_CONFIG_DEINTERLACE);
