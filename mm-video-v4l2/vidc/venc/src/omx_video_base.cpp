@@ -319,6 +319,7 @@ omx_video::omx_video():
     OMX_INIT_STRUCT(&m_blurInfo, OMX_QTI_VIDEO_CONFIG_BLURINFO);
     m_blurInfo.nPortIndex == (OMX_U32)PORT_INDEX_IN;
 
+    mUseProxyColorFormat = false;
     mUsesColorConversion = false;
     pthread_mutex_init(&m_lock, NULL);
     pthread_mutex_init(&timestamp.m_lock, NULL);
