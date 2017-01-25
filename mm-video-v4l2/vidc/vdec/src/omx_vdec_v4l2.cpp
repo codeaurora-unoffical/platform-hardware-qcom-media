@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -63,6 +63,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef _ANDROID_
 #include <cutils/properties.h>
 #undef USE_EGL_IMAGE_GPU
+
+#ifdef _QUERY_DISP_RES_
+#include "display_config.h"
+#endif
 #endif
 
 #ifdef _USE_GLIB_
@@ -154,6 +158,9 @@ extern "C" {
 #endif
 
 #define LUMINANCE_DIV_FACTOR 10000.0
+
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+#define MAX(x,y) (((x) > (y)) ? (x) : (y))
 
 static OMX_U32 maxSmoothStreamingWidth = 1920;
 static OMX_U32 maxSmoothStreamingHeight = 1088;
@@ -824,6 +831,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     dynamic_buf_mode = false;
     out_dynamic_list = NULL;
     is_down_scalar_enabled = false;
+    m_enable_downscalar = 0;
     m_downscalar_width = 0;
     m_downscalar_height = 0;
     m_force_down_scalar = 0;
@@ -1228,6 +1236,7 @@ int omx_vdec::decide_downscalar()
     struct v4l2_format fmt;
     enum color_fmts color_format;
     OMX_U32 width, height;
+    OMX_BOOL isPortraitVideo = OMX_FALSE;
 
     if (capture_capability == V4L2_PIX_FMT_NV12_TP10_UBWC) {
         rc = disable_downscalar();
@@ -1238,8 +1247,74 @@ int omx_vdec::decide_downscalar()
         return 0;
     }
 
-    if  (!m_downscalar_width || !m_downscalar_height) {
+    if  (!m_enable_downscalar) {
         DEBUG_PRINT_LOW("%s: downscalar not supported", __func__);
+        return 0;
+    }
+
+#ifdef _QUERY_DISP_RES_
+    memset(&fmt, 0x0, sizeof(struct v4l2_format));
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    fmt.fmt.pix_mp.pixelformat = capture_capability;
+    rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
+    if (rc < 0) {
+       DEBUG_PRINT_ERROR("%s: Failed to get format on capture mplane", __func__);
+       return rc;
+    }
+    isPortraitVideo = fmt.fmt.pix_mp.width < fmt.fmt.pix_mp.height ? OMX_TRUE : OMX_FALSE;
+    if (!m_downscalar_width || !m_downscalar_height) {
+        qdutils::DisplayAttributes dpa = {}, dsa = {}, dva = {};
+        int prim_config, ext_config, virt_config;
+
+        prim_config = qdutils::getActiveConfig(qdutils::DISPLAY_PRIMARY);
+        dpa = qdutils::getDisplayAttributes(prim_config, qdutils::DISPLAY_PRIMARY);
+        DEBUG_PRINT_HIGH("%s: Primary dpa.xres = %d  dpa.yres=%d   dpa.xdpi = %f  dpa.ydpi = %f ",
+            __func__, dpa.xres, dpa.yres, dpa.xdpi, dpa.ydpi);
+
+        ext_config = qdutils::getActiveConfig(qdutils::DISPLAY_EXTERNAL);
+        dsa = qdutils::getDisplayAttributes(ext_config, qdutils::DISPLAY_EXTERNAL);
+        DEBUG_PRINT_HIGH("%s: HDMI dsa.xres = %d  dsa.yres = %d   dsa.xdpi = %f  dsa.ydpi = %f ",
+            __func__, dsa.xres, dsa.yres, dsa.xdpi, dsa.ydpi);
+
+        virt_config = qdutils::getActiveConfig(qdutils::DISPLAY_VIRTUAL);
+        dva = qdutils::getDisplayAttributes(virt_config, qdutils::DISPLAY_VIRTUAL);
+        DEBUG_PRINT_HIGH("%s: Virtual dva.xres = %d  dva.yres = %d   dva.xdpi = %f  dva.ydpi = %f ",
+            __func__, dva.xres, dva.yres, dva.xdpi, dva.ydpi);
+
+        /* Below logic takes care of following conditions:
+         *   1. Choose display resolution as maximum resolution of all the connected
+         *      displays (secondary, primary, virtual), so that we do not downscale
+         *      unnecessarily which might be supported on one of the display losing quality.
+         *   2. Displays connected might be in landscape or portrait mode, so the xres might
+         *      be smaller or greater than the yres. So we first take the max of the two
+         *      in width and min of two in height and then rotate it if below point is true.
+         *   3. Video might also be in portrait mode, so invert the downscalar width and
+         *      height for such cases.
+         */
+        if (dsa.xres * dsa.yres > dpa.xres * dpa.yres) {
+            m_downscalar_width = MAX(dsa.xres, dsa.yres);
+            m_downscalar_height = MIN(dsa.xres, dsa.yres);
+        } else if (dva.xres * dva.yres > dpa.xres * dpa.yres) {
+            m_downscalar_width = MAX(dva.xres, dva.yres);
+            m_downscalar_height = MIN(dva.xres, dva.yres);
+
+        } else {
+            m_downscalar_width = MAX(dpa.xres, dpa.yres);
+            m_downscalar_height = MIN(dpa.xres, dpa.yres);
+        }
+        if (isPortraitVideo) {
+            // Swap width and height
+            m_downscalar_width = m_downscalar_width ^ m_downscalar_height;
+            m_downscalar_height = m_downscalar_width ^ m_downscalar_height;
+            m_downscalar_width = m_downscalar_width ^ m_downscalar_height;
+        }
+    }
+    m_downscalar_width = ALIGN(m_downscalar_width, 128);
+    m_downscalar_height = ALIGN(m_downscalar_height, 32);
+#endif
+
+    if (!m_downscalar_width || !m_downscalar_height) {
+        DEBUG_PRINT_LOW("%s: Invalid downscalar configuration", __func__);
         return 0;
     }
 
@@ -1263,7 +1338,7 @@ int omx_vdec::decide_downscalar()
     DEBUG_PRINT_HIGH("%s: driver wxh = %dx%d, downscalar wxh = %dx%d m_is_display_session = %d", __func__,
         fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height, m_downscalar_width, m_downscalar_height, m_is_display_session);
 
-    if ((fmt.fmt.pix_mp.width * fmt.fmt.pix_mp.height >= m_downscalar_width * m_downscalar_height) &&
+    if ((fmt.fmt.pix_mp.width * fmt.fmt.pix_mp.height > m_downscalar_width * m_downscalar_height) &&
          m_is_display_session) {
         rc = enable_downscalar();
         if (rc < 0) {
@@ -2042,7 +2117,10 @@ int omx_vdec::log_output_buffers(OMX_BUFFERHEADERTYPE *buffer) {
     int buf_index = 0;
     char *temp = NULL;
 
-    if (m_debug.out_buffer_log && !m_debug.outfile && buffer->nFilledLen) {
+    if (!(m_debug.out_buffer_log || m_debug.out_meta_buffer_log) || !buffer || !buffer->nFilledLen)
+        return 0;
+
+    if (m_debug.out_buffer_log && !m_debug.outfile) {
         snprintf(m_debug.outfile_name, OMX_MAX_STRINGNAME_SIZE, "%s/output_%d_%d_%p.yuv",
                 m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         m_debug.outfile = fopen (m_debug.outfile_name, "ab");
@@ -2053,8 +2131,7 @@ int omx_vdec::log_output_buffers(OMX_BUFFERHEADERTYPE *buffer) {
         }
     }
 
-    if (m_debug.out_meta_buffer_log && !m_debug.out_ymeta_file && !m_debug.out_uvmeta_file
-        && buffer->nFilledLen) {
+    if (m_debug.out_meta_buffer_log && !m_debug.out_ymeta_file && !m_debug.out_uvmeta_file) {
         snprintf(m_debug.out_ymetafile_name, OMX_MAX_STRINGNAME_SIZE, "%s/output_%d_%d_%p.ymeta",
                 m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         snprintf(m_debug.out_uvmetafile_name, OMX_MAX_STRINGNAME_SIZE, "%s/output_%d_%d_%p.uvmeta",
@@ -2068,9 +2145,6 @@ int omx_vdec::log_output_buffers(OMX_BUFFERHEADERTYPE *buffer) {
             return -1;
         }
     }
-
-    if ((!m_debug.outfile && !m_debug.out_ymeta_file) || !buffer || !buffer->nFilledLen)
-        return 0;
 
     buf_index = buffer - m_out_mem_ptr;
     temp = (char *)drv_ctx.ptr_outputbuffer[buf_index].bufferaddr;
@@ -2117,7 +2191,7 @@ int omx_vdec::log_output_buffers(OMX_BUFFERHEADERTYPE *buffer) {
                 temp += uv_meta_stride;
             }
         }
-    } else if (drv_ctx.output_format == VDEC_YUV_FORMAT_NV12) {
+    } else if (m_debug.outfile && drv_ctx.output_format == VDEC_YUV_FORMAT_NV12) {
         int stride = drv_ctx.video_resolution.stride;
         int scanlines = drv_ctx.video_resolution.scan_lines;
         if (m_smoothstreaming_mode) {
@@ -2618,24 +2692,27 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         drv_ctx.idr_only_decoding = 0;
 
 #ifdef _ANDROID_
-        property_get("vidc.dec.downscalar_width",property_value,"0");
+        property_get("vidc.dec.enable.downscalar",property_value,"0");
         if (atoi(property_value)) {
-            m_downscalar_width = atoi(property_value);
-        }
-        property_get("vidc.dec.downscalar_height",property_value,"0");
-        if (atoi(property_value)) {
-            m_downscalar_height = atoi(property_value);
-        }
+            m_enable_downscalar =  atoi(property_value);
+            property_get("vidc.dec.downscalar_width",property_value,"0");
+            if (atoi(property_value)) {
+                m_downscalar_width = atoi(property_value);
+            }
+            property_get("vidc.dec.downscalar_height",property_value,"0");
+            if (atoi(property_value)) {
+                m_downscalar_height = atoi(property_value);
+            }
 
-        if (m_downscalar_width < m_decoder_capability.min_width ||
-            m_downscalar_height < m_decoder_capability.min_height) {
-            m_downscalar_width = 0;
-            m_downscalar_height = 0;
+            if (m_downscalar_width < m_decoder_capability.min_width ||
+                m_downscalar_height < m_decoder_capability.min_height) {
+                m_downscalar_width = 0;
+                m_downscalar_height = 0;
+            }
+
+            DEBUG_PRINT_LOW("Downscaler configured WxH %dx%d\n",
+                m_downscalar_width, m_downscalar_height);
         }
-
-        DEBUG_PRINT_LOW("Downscaler configured WxH %dx%d\n",
-            m_downscalar_width, m_downscalar_height);
-
         property_get("vidc.disable.split.mode",property_value,"0");
         m_disable_split_mode = atoi(property_value);
         DEBUG_PRINT_HIGH("split mode is %s", m_disable_split_mode ? "disabled" : "enabled");
@@ -3509,7 +3586,7 @@ OMX_ERRORTYPE omx_vdec::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVEL
 
     if (profileLevelType->nPortIndex == 0) {
         if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.avc",OMX_MAX_STRINGNAME_SIZE)) {
-            profileLevelType->eLevel = OMX_VIDEO_AVCLevel52;
+            profileLevelType->eLevel = OMX_VIDEO_AVCLevel51;
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileBaseline;
             } else if (profileLevelType->nProfileIndex == 1) {
@@ -5070,25 +5147,35 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             OMX_QTI_VIDEO_PARAM_VQZIP_SEI_TYPE *pParam =
                 (OMX_QTI_VIDEO_PARAM_VQZIP_SEI_TYPE *)paramData;
                 DEBUG_PRINT_LOW("Enable VQZIP SEI: %d", pParam->bEnable);
+
             eRet = enable_extradata(OMX_VQZIPSEI_EXTRADATA, false,
                 ((QOMX_ENABLETYPE *)paramData)->bEnable);
             if (eRet != OMX_ErrorNone) {
                 DEBUG_PRINT_ERROR("ERROR: Failed to set SEI Extradata");
                 eRet = OMX_ErrorBadParameter;
                 client_extradata = client_extradata & ~OMX_VQZIPSEI_EXTRADATA;
-            } else {
-                eRet = enable_extradata(OMX_QP_EXTRADATA, false,
+                break;
+            }
+            eRet = enable_extradata(OMX_QP_EXTRADATA, false,
                     ((QOMX_ENABLETYPE *)paramData)->bEnable);
-                if (eRet != OMX_ErrorNone) {
-                    DEBUG_PRINT_ERROR("ERROR: Failed to set QP Extradata");
-                    eRet = OMX_ErrorBadParameter;
-                    client_extradata = client_extradata & ~OMX_VQZIPSEI_EXTRADATA;
-                    client_extradata = client_extradata & ~OMX_QP_EXTRADATA;
-                }
+            if (eRet != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("ERROR: Failed to set QP Extradata");
+                eRet = OMX_ErrorBadParameter;
+                client_extradata = client_extradata & ~OMX_VQZIPSEI_EXTRADATA;
+                client_extradata = client_extradata & ~OMX_QP_EXTRADATA;
+                break;
+            }
+            eRet = enable_extradata(OMX_FRAMEINFO_EXTRADATA, false,
+                        ((QOMX_ENABLETYPE *)paramData)->bEnable);
+            if (eRet != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("ERROR: Failed to set FrameInfo Extradata");
+                eRet = OMX_ErrorBadParameter;
+                client_extradata = client_extradata & ~OMX_VQZIPSEI_EXTRADATA;
+                client_extradata = client_extradata & ~OMX_QP_EXTRADATA;
+                client_extradata = client_extradata & ~OMX_FRAMEINFO_EXTRADATA;
             }
             break;
         }
-
         case OMX_QTIIndexParamPassInputBufferFd:
         {
             VALIDATE_OMX_PARAM_DATA(paramData, QOMX_ENABLETYPE);
@@ -6306,6 +6393,7 @@ OMX_ERRORTYPE omx_vdec::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 #ifdef USE_ION
             free_ion_memory(&drv_ctx.ip_buf_ion_info[index]);
 #endif
+            m_in_alloc_cnt--;
         }
     }
 
