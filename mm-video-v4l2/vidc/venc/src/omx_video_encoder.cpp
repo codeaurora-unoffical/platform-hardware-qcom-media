@@ -142,6 +142,7 @@ omx_venc::omx_venc()
 #ifdef _LINUX_
     char *env_ptr = getenv("OMX_DEBUG_LEVEL");
     debug_level = env_ptr ? atoi(env_ptr) : 0;
+    meta_mode_enable = false;
 #else
     bframes = entropy = 0;
     char property_value[PROPERTY_VALUE_MAX] = {0};
