@@ -3356,10 +3356,25 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                        break;
                                    }
 
-                                   if (!client_buffers.get_buffer_req(buffer_size)) {
+                                   if (portDefn->nBufferCountActual > MAX_NUM_INPUT_OUTPUT_BUFFERS) {
+                                       DEBUG_PRINT_ERROR("Requested o/p buf count (%u) exceeds limit (%u)",
+                                               portDefn->nBufferCountActual, MAX_NUM_INPUT_OUTPUT_BUFFERS);
+                                       eRet = OMX_ErrorBadParameter;
+                                   } else if (!client_buffers.get_buffer_req(buffer_size)) {
                                        DEBUG_PRINT_ERROR("Error in getting buffer requirements");
                                        eRet = OMX_ErrorBadParameter;
                                    } else if (!port_format_changed) {
+
+                                       // Buffer count can change only when port is unallocated
+                                       if (m_out_mem_ptr &&
+                                                (portDefn->nBufferCountActual != drv_ctx.op_buf.actualcount ||
+                                                portDefn->nBufferSize != drv_ctx.op_buf.buffer_size)) {
+
+                                           DEBUG_PRINT_ERROR("Cannot change o/p buffer count since all buffers are not freed yet !");
+                                           eRet = OMX_ErrorInvalidState;
+                                           break;
+                                       }
+
                                        if ( portDefn->nBufferCountActual >= drv_ctx.op_buf.mincount &&
                                                portDefn->nBufferSize >=  drv_ctx.op_buf.buffer_size ) {
                                            drv_ctx.op_buf.actualcount = portDefn->nBufferCountActual;
@@ -3468,6 +3483,21 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                        eRet = OMX_ErrorBadParameter;
                                        break;
                                    }
+                                   if (portDefn->nBufferCountActual > MAX_NUM_INPUT_OUTPUT_BUFFERS) {
+                                       DEBUG_PRINT_ERROR("Requested i/p buf count (%u) exceeds limit (%u)",
+                                               portDefn->nBufferCountActual, MAX_NUM_INPUT_OUTPUT_BUFFERS);
+                                       eRet = OMX_ErrorBadParameter;
+                                       break;
+                                   }
+                                   // Buffer count can change only when port is unallocated
+                                   if (m_inp_mem_ptr &&
+                                            (portDefn->nBufferCountActual != drv_ctx.ip_buf.actualcount ||
+                                            portDefn->nBufferSize != drv_ctx.ip_buf.buffer_size)) {
+                                       DEBUG_PRINT_ERROR("Cannot change i/p buffer count since all buffers are not freed yet !");
+                                       eRet = OMX_ErrorInvalidState;
+                                       break;
+                                   }
+
                                    if (portDefn->nBufferCountActual >= drv_ctx.ip_buf.mincount
                                            || portDefn->nBufferSize != drv_ctx.ip_buf.buffer_size) {
                                        port_format_changed = true;
@@ -3544,6 +3574,14 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
                             /* Input port */
                             if (portFmt->nPortIndex == 0) {
+                                // arbitrary_bytes mode cannot be changed arbitrarily since this controls how:
+                                //   - headers are allocated and
+                                //   - headers-indices are derived
+                                // Avoid changing arbitrary_bytes when the port is already allocated
+                                if (m_inp_mem_ptr) {
+                                    DEBUG_PRINT_ERROR("Cannot change arbitrary-bytes-mode since input port is not free!");
+                                    return OMX_ErrorUnsupportedSetting;
+                                }
                                 if (portFmt->nFramePackingFormat == OMX_QCOM_FramePacking_Arbitrary) {
                                     if (secure_mode) {
                                         arbitrary_bytes = false;
@@ -3866,6 +3904,15 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                    * with openmax standard. */
         case OMX_GoogleAndroidIndexEnableAndroidNativeBuffers: {
                                            EnableAndroidNativeBuffersParams* enableNativeBuffers = (EnableAndroidNativeBuffersParams *) paramData;
+                                           if (enableNativeBuffers->nPortIndex != OMX_CORE_OUTPUT_PORT_INDEX) {
+                                                DEBUG_PRINT_ERROR("Enable/Disable android-native-buffers allowed only on output port!");
+                                                eRet = OMX_ErrorUnsupportedSetting;
+                                                break;
+                                           } else if (m_out_mem_ptr) {
+                                                DEBUG_PRINT_ERROR("Enable/Disable android-native-buffers is not allowed since Output port is not free !");
+                                                eRet = OMX_ErrorInvalidState;
+                                                break;
+                                           }
                                            if (enableNativeBuffers) {
                                                m_enable_android_native_buffers = enableNativeBuffers->enable;
                                            }
@@ -3924,6 +3971,12 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 break;
             }
             if (metabuffer->nPortIndex == OMX_CORE_OUTPUT_PORT_INDEX) {
+
+                    if (m_out_mem_ptr) {
+                        DEBUG_PRINT_ERROR("Enable/Disable dynamic-buffer-mode is not allowed since Output port is not free !");
+                        eRet = OMX_ErrorInvalidState;
+                        break;
+                    }
                     //set property dynamic buffer mode to driver.
                     struct v4l2_control control;
                     struct v4l2_format fmt;
@@ -4193,110 +4246,7 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
 
     DEBUG_PRINT_LOW("Set Config Called");
 
-    if (configIndex == (OMX_INDEXTYPE)OMX_IndexVendorVideoExtraData) {
-        OMX_VENDOR_EXTRADATATYPE *config = (OMX_VENDOR_EXTRADATATYPE *) configData;
-        DEBUG_PRINT_LOW("Index OMX_IndexVendorVideoExtraData called");
-        if (!strcmp(drv_ctx.kind, "OMX.qcom.video.decoder.avc") ||
-            !strcmp(drv_ctx.kind, "OMX.qcom.video.decoder.mvc")) {
-            DEBUG_PRINT_LOW("Index OMX_IndexVendorVideoExtraData AVC");
-            OMX_U32 extra_size;
-            // Parsing done here for the AVC atom is definitely not generic
-            // Currently this piece of code is working, but certainly
-            // not tested with all .mp4 files.
-            // Incase of failure, we might need to revisit this
-            // for a generic piece of code.
-
-            // Retrieve size of NAL length field
-            // byte #4 contains the size of NAL lenght field
-            nal_length = (config->pData[4] & 0x03) + 1;
-
-            extra_size = 0;
-            if (nal_length > 2) {
-                /* Presently we assume that only one SPS and one PPS in AvC1 Atom */
-                extra_size = (nal_length - 2) * 2;
-            }
-
-            // SPS starts from byte #6
-            OMX_U8 *pSrcBuf = (OMX_U8 *) (&config->pData[6]);
-            OMX_U8 *pDestBuf;
-            m_vendor_config.nPortIndex = config->nPortIndex;
-
-            // minus 6 --> SPS starts from byte #6
-            // minus 1 --> picture param set byte to be ignored from avcatom
-            m_vendor_config.nDataSize = config->nDataSize - 6 - 1 + extra_size;
-            m_vendor_config.pData = (OMX_U8 *) malloc(m_vendor_config.nDataSize);
-            OMX_U32 len;
-            OMX_U8 index = 0;
-            // case where SPS+PPS is sent as part of set_config
-            pDestBuf = m_vendor_config.pData;
-
-            DEBUG_PRINT_LOW("Rxd SPS+PPS nPortIndex[%u] len[%u] data[%p]",
-                    (unsigned int)m_vendor_config.nPortIndex,
-                    (unsigned int)m_vendor_config.nDataSize,
-                    m_vendor_config.pData);
-            while (index < 2) {
-                uint8 *psize;
-                len = *pSrcBuf;
-                len = len << 8;
-                len |= *(pSrcBuf + 1);
-                psize = (uint8 *) & len;
-                memcpy(pDestBuf + nal_length, pSrcBuf + 2,len);
-                for (unsigned int i = 0; i < nal_length; i++) {
-                    pDestBuf[i] = psize[nal_length - 1 - i];
-                }
-                //memcpy(pDestBuf,pSrcBuf,(len+2));
-                pDestBuf += len + nal_length;
-                pSrcBuf += len + 2;
-                index++;
-                pSrcBuf++;   // skip picture param set
-                len = 0;
-            }
-        } else if (!strcmp(drv_ctx.kind, "OMX.qcom.video.decoder.mpeg4") ||
-                !strcmp(drv_ctx.kind, "OMX.qcom.video.decoder.mpeg2")) {
-            m_vendor_config.nPortIndex = config->nPortIndex;
-            m_vendor_config.nDataSize = config->nDataSize;
-            m_vendor_config.pData = (OMX_U8 *) malloc((config->nDataSize));
-            memcpy(m_vendor_config.pData, config->pData,config->nDataSize);
-        } else if (!strcmp(drv_ctx.kind, "OMX.qcom.video.decoder.vc1")) {
-            if (m_vendor_config.pData) {
-                free(m_vendor_config.pData);
-                m_vendor_config.pData = NULL;
-                m_vendor_config.nDataSize = 0;
-            }
-
-            if (((*((OMX_U32 *) config->pData)) &
-                        VC1_SP_MP_START_CODE_MASK) ==
-                    VC1_SP_MP_START_CODE) {
-                DEBUG_PRINT_LOW("set_config - VC1 simple/main profile");
-                m_vendor_config.nPortIndex = config->nPortIndex;
-                m_vendor_config.nDataSize = config->nDataSize;
-                m_vendor_config.pData =
-                    (OMX_U8 *) malloc(config->nDataSize);
-                memcpy(m_vendor_config.pData, config->pData,
-                        config->nDataSize);
-                m_vc1_profile = VC1_SP_MP_RCV;
-            } else if (*((OMX_U32 *) config->pData) == VC1_AP_SEQ_START_CODE) {
-                DEBUG_PRINT_LOW("set_config - VC1 Advance profile");
-                m_vendor_config.nPortIndex = config->nPortIndex;
-                m_vendor_config.nDataSize = config->nDataSize;
-                m_vendor_config.pData =
-                    (OMX_U8 *) malloc((config->nDataSize));
-                memcpy(m_vendor_config.pData, config->pData,
-                        config->nDataSize);
-                m_vc1_profile = VC1_AP;
-            } else if ((config->nDataSize == VC1_STRUCT_C_LEN)) {
-                DEBUG_PRINT_LOW("set_config - VC1 Simple/Main profile struct C only");
-                m_vendor_config.nPortIndex = config->nPortIndex;
-                m_vendor_config.nDataSize  = config->nDataSize;
-                m_vendor_config.pData = (OMX_U8*)malloc(config->nDataSize);
-                memcpy(m_vendor_config.pData,config->pData,config->nDataSize);
-                m_vc1_profile = VC1_SP_MP_RCV;
-            } else {
-                DEBUG_PRINT_LOW("set_config - Error: Unknown VC1 profile");
-            }
-        }
-        return ret;
-    } else if (configIndex == OMX_IndexConfigVideoNalSize) {
+    if (configIndex == OMX_IndexConfigVideoNalSize) {
         struct v4l2_control temp;
         temp.id = V4L2_CID_MPEG_VIDC_VIDEO_STREAM_FORMAT;
 
@@ -4910,6 +4860,12 @@ OMX_ERRORTYPE  omx_vdec::use_input_heap_buffers(
 {
     DEBUG_PRINT_LOW("Inside %s, %p", __FUNCTION__, buffer);
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
+
+    if (secure_mode) {
+        DEBUG_PRINT_ERROR("use_input_heap_buffers is not allowed in secure mode");
+        return OMX_ErrorUndefined;
+    }
+
     if (!m_inp_heap_ptr)
         m_inp_heap_ptr = (OMX_BUFFERHEADERTYPE*)
             calloc( (sizeof(OMX_BUFFERHEADERTYPE)),
@@ -4978,9 +4934,16 @@ OMX_ERRORTYPE  omx_vdec::use_buffer(
         DEBUG_PRINT_ERROR("Use Buffer in Invalid State");
         return OMX_ErrorInvalidState;
     }
-    if (port == OMX_CORE_INPUT_PORT_INDEX)
+    if (port == OMX_CORE_INPUT_PORT_INDEX) {
+        // If this is not the first allocation (i.e m_inp_mem_ptr is allocated),
+        // ensure that use-buffer was called for previous allocation.
+        // Mix-and-match of useBuffer and allocateBuffer is not allowed
+        if (m_inp_mem_ptr && !input_use_buffer) {
+            DEBUG_PRINT_ERROR("'Use' Input buffer called after 'Allocate' Input buffer !");
+            return OMX_ErrorUndefined;
+        }
         error = use_input_heap_buffers(hComp, bufferHdr, port, appData, bytes, buffer);
-    else if (port == OMX_CORE_OUTPUT_PORT_INDEX)
+    } else if (port == OMX_CORE_OUTPUT_PORT_INDEX)
         error = use_output_buffer(hComp,bufferHdr,port,appData,bytes,buffer); //not tested
     else {
         DEBUG_PRINT_ERROR("Error: Invalid Port Index received %d",(int)port);
@@ -5756,6 +5719,13 @@ OMX_ERRORTYPE  omx_vdec::allocate_buffer(OMX_IN OMX_HANDLETYPE                hC
     }
 
     if (port == OMX_CORE_INPUT_PORT_INDEX) {
+        // If this is not the first allocation (i.e m_inp_mem_ptr is allocated),
+        // ensure that use-buffer was never called.
+        // Mix-and-match of useBuffer and allocateBuffer is not allowed
+        if (m_inp_mem_ptr && input_use_buffer) {
+            DEBUG_PRINT_ERROR("'Allocate' Input buffer called after 'Use' Input buffer !");
+            return OMX_ErrorUndefined;
+        }
         if (arbitrary_bytes) {
             eRet = allocate_input_heap_buffer (hComp,bufferHdr,port,appData,bytes);
         } else {
@@ -5855,7 +5825,8 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
             nPortIndex = buffer - m_inp_heap_ptr;
 
         DEBUG_PRINT_LOW("free_buffer on i/p port - Port idx %d", nPortIndex);
-        if (nPortIndex < drv_ctx.ip_buf.actualcount) {
+        if (nPortIndex < drv_ctx.ip_buf.actualcount &&
+                BITMASK_PRESENT(&m_inp_bm_count, nPortIndex)) {
             // Clear the bit associated with it.
             BITMASK_CLEAR(&m_inp_bm_count,nPortIndex);
             BITMASK_CLEAR(&m_heap_inp_bm_count,nPortIndex);
@@ -5897,7 +5868,8 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
     } else if (port == OMX_CORE_OUTPUT_PORT_INDEX) {
         // check if the buffer is valid
         nPortIndex = buffer - client_buffers.get_il_buf_hdr();
-        if (nPortIndex < drv_ctx.op_buf.actualcount) {
+        if (nPortIndex < drv_ctx.op_buf.actualcount &&
+                BITMASK_PRESENT(&m_out_bm_count, nPortIndex)) {
             DEBUG_PRINT_LOW("free_buffer on o/p port - Port idx %d", nPortIndex);
             // Clear the bit associated with it.
             BITMASK_CLEAR(&m_out_bm_count,nPortIndex);
@@ -6010,6 +5982,10 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
     } else {
         if (input_use_buffer == true) {
             nBufferIndex = buffer - m_inp_heap_ptr;
+            if (nBufferIndex >= drv_ctx.ip_buf.actualcount ) {
+                DEBUG_PRINT_ERROR("ERROR: ETB nBufferIndex is invalid in use-buffer mode");
+                return OMX_ErrorBadParameter;
+            }
             m_inp_mem_ptr[nBufferIndex].nFilledLen = m_inp_heap_ptr[nBufferIndex].nFilledLen;
             m_inp_mem_ptr[nBufferIndex].nTimeStamp = m_inp_heap_ptr[nBufferIndex].nTimeStamp;
             m_inp_mem_ptr[nBufferIndex].nFlags = m_inp_heap_ptr[nBufferIndex].nFlags;
@@ -6021,7 +5997,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         }
     }
 
-    if (nBufferIndex > drv_ctx.ip_buf.actualcount ) {
+    if (nBufferIndex >= drv_ctx.ip_buf.actualcount ) {
         DEBUG_PRINT_ERROR("ERROR:ETB nBufferIndex is invalid");
         return OMX_ErrorBadParameter;
     }
@@ -6078,7 +6054,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
 
     nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)m_inp_mem_ptr);
 
-    if (nPortIndex > drv_ctx.ip_buf.actualcount) {
+    if (nPortIndex >= drv_ctx.ip_buf.actualcount) {
         DEBUG_PRINT_ERROR("ERROR:empty_this_buffer_proxy invalid nPortIndex[%u]",
                 nPortIndex);
         return OMX_ErrorBadParameter;
@@ -6155,7 +6131,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     /*for use buffer we need to memcpy the data*/
     temp_buffer->buffer_len = buffer->nFilledLen;
 
-    if (input_use_buffer) {
+    if (input_use_buffer && !secure_mode) {
         if (buffer->nFilledLen <= temp_buffer->buffer_len) {
             if (arbitrary_bytes) {
                 memcpy (temp_buffer->bufferaddr, (buffer->pBuffer + buffer->nOffset),buffer->nFilledLen);
@@ -6416,7 +6392,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
 
     nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)client_buffers.get_il_buf_hdr());
 
-    if (bufferAdd == NULL || nPortIndex > drv_ctx.op_buf.actualcount) {
+    if (bufferAdd == NULL || nPortIndex >= drv_ctx.op_buf.actualcount) {
         DEBUG_PRINT_ERROR("FTBProxy: ERROR: invalid buffer index, nPortIndex %u bufCount %u",
             nPortIndex, drv_ctx.op_buf.actualcount);
         return OMX_ErrorBadParameter;
@@ -6574,7 +6550,14 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     if (m_out_mem_ptr) {
         DEBUG_PRINT_LOW("Freeing the Output Memory");
         for (i = 0; i < drv_ctx.op_buf.actualcount; i++ ) {
-            free_output_buffer (&m_out_mem_ptr[i]);
+            if (BITMASK_PRESENT(&m_out_bm_count, i)) {
+                BITMASK_CLEAR(&m_out_bm_count, i);
+                client_buffers.free_output_buffer (&m_out_mem_ptr[i]);
+            }
+
+            if (release_output_done()) {
+                break;
+            }
         }
 #ifdef _ANDROID_ICS_
         memset(&native_buffer, 0, (sizeof(nativebuffer) * MAX_NUM_INPUT_OUTPUT_BUFFERS));
@@ -6585,11 +6568,19 @@ OMX_ERRORTYPE  omx_vdec::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     if (m_inp_mem_ptr || m_inp_heap_ptr) {
         DEBUG_PRINT_LOW("Freeing the Input Memory");
         for (i = 0; i<drv_ctx.ip_buf.actualcount; i++ ) {
-            if (m_inp_mem_ptr)
-                free_input_buffer (i,&m_inp_mem_ptr[i]);
-            else
-                free_input_buffer (i,NULL);
-        }
+
+            if (BITMASK_PRESENT(&m_inp_bm_count, i)) {
+                BITMASK_CLEAR(&m_inp_bm_count, i);
+                if (m_inp_mem_ptr)
+                    free_input_buffer (i,&m_inp_mem_ptr[i]);
+                else
+                    free_input_buffer (i,NULL);
+            }
+
+            if (release_input_done()) {
+                break;
+            }
+       }
     }
     free_input_buffer_header();
     free_output_buffer_header();
@@ -6991,7 +6982,7 @@ bool omx_vdec::release_output_done(void)
     bool bRet = false;
     unsigned i=0,j=0;
 
-    DEBUG_PRINT_LOW("Value of m_out_mem_ptr %p",m_inp_mem_ptr);
+    DEBUG_PRINT_LOW("Value of m_out_mem_ptr %p", m_out_mem_ptr);
     if (m_out_mem_ptr) {
         for (; j < drv_ctx.op_buf.actualcount ; j++) {
             if (BITMASK_PRESENT(&m_out_bm_count,j)) {
@@ -7300,7 +7291,9 @@ OMX_ERRORTYPE omx_vdec::empty_buffer_done(OMX_HANDLETYPE         hComp,
         OMX_BUFFERHEADERTYPE* buffer)
 {
 
-    if (buffer == NULL || ((buffer - m_inp_mem_ptr) > (int)drv_ctx.ip_buf.actualcount)) {
+    int nBufferIndex = buffer - m_inp_mem_ptr;
+
+    if (buffer == NULL || (nBufferIndex >= (int)drv_ctx.ip_buf.actualcount)) {
         DEBUG_PRINT_ERROR("empty_buffer_done: ERROR bufhdr = %p", buffer);
         return OMX_ErrorBadParameter;
     }

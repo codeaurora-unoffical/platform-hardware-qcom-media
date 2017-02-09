@@ -487,6 +487,10 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /* Set Encoder Performance Index */
     OMX_QcomIndexConfigVideoVencPerfMode = 0x7F000042,
+
+    /* Custom extension provided to IMS-VT to set meta-mode */
+    OMX_QTIIndexParamIMSVTVideoMetaBufferMode = 0x7F00005C,
+
 };
 
 /**
