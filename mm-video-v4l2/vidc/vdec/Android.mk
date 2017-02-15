@@ -98,7 +98,7 @@ libmm-vdec-def += -DALLOCATE_OUTPUT_NATIVEHANDLE
 endif
 
 # Hypervisor
-ifneq (,$(filter $(MACHINE), "8x96quinhyp" "8x96redhyp"))
+ifneq (,$(filter $(MACHINE), "8x96autogvmquin" "8x96autogvmred"))
 libmm-vdec-def += -D_HYPERVISOR_
 endif
 # ---------------------------------------------------------------------------------
