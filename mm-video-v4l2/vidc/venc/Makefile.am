@@ -18,6 +18,12 @@ AM_CPPFLAGS += -DENABLE_DEBUG_ERROR
 AM_CPPFLAGS += -UINPUT_BUFFER_LOG
 AM_CPPFLAGS += -UOUTPUT_BUFFER_LOG
 AM_CPPFLAGS += -Wno-parentheses
+
+#Hypervisor
+if TARGET_HYPERVISOR
+AM_CPPFLAGS += -D_HYPERVISOR_
+endif
+
 if TARGET_MSM8960
 AM_CPPFLAGS += -DMAX_RES_1080P
 AM_CPPFLAGS += -DMAX_RES_1080P_EBI
@@ -50,6 +56,8 @@ if TARGET_MSM8974
 sources += src/video_encoder_device_v4l2.cpp
 endif
 sources += ../common/src/extra_data_handler.cpp
+#Hypervisor
+sources += ../common/src/hypv_intercept.cpp
 
 lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
