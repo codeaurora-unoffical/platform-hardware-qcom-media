@@ -1521,12 +1521,6 @@ bool venc_dev::venc_open(OMX_U32 codec)
     }
 #endif // _PQ_
 
-    /* Enable Low power mode by default for better power */
-
-    if (venc_set_perf_mode(V4L2_MPEG_VIDC_VIDEO_PERF_POWER_SAVE) == false) {
-        DEBUG_PRINT_HIGH("Failed to set Perf Mode");
-    }
-
     input_extradata_info.port_index = OUTPUT_PORT;
     output_extradata_info.port_index = CAPTURE_PORT;
 
@@ -5409,6 +5403,13 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
         intra_period.num_bframes = 0;
         DEBUG_PRINT_LOW("Warning: Disabling B frames for UHD recording pFrames = %lu bFrames = %lu",
                          intra_period.num_pframes, intra_period.num_bframes);
+    }
+
+    if (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height >= 5376 * 2688 &&
+        (property_get("vidc.enc.disable_pframes", property_value, "0") && atoi(property_value))) {
+          intra_period.num_pframes = 0;
+          DEBUG_PRINT_LOW("Warning: Disabling P frames for 5k/6k resolutions pFrames = %lu bFrames = %lu",
+          intra_period.num_pframes, intra_period.num_bframes);
     }
 
     control.id = V4L2_CID_MPEG_VIDC_VIDEO_NUM_P_FRAMES;
