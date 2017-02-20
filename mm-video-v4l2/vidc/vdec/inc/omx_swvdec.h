@@ -1,7 +1,7 @@
 /**
  * @copyright
  *
- *   Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *   Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
  *   modification, are permitted provided that the following conditions are met:
@@ -57,7 +57,7 @@
 using namespace android;
 
 /// OMX SwVdec version date
-#define OMX_SWVDEC_VERSION_DATE "2017-10-06T11:32:51+0530"
+#define OMX_SWVDEC_VERSION_DATE "2018-02-13T16:25:51+0530"
 
 #define OMX_SPEC_VERSION 0x00000101 ///< OMX specification version
 
@@ -348,6 +348,7 @@ private:
     OMX_ERRORTYPE set_frame_dimensions_swvdec();
     OMX_ERRORTYPE set_frame_attributes_swvdec();
     OMX_ERRORTYPE set_adaptive_playback_swvdec();
+    OMX_ERRORTYPE set_thumbnail_mode_swvdec();
 
     // functions to get SwVdec properties and set OMX component properties
 
