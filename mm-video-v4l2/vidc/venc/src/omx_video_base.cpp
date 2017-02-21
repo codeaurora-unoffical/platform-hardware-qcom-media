@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2016, Linux Foundation. All rights reserved.
+Copyright (c) 2010-2017, Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -1890,7 +1890,6 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         eRet = OMX_ErrorUnsupportedIndex;
                     }
                 }
-#ifndef _MSM8974_
                 else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoLTRInfo) {
                     if (pParam->nPortIndex == PORT_INDEX_OUT) {
                         pParam->bEnabled =
@@ -1902,7 +1901,6 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         eRet = OMX_ErrorUnsupportedIndex;
                     }
                 }
-#endif
                 else {
                     DEBUG_PRINT_ERROR("get_parameter: unsupported extradata index (0x%x)",
                             pParam->nIndex);
@@ -2124,6 +2122,19 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     eRet = OMX_ErrorHardware;
                 }
                 memcpy(pLayerInfo, &m_sParamTemporalLayers, sizeof(m_sParamTemporalLayers));
+                break;
+            }
+        case OMX_QTIIndexParamDisablePQ:
+            {
+                VALIDATE_OMX_PARAM_DATA(paramData, QOMX_DISABLETYPE);
+                OMX_BOOL pq_status;
+                QOMX_DISABLETYPE *pParam =
+                        reinterpret_cast<QOMX_DISABLETYPE*>(paramData);
+                if (!dev_get_pq_status(&pq_status)) {
+                    DEBUG_PRINT_ERROR("Failed to get PQ status");
+                    eRet = OMX_ErrorHardware;
+                }
+                pParam->bDisable = pq_status ? OMX_FALSE : OMX_TRUE;
                 break;
             }
         case OMX_IndexParamVideoSliceFMO:
@@ -3801,6 +3812,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
     }
 
     m_etb_count++;
+    m_etb_timestamp = buffer->nTimeStamp;
     DEBUG_PRINT_LOW("DBG: i/p nTimestamp = %u", (unsigned)buffer->nTimeStamp);
     post_event ((unsigned long)hComp,(unsigned long)buffer,m_input_msg_id);
     return OMX_ErrorNone;
@@ -5349,7 +5361,7 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
         // separately by queueing an intermediate color-conversion buffer
         // and propagate the EOS.
         if (psource_frame->nFilledLen == 0 && (psource_frame->nFlags & OMX_BUFFERFLAG_EOS)) {
-            return push_empty_eos_buffer(hComp, psource_frame);
+            return push_empty_eos_buffer(hComp);
         }
         media_buffer = (LEGACY_CAM_METADATA_TYPE *)psource_frame->pBuffer;
         /*Will enable to verify camcorder in current TIPS can be removed*/
@@ -5386,8 +5398,7 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
     return ret;
 }
 
-OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
-        OMX_BUFFERHEADERTYPE* buffer) {
+OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp) {
     OMX_BUFFERHEADERTYPE* opqBuf = NULL;
     OMX_ERRORTYPE retVal = OMX_ErrorNone;
     unsigned index = 0;
@@ -5407,7 +5418,7 @@ OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
             }
             index = opqBuf - m_inp_mem_ptr;
         } else {
-            opqBuf = (OMX_BUFFERHEADERTYPE* ) buffer;
+            opqBuf = (OMX_BUFFERHEADERTYPE* ) psource_frame;
             index = opqBuf - meta_buffer_hdr;
         }
 
@@ -5436,8 +5447,8 @@ OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
         OMX_BUFFERHEADERTYPE emptyEosBufHdr;
         memcpy(&emptyEosBufHdr, opqBuf, sizeof(OMX_BUFFERHEADERTYPE));
         emptyEosBufHdr.nFilledLen = 0;
-        emptyEosBufHdr.nTimeStamp = buffer->nTimeStamp;
-        emptyEosBufHdr.nFlags = buffer->nFlags;
+        emptyEosBufHdr.nTimeStamp = psource_frame->nTimeStamp;
+        emptyEosBufHdr.nFlags = psource_frame->nFlags;
         emptyEosBufHdr.pBuffer = NULL;
         if (!mUsesColorConversion)
             emptyEosBufHdr.nAllocLen =
@@ -5454,7 +5465,8 @@ OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
 
     //return client's buffer regardless since intermediate color-conversion
     //buffer is sent to the the encoder
-    m_pCallbacks.EmptyBufferDone(hComp, m_app_data, buffer);
+    m_pCallbacks.EmptyBufferDone(hComp, m_app_data, psource_frame);
+    psource_frame = NULL;
     --pending_input_buffers;
     VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
     return retVal;
