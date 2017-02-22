@@ -2691,6 +2691,15 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                         DEBUG_PRINT_ERROR("ERROR: Request for setting intra period failed");
                         return false;
                     }
+
+                    if ((m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264) ||
+                        (m_sVenc_cfg.codectype == V4L2_PIX_FMT_HEVC)) {
+                        if (venc_set_idr_period(intraperiod->nPFrames, intraperiod->nIDRPeriod)
+                                == false) {
+                            DEBUG_PRINT_ERROR("ERROR: Request for setting idr period failed");
+                            return false;
+                        }
+                    }
                 }
 
                 break;
@@ -5405,8 +5414,8 @@ bool venc_dev::venc_set_idr_period(OMX_U32 nPFrames, OMX_U32 nIDRPeriod)
     DEBUG_PRINT_LOW("venc_set_idr_period: nPFrames = %u, nIDRPeriod: %u",
             (unsigned int)nPFrames, (unsigned int)nIDRPeriod);
 
-    if (m_sVenc_cfg.codectype != V4L2_PIX_FMT_H264) {
-        DEBUG_PRINT_ERROR("ERROR: IDR period valid for H264 only!!");
+    if ((m_sVenc_cfg.codectype != V4L2_PIX_FMT_H264) && (m_sVenc_cfg.codectype != V4L2_PIX_FMT_HEVC)) {
+        DEBUG_PRINT_ERROR("ERROR: IDR period valid for H264 and HEVC only!!");
         return false;
     }
 
