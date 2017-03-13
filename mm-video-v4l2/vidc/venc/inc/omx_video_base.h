@@ -537,8 +537,7 @@ class omx_video: public qc_omx_component
                 struct pmem &Input_pmem_info,unsigned long &index);
         OMX_ERRORTYPE queue_meta_buffer(OMX_HANDLETYPE hComp,
                 struct pmem &Input_pmem_info);
-        OMX_ERRORTYPE push_empty_eos_buffer(OMX_HANDLETYPE hComp,
-                OMX_BUFFERHEADERTYPE *buffer);
+        OMX_ERRORTYPE push_empty_eos_buffer(OMX_HANDLETYPE hComp);
         OMX_ERRORTYPE fill_this_buffer_proxy(OMX_HANDLETYPE hComp,
                 OMX_BUFFERHEADERTYPE *buffer);
         bool release_done();
@@ -715,6 +714,12 @@ class omx_video: public qc_omx_component
         bool hw_overload;
         size_t m_graphicbuffer_size;
         char m_platform[OMX_MAX_STRINGNAME_SIZE];
+
+        bool profile_mode;
+        int profile_frame_count;
+        OMX_U64 profile_start_time;
+        OMX_U64 profile_last_time;
+        bool profile_etb();
 };
 
 #endif // __OMX_VIDEO_BASE_H__

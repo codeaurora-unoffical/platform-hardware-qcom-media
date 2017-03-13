@@ -303,7 +303,11 @@ omx_video::omx_video():
     m_fbd_count(0),
     m_event_port_settings_sent(false),
     hw_overload(false),
-    m_graphicbuffer_size(0)
+    m_graphicbuffer_size(0),
+    profile_mode(false),
+    profile_frame_count(0),
+    profile_start_time(0),
+    profile_last_time(0)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -324,9 +328,11 @@ omx_video::omx_video():
 
     memset(m_platform, 0, sizeof(m_platform));
 #ifdef _ANDROID_
-    char platform_name[PROPERTY_VALUE_MAX] = {0};
-    property_get("ro.board.platform", platform_name, "0");
-    strlcpy(m_platform, platform_name, sizeof(m_platform));
+    char property_value[PROPERTY_VALUE_MAX] = {0};
+    property_get("ro.board.platform", property_value, "0");
+    strlcpy(m_platform, property_value, sizeof(m_platform));
+    property_get("vidc.enc.profile.in", property_value, "0");
+    profile_mode = !!atoi(property_value);
 #endif
 }
 
@@ -369,6 +375,10 @@ omx_video::~omx_video()
     sem_destroy(&m_cmd_lock);
     DEBUG_PRINT_HIGH("m_etb_count = %" PRIu64 ", m_fbd_count = %" PRIu64, m_etb_count,
             m_fbd_count);
+    if (profile_mode && (profile_start_time < profile_last_time)) {
+        DEBUG_PRINT_HIGH("Input frame rate = %f",
+            ((profile_frame_count - 1) * 1e6) / (profile_last_time - profile_start_time));
+    }
     DEBUG_PRINT_HIGH("omx_video: Destructor exit");
     DEBUG_PRINT_HIGH("Exiting OMX Video Encoder ...");
 }
@@ -3817,6 +3827,22 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
     post_event ((unsigned long)hComp,(unsigned long)buffer,m_input_msg_id);
     return OMX_ErrorNone;
 }
+
+bool omx_video::profile_etb() {
+    if (profile_mode) {
+        struct timeval act_time = {0, 0};
+        gettimeofday(&act_time, NULL);
+        if (profile_start_time == 0) {
+            profile_start_time = (act_time.tv_usec + act_time.tv_sec * 1e6);
+        } else {
+            profile_last_time = (act_time.tv_usec + act_time.tv_sec * 1e6);
+        }
+        profile_frame_count++;
+        return true;
+    }
+    return false;
+}
+
 /* ======================================================================
    FUNCTION
    omx_video::empty_this_buffer_proxy
@@ -3850,6 +3876,11 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     if (buffer == NULL) {
         DEBUG_PRINT_ERROR("ERROR: ETBProxy: Invalid buffer[%p]", buffer);
         return OMX_ErrorBadParameter;
+    }
+
+    if (profile_etb()) {
+        m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
+        return OMX_ErrorNone;
     }
 
     // Buffer sanity checks
@@ -5114,6 +5145,11 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         return OMX_ErrorBadParameter;
     }
 
+    if (profile_etb()) {
+        m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
+        return OMX_ErrorNone;
+    }
+
     if (!dev_buffer_ready_to_queue(buffer)) {
         DEBUG_PRINT_HIGH("Info: ETBProxyA: buffer[%p] is deffered", buffer);
         return OMX_ErrorNone;
@@ -5361,7 +5397,7 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
         // separately by queueing an intermediate color-conversion buffer
         // and propagate the EOS.
         if (psource_frame->nFilledLen == 0 && (psource_frame->nFlags & OMX_BUFFERFLAG_EOS)) {
-            return push_empty_eos_buffer(hComp, psource_frame);
+            return push_empty_eos_buffer(hComp);
         }
         media_buffer = (LEGACY_CAM_METADATA_TYPE *)psource_frame->pBuffer;
         /*Will enable to verify camcorder in current TIPS can be removed*/
@@ -5398,8 +5434,7 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
     return ret;
 }
 
-OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
-        OMX_BUFFERHEADERTYPE* buffer) {
+OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp) {
     OMX_BUFFERHEADERTYPE* opqBuf = NULL;
     OMX_ERRORTYPE retVal = OMX_ErrorNone;
     unsigned index = 0;
@@ -5419,7 +5454,7 @@ OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
             }
             index = opqBuf - m_inp_mem_ptr;
         } else {
-            opqBuf = (OMX_BUFFERHEADERTYPE* ) buffer;
+            opqBuf = (OMX_BUFFERHEADERTYPE* ) psource_frame;
             index = opqBuf - meta_buffer_hdr;
         }
 
@@ -5448,8 +5483,8 @@ OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
         OMX_BUFFERHEADERTYPE emptyEosBufHdr;
         memcpy(&emptyEosBufHdr, opqBuf, sizeof(OMX_BUFFERHEADERTYPE));
         emptyEosBufHdr.nFilledLen = 0;
-        emptyEosBufHdr.nTimeStamp = buffer->nTimeStamp;
-        emptyEosBufHdr.nFlags = buffer->nFlags;
+        emptyEosBufHdr.nTimeStamp = psource_frame->nTimeStamp;
+        emptyEosBufHdr.nFlags = psource_frame->nFlags;
         emptyEosBufHdr.pBuffer = NULL;
         if (!mUsesColorConversion)
             emptyEosBufHdr.nAllocLen =
@@ -5466,7 +5501,8 @@ OMX_ERRORTYPE omx_video::push_empty_eos_buffer(OMX_HANDLETYPE hComp,
 
     //return client's buffer regardless since intermediate color-conversion
     //buffer is sent to the the encoder
-    m_pCallbacks.EmptyBufferDone(hComp, m_app_data, buffer);
+    m_pCallbacks.EmptyBufferDone(hComp, m_app_data, psource_frame);
+    psource_frame = NULL;
     --pending_input_buffers;
     VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
     return retVal;
