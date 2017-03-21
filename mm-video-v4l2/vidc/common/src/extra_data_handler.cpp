@@ -499,7 +499,7 @@ OMX_S32 extra_data_handler::create_rbsp(OMX_U8 *buf, OMX_U32 nalu_type)
 
 OMX_U32 extra_data_handler::create_sei(OMX_U8 *buffer)
 {
-    OMX_U32 i, ret_val = 0;
+    OMX_U32 ret_val = 0;
 
     byte_ptr = 0;
     bit_ptr  = 8;

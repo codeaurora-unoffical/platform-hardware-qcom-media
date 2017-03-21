@@ -137,7 +137,6 @@ bool HEVC_Utils::isNewFrame(OMX_BUFFERHEADERTYPE *p_buf_hdr,
     uint32 pos = 0;
     uint32 nal_len = buffer_length;
     uint32 sizeofNalLengthField = 0;
-    uint32 zero_count;
     boolean start_code = (size_of_nal_length_field==0)?true:false;
 
     if (start_code) {

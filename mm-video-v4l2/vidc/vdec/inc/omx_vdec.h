@@ -52,8 +52,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <qdMetaData.h>
 #endif
 
-static ptrdiff_t x;
-
 #ifdef _ANDROID_
 #ifdef MAX_RES_720P
 #define LOG_TAG "OMX-VDEC-720P"

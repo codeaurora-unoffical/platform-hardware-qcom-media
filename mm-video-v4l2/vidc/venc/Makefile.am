@@ -1,6 +1,5 @@
 AM_CFLAGS = -Wall
 AM_CFLAGS += -Wundef
-AM_CFLAGS += -Wstrict-prototypes
 AM_CFLAGS += -Wno-trigraphs
 AM_CFLAGS += -g -O3
 

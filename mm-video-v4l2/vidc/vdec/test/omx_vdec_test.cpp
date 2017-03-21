@@ -1466,7 +1466,8 @@ int main(int argc, char **argv)
       printf(" 9--> HEVC\n");
 #endif
       fflush(stdin);
-      fgets(tempbuf,sizeof(tempbuf),stdin);
+      if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+          DEBUG_PRINT_ERROR("Error while reading");
       sscanf(tempbuf,"%d",&codec_format_option);
       fflush(stdin);
       if (codec_format_option > CODEC_FORMAT_MAX)
@@ -1515,7 +1516,8 @@ int main(int argc, char **argv)
       }
 #endif
       fflush(stdin);
-      fgets(tempbuf,sizeof(tempbuf),stdin);
+      if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+          DEBUG_PRINT_ERROR("Error while reading");
       sscanf(tempbuf,"%d",&file_type_option);
 #ifdef _MSM8974_
       if ( (codec_format_option == CODEC_FORMAT_VP8) || (codec_format_option == CODEC_FORMAT_VP9) )
@@ -1527,7 +1529,8 @@ int main(int argc, char **argv)
       if (codec_format_option == CODEC_FORMAT_H264 && file_type_option == 3)
       {
         printf(" Enter Nal length size [2 or 4] \n");
-        fgets(tempbuf,sizeof(tempbuf),stdin);
+        if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+            DEBUG_PRINT_ERROR("Error while reading");
         sscanf(tempbuf,"%d",&nalSize);
         if (nalSize != 2 && nalSize != 4)
         {
@@ -1544,7 +1547,8 @@ int main(int argc, char **argv)
       printf(" 2 --> Take YUV log\n");
       printf(" 3 --> Display YUV and take YUV log\n");
       fflush(stdin);
-      fgets(tempbuf,sizeof(tempbuf),stdin);
+      if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+          DEBUG_PRINT_ERROR("Error while reading");
       sscanf(tempbuf,"%d",&outputOption);
       fflush(stdin);
 
@@ -1556,7 +1560,8 @@ int main(int argc, char **argv)
       printf("       Please only see \"TEST SUCCESSFULL\" to indicate test pass\n");
       printf(" 3 --> Thumbnail decode mode\n");
       fflush(stdin);
-      fgets(tempbuf,sizeof(tempbuf),stdin);
+      if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+          DEBUG_PRINT_ERROR("Error while reading");
       sscanf(tempbuf,"%d",&test_option);
       fflush(stdin);
       if (test_option == 3)
@@ -1574,7 +1579,8 @@ int main(int argc, char **argv)
           printf(" 4 --> 1/4 th of the screen starting from middle to bottom right \n");
           printf("       Please only see \"TEST SUCCESSFULL\" to indidcate test pass\n");
           fflush(stdin);
-          fgets(tempbuf,sizeof(tempbuf),stdin);
+          if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+              DEBUG_PRINT_ERROR("Error while reading");
           sscanf(tempbuf,"%d",&displayWindow);
           fflush(stdin);
           if(displayWindow > 0)
@@ -1593,7 +1599,8 @@ int main(int argc, char **argv)
           printf("          For Arbitrary bytes option, Real time display is not recommended\n");
           printf(" *********************************************\n");
           fflush(stdin);
-          fgets(tempbuf,sizeof(tempbuf),stdin);
+          if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+              DEBUG_PRINT_ERROR("Error while reading");
           sscanf(tempbuf,"%d",&realtime_display);
           fflush(stdin);
       }
@@ -1606,7 +1613,8 @@ int main(int argc, char **argv)
           printf(" Exception: Timestamp extracted from clips will be used.\n");
           printf(" *********************************************\n");
           fflush(stdin);
-          fgets(tempbuf,sizeof(tempbuf),stdin);
+          if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+              DEBUG_PRINT_ERROR("Error while reading");
           sscanf(tempbuf,"%d",&fps);
           fflush(stdin);
           timestampInterval = 1000000/fps;
@@ -1617,7 +1625,8 @@ int main(int argc, char **argv)
       printf(" 0 --> Semiplanar \n 1 --> Tile Mode\n");
       printf(" *********************************************\n");
       fflush(stdin);
-      fgets(tempbuf,sizeof(tempbuf),stdin);
+      if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+          DEBUG_PRINT_ERROR("Error while reading");
       sscanf(tempbuf,"%d",&color_fmt_type);
       fflush(stdin);
 
@@ -1627,7 +1636,8 @@ int main(int argc, char **argv)
           printf(" *********************************************\n");
           printf(" 0 --> Display order\n 1 --> Decode order\n");
           fflush(stdin);
-          fgets(tempbuf,sizeof(tempbuf),stdin);
+          if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+              DEBUG_PRINT_ERROR("Error while reading");
           sscanf(tempbuf,"%d",&pic_order);
           fflush(stdin);
 
@@ -1636,7 +1646,8 @@ int main(int argc, char **argv)
           printf(" 0 ---> decode all frames: \n");
           printf(" *********************************************\n");
           fflush(stdin);
-          fgets(tempbuf,sizeof(tempbuf),stdin);
+          if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+              DEBUG_PRINT_ERROR("Error while reading");
           sscanf(tempbuf,"%d",&num_frames_to_decode);
           fflush(stdin);
       }
@@ -1711,7 +1722,8 @@ int main(int argc, char **argv)
       printf(" 3 --> Call Free Handle at the OMX_StateExecuting\n");
       printf(" 4 --> Call Free Handle at the OMX_StatePause\n");
       fflush(stdin);
-      fgets(tempbuf,sizeof(tempbuf),stdin);
+      if (fgets(tempbuf,sizeof(tempbuf),stdin) <= 0)
+          DEBUG_PRINT_ERROR("Error while reading");
       sscanf(tempbuf,"%d",&freeHandle_option);
       fflush(stdin);
     }
@@ -1955,7 +1967,7 @@ int Init_Decoder()
     OMX_U32 total = 0;
     char vdecCompNames[50];
     typedef OMX_U8* OMX_U8_PTR;
-    char *role ="video_decoder";
+    char *role = (char *) "video_decoder";
 
     static OMX_CALLBACKTYPE call_back = {&EventHandler, &EmptyBufferDone, &FillBufferDone};
 
@@ -3456,10 +3468,12 @@ static int Read_Buffer_From_RCV_File_Seq_Layer(OMX_BUFFERHEADERTYPE  *pBufHdr)
 
     DEBUG_PRINT("Inside %s ", __FUNCTION__);
 
-    read(inputBufferFileFd, &startcode, 4);
+    if (read(inputBufferFileFd, &startcode, 4) <= 0)
+        DEBUG_PRINT_ERROR("Error while reading");
 
     /* read size of struct C as it need not be 4 always*/
-    read(inputBufferFileFd, &size_struct_C, 4);
+    if (read(inputBufferFileFd, &size_struct_C, 4) <= 0)
+        DEBUG_PRINT_ERROR("Error while reading");
 
 #ifndef _MSM8974_
     /* reseek to beginning of sequence header */
@@ -4251,13 +4265,13 @@ void render_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr)
     // read to the end of existing extra data sections
     pExtraData = (OMX_OTHER_EXTRADATATYPE*)addr;
 
-    while (addr < end && pExtraData->eType != OMX_ExtraDataFrameInfo)
+    while (addr < end && (OMX_QCOM_EXTRADATATYPE) (pExtraData->eType) != OMX_ExtraDataFrameInfo)
     {
             addr += pExtraData->nSize;
             pExtraData = (OMX_OTHER_EXTRADATATYPE*)addr;
     }
 
-    if (pExtraData->eType != OMX_ExtraDataFrameInfo)
+    if ((OMX_QCOM_EXTRADATATYPE) (pExtraData->eType) != OMX_ExtraDataFrameInfo)
     {
        DEBUG_PRINT_ERROR("pExtraData->eType %d pExtraData->nSize %d",pExtraData->eType,pExtraData->nSize);
     }
@@ -4736,7 +4750,7 @@ int alloc_map_ion_memory(OMX_U32 buffer_size,
   rc = ioctl(fd,ION_IOC_ALLOC,alloc_data);
   if (rc || !alloc_data->handle) {
     DEBUG_PRINT_ERROR(" ION ALLOC memory failed ");
-    alloc_data->handle = NULL;
+    alloc_data->handle = 0;
     close(fd);
     fd = -ENOMEM;
     return fd;
@@ -4769,7 +4783,7 @@ void free_ion_memory(struct vdec_ion *buf_ion_info) {
      }
      close(buf_ion_info->ion_device_fd);
      buf_ion_info->ion_device_fd = -1;
-     buf_ion_info->ion_alloc_data.handle = NULL;
+     buf_ion_info->ion_alloc_data.handle = 0;
      buf_ion_info->fd_ion_data.fd = -1;
 }
 #endif

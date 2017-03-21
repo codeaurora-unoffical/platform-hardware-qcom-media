@@ -37,12 +37,12 @@ int FBTest_DisplayImage(int nPmemFd, int nOffset)
    return 0;
 }
 
-int FBTest_Exit()
+int FBTest_Exit(void)
 {
    return 0;
 }
 
-int FBTest_RunTest()
+int FBTest_RunTest(void)
 {
    return 0;
 }

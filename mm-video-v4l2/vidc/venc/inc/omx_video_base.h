@@ -94,11 +94,11 @@ static const char* MEM_DEVICE = "/dev/ion";
 #define MEM_HEAP_ID ION_CP_MM_HEAP_ID
 #endif
 #endif
-#elif MAX_RES_720P
+#elif defined MAX_RES_720P
 static const char* MEM_DEVICE = "/dev/pmem_adsp";
-#elif MAX_RES_1080P_EBI
+#elif defined MAX_RES_1080P_EBI
 static const char* MEM_DEVICE  = "/dev/pmem_adsp";
-#elif MAX_RES_1080P
+#elif defined MAX_RES_1080P
 static const char* MEM_DEVICE = "/dev/pmem_smipool";
 #else
 #error MEM_DEVICE cannot be determined.

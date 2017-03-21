@@ -47,7 +47,7 @@ struct Queue
   int  current_size;
 };
 
-Queue *alloc_queue()
+Queue *alloc_queue(void)
 {
   Queue *q = (Queue *) malloc(sizeof(Queue));
   if (q)

@@ -296,42 +296,6 @@ static int check_lib_unload(int index)
   }
   return rc;
 }
-/* ======================================================================
-FUNCTION
-  is_cmp_already_exists
-
-DESCRIPTION
-  Check if the component already exists or not. Used in the
-  management of component handles.
-
-PARAMETERS
-  None
-
-RETURN VALUE
-  Error None.
-========================================================================== */
-static int is_cmp_already_exists(char *cmp_name)
-{
-  unsigned i    =0,j=0;
-  int rc = -1;
-  for(i=0; i< SIZE_OF_CORE; i++)
-  {
-    if(!strcmp(cmp_name, core[i].name))
-    {
-      for(j=0; j< OMX_COMP_MAX_INST; j++)
-      {
-        if(core[i].inst[j])
-        {
-          rc = i;
-          DEBUG_PRINT("Component exists %d\n", rc);
-          return rc;
-        }
-      }
-      break;
-    }
-  }
-  return rc;
-}
 
 /* ======================================================================
 FUNCTION
@@ -419,7 +383,6 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
   pthread_mutex_lock(&lock_core);
   if(handle)
   {
-    struct stat sd;
     *handle = NULL;
     char optComponentName[OMX_MAX_STRINGNAME_SIZE];
     strlcpy(optComponentName, componentName, OMX_MAX_STRINGNAME_SIZE);
@@ -429,7 +392,7 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
       void *libhandle = dlopen("libOmxVideoDSMode.so", RTLD_NOW);
       if(libhandle)
       {
-        int (*fn_ptr)()  = dlsym(libhandle, "isDSModeActive");
+        int (*fn_ptr)(void)  = dlsym(libhandle, "isDSModeActive");
 
         if(fn_ptr == NULL)
         {
@@ -465,10 +428,8 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
     }
     if(cmp_index >= 0)
     {
+#ifndef _LINUX_
       char value[PROPERTY_VALUE_MAX];
-#ifdef _LINUX_
-      value[0] = '\0';  //vpp property is disabled
-#else
       DEBUG_PRINT("getting fn pointer\n");
 
       // Load VPP omx component for decoder if vpp

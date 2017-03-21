@@ -861,7 +861,6 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
         case OMX_IndexParamVideoInit:
             { //TODO, do we need this index set param
                 VALIDATE_OMX_PARAM_DATA(paramData, OMX_PORT_PARAM_TYPE);
-                OMX_PORT_PARAM_TYPE* pParam = (OMX_PORT_PARAM_TYPE*)(paramData);
                 DEBUG_PRINT_LOW("Set OMX_IndexParamVideoInit called");
                 break;
             }
@@ -2557,7 +2556,6 @@ int omx_venc::async_message_process (void *context, void* message)
     omx_video* omx = NULL;
     struct venc_msg *m_sVenc_msg = NULL;
     OMX_BUFFERHEADERTYPE* omxhdr = NULL;
-    struct venc_buffer *temp_buff = NULL;
 #ifndef _LINUX_
     native_handle_t *nh = NULL;
 #endif

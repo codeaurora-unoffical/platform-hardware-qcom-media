@@ -30,7 +30,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 typedef struct Queue Queue;
 
-Queue *alloc_queue();
+Queue *alloc_queue(void);
 void free_queue(Queue *q);
 void free_queue_and_qelement(Queue *q);
 int push(Queue *q, void * element);

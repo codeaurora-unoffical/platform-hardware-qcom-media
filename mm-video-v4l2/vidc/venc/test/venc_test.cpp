@@ -419,11 +419,11 @@ int ebd_cnt=0, fbd_cnt=0;
 
 #ifdef USE_ION
 static const char* PMEM_DEVICE = "/dev/ion";
-#elif MAX_RES_720P
+#elif defined MAX_RES_720P
 static const char* PMEM_DEVICE = "/dev/pmem_adsp";
-#elif MAX_RES_1080P_EBI
+#elif defined MAX_RES_1080P_EBI
 static const char* PMEM_DEVICE  = "/dev/pmem_adsp";
-#elif MAX_RES_1080P
+#elif defined MAX_RES_1080P
 static const char* PMEM_DEVICE = "/dev/pmem_smipool";
 #else
 #error PMEM_DEVICE cannot be determined.
@@ -460,7 +460,7 @@ void* PmemMalloc(OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO* pMem, int nSize)
   rc = ioctl(ion_data.ion_device_fd,ION_IOC_ALLOC,&ion_data.alloc_data);
   if(rc || !ion_data.alloc_data.handle) {
          E("\n ION ALLOC memory failed rc: %d, handle: %p", rc, ion_data.alloc_data.handle);
-         ion_data.alloc_data.handle=NULL;
+         ion_data.alloc_data.handle = 0;
          return NULL;
   }
 
@@ -492,7 +492,7 @@ void* PmemMalloc(OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO* pMem, int nSize)
        &ion_data.alloc_data.handle)) {
       E("ion recon buffer free failed");
     }
-    ion_data.alloc_data.handle = NULL;
+    ion_data.alloc_data.handle = 0;
     ion_data.ion_alloc_fd.fd =-1;
     close(ion_data.ion_device_fd);
     ion_data.ion_device_fd =-1;
@@ -518,7 +518,7 @@ int PmemFree(OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO* pMem, void* pvirt, int nSize)
          &ion_data.alloc_data.handle)) {
         E("ion recon buffer free failed");
    }
-   ion_data.alloc_data.handle = NULL;
+   ion_data.alloc_data.handle = 0;
    ion_data.ion_alloc_fd.fd =-1;
    close(ion_data.ion_device_fd);
    ion_data.ion_device_fd =-1;
@@ -1266,7 +1266,7 @@ OMX_ERRORTYPE VencTest_Initialize()
    if (m_sProfile.eCodec == OMX_VIDEO_CodingMPEG4)
    {
         result = OMX_GetHandle(&m_hHandle,
-                             "OMX.qcom.video.encoder.mpeg4",
+                             (OMX_STRING) "OMX.qcom.video.encoder.mpeg4",
                              NULL,
                              &sCallbacks);
      // CHK(result);
@@ -1274,7 +1274,7 @@ OMX_ERRORTYPE VencTest_Initialize()
    else if (m_sProfile.eCodec == OMX_VIDEO_CodingH263)
    {
       result = OMX_GetHandle(&m_hHandle,
-                             "OMX.qcom.video.encoder.h263",
+                             (OMX_STRING) "OMX.qcom.video.encoder.h263",
                              NULL,
                              &sCallbacks);
       CHK(result);
@@ -1283,7 +1283,7 @@ OMX_ERRORTYPE VencTest_Initialize()
    else if (m_sProfile.eCodec == OMX_VIDEO_CodingVP8)
    {
       result = OMX_GetHandle(&m_hHandle,
-                             "OMX.qcom.video.encoder.vp8",
+                             (OMX_STRING) "OMX.qcom.video.encoder.vp8",
                              NULL,
                              &sCallbacks);
       CHK(result);
@@ -1291,7 +1291,7 @@ OMX_ERRORTYPE VencTest_Initialize()
    else if (m_sProfile.eCodec == OMX_VIDEO_CodingHEVC)
    {
       result = OMX_GetHandle(&m_hHandle,
-                             "OMX.qcom.video.encoder.hevc",
+                             (OMX_STRING) "OMX.qcom.video.encoder.hevc",
                              NULL,
                              &sCallbacks);
       CHK(result);
@@ -1301,7 +1301,7 @@ OMX_ERRORTYPE VencTest_Initialize()
    else
    {
       result = OMX_GetHandle(&m_hHandle,
-                             "OMX.qcom.video.encoder.avc",
+                             (OMX_STRING) "OMX.qcom.video.encoder.avc",
                              NULL,
                              &sCallbacks);
       CHK(result);
@@ -1461,7 +1461,6 @@ void VencTest_ReadDynamicConfigMsg()
     } while(dest[cntr] != ' ' && dest[cntr] != '\t' && dest[cntr] != '\n' && dest[cntr] != '\r' && !feof(m_pDynConfFile));
     if (dest[cntr] == '\n' || dest[cntr] == '\r')
       end = true;
-    dest[cntr] = NULL;
     if (dest == frame_n)
       dest = config;
     else if (dest == config)
@@ -2183,9 +2182,11 @@ int main(int argc, char** argv)
               m_sProfile.nFrameBytes);
 #else
          // read Y first
-         read(m_nInFd,
-              m_pInBuffers[i]->pBuffer,
-              m_sProfile.nFrameWidth*m_sProfile.nFrameHeight);
+        if(read(m_nInFd, m_pInBuffers[i]->pBuffer,
+              m_sProfile.nFrameWidth*m_sProfile.nFrameHeight) <= 0) {
+            E("Error while reading frame");
+            break;
+        }
 
          // check alignment for offset to C
          OMX_U32 offset_to_c = m_sProfile.nFrameWidth * m_sProfile.nFrameHeight;
@@ -2201,11 +2202,13 @@ int main(int argc, char** argv)
          }
 
          // read C
-         read(m_nInFd,
-              m_pInBuffers[i]->pBuffer + offset_to_c,
-              m_sProfile.nFrameWidth*m_sProfile.nFrameHeight/2);
-#endif
+         if (read(m_nInFd, m_pInBuffers[i]->pBuffer + offset_to_c,
+                     m_sProfile.nFrameWidth*m_sProfile.nFrameHeight/2) <= 0) {
+             E("Error while reading frame");
+             break;
+         }
 
+#endif
       }
 
      // FBTest_Initialize(m_sProfile.nFrameWidth, m_sProfile.nFrameHeight);

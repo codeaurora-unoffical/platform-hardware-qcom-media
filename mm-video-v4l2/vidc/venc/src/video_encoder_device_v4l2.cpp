@@ -271,7 +271,6 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     etb = ebd = ftb = fbd = 0;
     m_poll_efd = -1;
 
-    struct v4l2_control control;
     for (i = 0; i < MAX_PORT; i++)
         streaming[i] = false;
 
@@ -405,7 +404,7 @@ void* venc_dev::async_venc_message_thread (void *input)
     pfds[1].events = POLLIN | POLLERR;
     pfds[0].fd = omx->handle->m_nDriver_fd;
     pfds[1].fd = omx->handle->m_poll_efd;
-    int error_code = 0,rc=0;
+    int rc=0;
 
     memset(&stats, 0, sizeof(statistics));
     memset(&v4l2_buf, 0, sizeof(v4l2_buf));
@@ -674,7 +673,6 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
 {
     OMX_OTHER_EXTRADATATYPE *p_extra = NULL;
     unsigned int consumed_len = 0, index = 0;
-    int enable = 0, i = 0;
     int height = 0, width = 0;
     OMX_TICKS nTimeStamp = buf.timestamp.tv_sec * 1000000 + buf.timestamp.tv_usec;
     int fd = buf.m.planes[0].reserved[0];
@@ -713,8 +711,6 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
     OMX_OTHER_EXTRADATATYPE *data = (struct OMX_OTHER_EXTRADATATYPE *)p_extradata;
     memset((void *)(data), 0, (input_extradata_info.buffer_size)); // clear stale data in current buffer
     if (p_extra) {
-        bool vqzip_sei_found = false;
-
         while ((consumed_len < input_extradata_info.buffer_size)
             && (p_extra->eType != (OMX_EXTRADATATYPE)MSM_VIDC_EXTRADATA_NONE)
             && !unknown_extradata) {
@@ -1332,16 +1328,14 @@ static int async_message_process_v4l2 (void *context, void* message)
 
 bool venc_dev::venc_open(OMX_U32 codec)
 {
-    int r;
-    unsigned int alignment = 0,buffer_size = 0, temp =0;
     struct v4l2_control control;
     OMX_STRING device_name = (OMX_STRING)"/dev/video33";
-    char property_value[PROPERTY_VALUE_MAX] = {0};
     char platform_name[PROPERTY_VALUE_MAX] = {0};
     FILE *soc_file = NULL;
     char buffer[10];
 
 #ifndef _LINUX_
+    char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("ro.board.platform", platform_name, "0");
     property_get("vidc.enc.narrow.searchrange", property_value, "0");
     enable_mv_narrow_searchrange = atoi(property_value);
@@ -1468,19 +1462,24 @@ bool venc_dev::venc_open(OMX_U32 codec)
         fdesc.index++;
     }
 
+    int bytes_read;
     is_thulium_v1 = false;
     soc_file= fopen("/sys/devices/soc0/soc_id", "r");
     if (soc_file) {
-        fread(buffer, 1, 4, soc_file);
+        bytes_read = fread(buffer, 1, 4, soc_file);
         fclose(soc_file);
-        if (atoi(buffer) == 246) {
-            soc_file = fopen("/sys/devices/soc0/revision", "r");
-            if (soc_file) {
-                fread(buffer, 1, 4, soc_file);
-                fclose(soc_file);
-                if (atoi(buffer) == 1) {
-                    is_thulium_v1 = true;
-                    DEBUG_PRINT_HIGH("is_thulium_v1 = TRUE");
+        if (bytes_read > 0) {
+            if (atoi(buffer) == 246) {
+                soc_file = fopen("/sys/devices/soc0/revision", "r");
+                if (soc_file) {
+                    bytes_read = fread(buffer, 1, 4, soc_file);
+                    fclose(soc_file);
+                    if (bytes_read > 0 ) {
+                        if (atoi(buffer) == 1) {
+                            is_thulium_v1 = true;
+                            DEBUG_PRINT_HIGH("is_thulium_v1 = TRUE");
+                        }
+                    }
                 }
             }
         }
@@ -1694,24 +1693,20 @@ bool venc_dev::venc_set_buf_req(OMX_U32 *min_buff_count,
         OMX_U32 port)
 {
     (void)min_buff_count, (void)buff_size;
-    unsigned long temp_count = 0;
 
     if (port == 0) {
         if (*actual_buff_count > m_sInput_buff_property.mincount) {
-            temp_count = m_sInput_buff_property.actualcount;
             m_sInput_buff_property.actualcount = *actual_buff_count;
             DEBUG_PRINT_LOW("I/P Count set to %u", (unsigned int)*actual_buff_count);
         }
     } else {
         if (*actual_buff_count > m_sOutput_buff_property.mincount) {
-            temp_count = m_sOutput_buff_property.actualcount;
             m_sOutput_buff_property.actualcount = *actual_buff_count;
             DEBUG_PRINT_LOW("O/P Count set to %u", (unsigned int)*actual_buff_count);
         }
     }
 
     return true;
-
 }
 
 bool venc_dev::venc_loaded_start()
@@ -1748,7 +1743,7 @@ bool venc_dev::venc_get_buf_req(OMX_U32 *min_buff_count,
 {
     struct v4l2_format fmt;
     struct v4l2_requestbuffers bufreq;
-    unsigned int buf_size = 0, extra_data_size = 0, client_extra_data_size = 0;
+    unsigned int extra_data_size = 0;
     int ret;
     int extra_idx = 0;
 
@@ -1893,7 +1888,6 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
     DEBUG_PRINT_LOW("venc_set_param:: venc-720p");
     struct v4l2_format fmt;
     struct v4l2_requestbuffers bufreq;
-    int ret;
 
     switch ((int)index) {
         case OMX_IndexParamPortDefinition:
@@ -3168,7 +3162,6 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
 
 unsigned venc_dev::venc_stop( void)
 {
-    struct venc_msg venc_msg;
     struct v4l2_requestbuffers bufreq;
     int rc = 0, ret = 0;
 
@@ -3334,7 +3327,7 @@ bool venc_dev::venc_set_vqzip_defaults()
 unsigned venc_dev::venc_start(void)
 {
     enum v4l2_buf_type buf_type;
-    int ret, r;
+    int ret;
     struct v4l2_control control;
 
     memset(&control, 0, sizeof(control));
@@ -3771,7 +3764,6 @@ bool venc_dev::venc_color_align(OMX_BUFFERHEADERTYPE *buffer,
     OMX_U32 y_stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, width),
             y_scanlines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, height),
             uv_stride = VENUS_UV_STRIDE(COLOR_FMT_NV12, width),
-            uv_scanlines = VENUS_UV_SCANLINES(COLOR_FMT_NV12, height),
             src_chroma_offset = width * height;
 
     if (buffer->nAllocLen >= VENUS_BUFFER_SIZE(COLOR_FMT_NV12, width, height)) {
@@ -3860,16 +3852,13 @@ bool venc_dev::venc_get_batch_size(OMX_U32 *size)
 
 bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index, unsigned fd)
 {
-    struct pmem *temp_buffer;
     struct v4l2_buffer buf;
-    struct v4l2_requestbuffers bufreq;
     struct v4l2_plane plane[VIDEO_MAX_PLANES];
     int rc = 0, extra_idx;
     struct OMX_BUFFERHEADERTYPE *bufhdr;
 #ifndef _LINUX_
     LEGACY_CAM_METADATA_TYPE * meta_buf = NULL;
 #endif
-    temp_buffer = (struct pmem *)buffer;
 
     memset (&buf, 0, sizeof(buf));
     memset (&plane, 0, sizeof(plane));
@@ -3880,10 +3869,6 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     }
 
     bufhdr = (OMX_BUFFERHEADERTYPE *)buffer;
-    bufreq.memory = V4L2_MEMORY_USERPTR;
-    bufreq.count = m_sInput_buff_property.actualcount;
-    bufreq.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-
     DEBUG_PRINT_LOW("Input buffer length %u, Timestamp = %lld", (unsigned int)bufhdr->nFilledLen, bufhdr->nTimeStamp);
 
 #ifdef _LINUX_
@@ -3894,6 +3879,11 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     DEBUG_PRINT_LOW("venc_empty_buf: non-camera buf: fd = %d filled %d of %d",
             fd, plane[0].bytesused, plane[0].length);
 #else
+    struct v4l2_requestbuffers bufreq;
+    bufreq.memory = V4L2_MEMORY_USERPTR;
+    bufreq.count = m_sInput_buff_property.actualcount;
+    bufreq.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+
     if (pmem_data_buf) {
         DEBUG_PRINT_LOW("\n Internal PMEM addr for i/p Heap UseBuf: %p", pmem_data_buf);
         plane[0].m.userptr = (unsigned long)pmem_data_buf;
@@ -4391,8 +4381,6 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
 
 bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,unsigned fd)
 {
-    struct pmem *temp_buffer = NULL;
-    struct venc_buffer  frameinfo;
     struct v4l2_buffer buf;
     struct v4l2_plane plane[VIDEO_MAX_PLANES];
     int rc = 0;
@@ -4742,7 +4730,6 @@ bool venc_dev::venc_set_slice_delivery_mode(OMX_U32 enable)
 bool venc_dev::venc_enable_initial_qp(QOMX_EXTNINDEX_VIDEO_INITIALQP* initqp)
 {
     int rc;
-    struct v4l2_control control;
     struct v4l2_ext_control ctrl[4];
     struct v4l2_ext_controls controls;
 
@@ -5418,8 +5405,6 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
     DEBUG_PRINT_LOW("venc_set_intra_period: nPFrames = %u, nBFrames: %u", (unsigned int)nPFrames, (unsigned int)nBFrames);
     int rc;
     struct v4l2_control control;
-    int pframe = 0, bframe = 0;
-    char property_value[PROPERTY_VALUE_MAX] = {0};
 
     if ((codec_profile.profile != V4L2_MPEG_VIDEO_MPEG4_PROFILE_ADVANCED_SIMPLE) &&
             (codec_profile.profile != V4L2_MPEG_VIDEO_H264_PROFILE_MAIN) &&
@@ -5444,6 +5429,8 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
     }
 
 #ifndef _LINUX_
+    char property_value[PROPERTY_VALUE_MAX] = {0};
+
     if (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height >= 3840 * 2160 &&
         (property_get("vidc.enc.disable_bframes", property_value, "0") && atoi(property_value))) {
         intra_period.num_pframes = intra_period.num_pframes + intra_period.num_bframes;
@@ -5699,7 +5686,6 @@ bool venc_dev::venc_set_intra_refresh(OMX_VIDEO_INTRAREFRESHTYPE ir_mode, OMX_U3
 bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* error_resilience)
 {
     bool status = true;
-    struct venc_headerextension hec_cfg;
     struct venc_multiclicecfg multislice_cfg;
     int rc;
     OMX_U32 resynchMarkerSpacingBytes = 0;
@@ -5707,15 +5693,8 @@ bool venc_dev::venc_set_error_resilience(OMX_VIDEO_PARAM_ERRORCORRECTIONTYPE* er
 
     memset(&control, 0, sizeof(control));
 
-    if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_MPEG4) {
-        if (error_resilience->bEnableHEC) {
-            hec_cfg.header_extension = 1;
-        } else {
-            hec_cfg.header_extension = 0;
-        }
-
+    if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_MPEG4)
         hec.header_extension = error_resilience->bEnableHEC;
-    }
 
     if (error_resilience->bEnableRVLC) {
         DEBUG_PRINT_ERROR("RVLC is not Supported");
@@ -6135,7 +6114,6 @@ bool venc_dev::venc_set_layer_bitrates(OMX_U32 *layerBitrate, OMX_U32 numLayers)
     struct v4l2_ext_control ctrl[OMX_VIDEO_ANDROID_MAXTEMPORALLAYERS];
     struct v4l2_ext_controls controls;
     int rc = 0;
-    OMX_U32 i;
 
     if (!venc_set_bitrate_type(V4L2_CID_MPEG_VIDC_VIDEO_VENC_BITRATE_ENABLE)) {
         DEBUG_PRINT_ERROR("Failed to set layerwise bitrate type %d", rc);
@@ -6440,7 +6418,6 @@ bool venc_dev::venc_set_vpe_rotation(OMX_S32 rotation_angle)
 bool venc_dev::venc_set_searchrange()
 {
     DEBUG_PRINT_LOW("venc_set_searchrange");
-    struct v4l2_control control;
     struct v4l2_ext_control ctrl[6];
     struct v4l2_ext_controls controls;
     int rc;
@@ -6662,7 +6639,6 @@ bool venc_dev::venc_set_qp(OMX_U32 nQp)
 bool venc_dev::venc_set_aspectratio(void *nSar)
 {
     int rc;
-    struct v4l2_control control;
     struct v4l2_ext_control ctrl[2];
     struct v4l2_ext_controls controls;
     QOMX_EXTNINDEX_VIDEO_VENC_SAR *sar;

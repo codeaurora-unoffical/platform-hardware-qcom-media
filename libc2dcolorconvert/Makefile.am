@@ -2,7 +2,6 @@
 
 AM_CPPFLAGS = -Wall
 AM_CPPFLAGS += -Wundef
-AM_CPPFLAGS += -Wstrict-prototypes
 AM_CPPFLAGS += -Wno-trigraphs
 AM_CPPFLAGS += -g -O3
 AM_CPPFLAGS += -O0 -fno-inline -fno-short-enums

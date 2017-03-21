@@ -211,14 +211,12 @@ int hypv_close(int fd)
         DEBUG_PRINT_ERROR("hypervisor not initialized");
         rc = -1;
     } else if (IS_HYPERVISOR_VIDEO(fd)) {
-        int rc = 0;
         int fd_index = fd & HYPV_HANDLE_MASK;
 
         if ((fd_index >= MAX_V4L2_HANDLE_STORAGE) || (fd_index < 0)) {
             DEBUG_PRINT_ERROR("invalid fd=%d", fd_index);
             rc = -1;
         } else {
-            int handle_count = 0;
             pthread_mutex_lock(&g_v4l2_handle_storage_lock);
             rc = v4l2fe_close(g_v4l2_handle_storage[fd_index]);
             g_v4l2_handle_storage[fd_index] = 0;
