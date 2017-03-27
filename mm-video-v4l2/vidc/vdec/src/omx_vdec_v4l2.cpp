@@ -683,11 +683,6 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 
     property_get("vidc.dec.debug.perf", property_value, "0");
     perf_flag = atoi(property_value);
-    if (perf_flag) {
-        DEBUG_PRINT_HIGH("vidc.dec.debug.perf is %d", perf_flag);
-        dec_time.start();
-        proc_frms = latency = 0;
-    }
     prev_n_filled_len = 0;
     property_value[0] = '\0';
     property_get("vidc.dec.debug.ts", property_value, "0");
@@ -749,11 +744,17 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 #else
     m_disable_ubwc_mode = true;
 #endif
-#endif //_ANDROID_
-#ifdef _LINUX_
+#elif _LINUX_
     char *env_ptr = getenv("OMX_DEBUG_LEVEL");
     debug_level = env_ptr ? atoi(env_ptr) : 0;
+    env_ptr = getenv("OMX_DEBUG_PERF");
+    perf_flag = env_ptr ? atoi(env_ptr) : 0;
 #endif
+    if (perf_flag) {
+        DEBUG_PRINT_HIGH("vidc.dec.debug.perf is %d", perf_flag);
+        dec_time.start();
+        proc_frms = latency = 0;
+    }
     memset(&m_cmp,0,sizeof(m_cmp));
     memset(&m_cb,0,sizeof(m_cb));
     memset (&drv_ctx,0,sizeof(drv_ctx));
@@ -949,12 +950,10 @@ omx_vdec::~omx_vdec()
     pthread_mutex_destroy(&c_lock);
     pthread_mutex_destroy(&buf_lock);
     sem_destroy(&m_cmd_lock);
-#ifndef _LINUX_
     if (perf_flag) {
         DEBUG_PRINT_HIGH("--> TOTAL PROCESSING TIME");
         dec_time.end();
     }
-#endif
     DEBUG_PRINT_INFO("Exit OMX vdec Destructor: fd=%d",drv_ctx.video_driver_fd);
     m_perf_control.send_hint_to_mpctl(false);
 }
@@ -7147,7 +7146,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         return OMX_ErrorBadPortIndex;
     }
 
-#ifndef _LINUX_
     if (perf_flag) {
         if (!latency) {
             dec_time.stop();
@@ -7155,7 +7153,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
             dec_time.start();
         }
     }
-#endif
 
     if (arbitrary_bytes) {
         nBufferIndex = buffer - m_inp_heap_ptr;
@@ -8408,7 +8405,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
             else
                 set_frame_rate(buffer->nTimeStamp);
 
-#ifndef _LINUX_
             if (perf_flag) {
                 if (!proc_frms) {
                     dec_time.stop();
@@ -8418,17 +8414,18 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
                     fps_metrics.start();
                 }
                 proc_frms++;
-                if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
-                    OMX_U64 proc_time = 0;
-                    fps_metrics.stop();
-                    proc_time = fps_metrics.processing_time_us();
-                    DEBUG_PRINT_HIGH(">>> FBD Metrics: proc_frms(%u) proc_time(%.2f)S fps(%.2f)",
-                            (unsigned int)proc_frms, (float)proc_time / 1e6,
-                            (float)(1e6 * proc_frms) / proc_time);
-                    proc_frms = 0;
-                }
             }
-#endif
+        }
+        if (perf_flag) {
+            if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
+                OMX_U64 proc_time = 0;
+                fps_metrics.stop();
+                proc_time = fps_metrics.processing_time_us();
+                DEBUG_PRINT_HIGH(">>> FBD Metrics: proc_frms(%u) proc_time(%.2f)S fps(%.2f)",
+                        (unsigned int)proc_frms, (float)proc_time / 1e6,
+                        (float)(1e6 * proc_frms) / proc_time);
+                proc_frms = 0;
+            }
         }
         if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
             prev_ts = LLONG_MAX;
