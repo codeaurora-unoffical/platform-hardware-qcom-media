@@ -296,6 +296,7 @@ omx_video::omx_video():
     output_use_buffer (false),
     pending_input_buffers(0),
     pending_output_buffers(0),
+    allocate_native_handle(false),
     m_out_bm_count(0),
     m_inp_bm_count(0),
     m_flags(0),
@@ -303,7 +304,11 @@ omx_video::omx_video():
     m_fbd_count(0),
     m_event_port_settings_sent(false),
     hw_overload(false),
-    m_graphicbuffer_size(0)
+    m_graphicbuffer_size(0),
+    profile_mode(false),
+    profile_frame_count(0),
+    profile_start_time(0),
+    profile_last_time(0)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -324,9 +329,11 @@ omx_video::omx_video():
 
     memset(m_platform, 0, sizeof(m_platform));
 #ifdef _ANDROID_
-    char platform_name[PROPERTY_VALUE_MAX] = {0};
-    property_get("ro.board.platform", platform_name, "0");
-    strlcpy(m_platform, platform_name, sizeof(m_platform));
+    char property_value[PROPERTY_VALUE_MAX] = {0};
+    property_get("ro.board.platform", property_value, "0");
+    strlcpy(m_platform, property_value, sizeof(m_platform));
+    property_get("vidc.enc.profile.in", property_value, "0");
+    profile_mode = !!atoi(property_value);
 #endif
 }
 
@@ -369,6 +376,10 @@ omx_video::~omx_video()
     sem_destroy(&m_cmd_lock);
     DEBUG_PRINT_HIGH("m_etb_count = %" PRIu64 ", m_fbd_count = %" PRIu64, m_etb_count,
             m_fbd_count);
+    if (profile_mode && (profile_start_time < profile_last_time)) {
+        DEBUG_PRINT_HIGH("Input frame rate = %f",
+            ((profile_frame_count - 1) * 1e6) / (profile_last_time - profile_start_time));
+    }
     DEBUG_PRINT_HIGH("omx_video: Destructor exit");
     DEBUG_PRINT_HIGH("Exiting OMX Video Encoder ...");
 }
@@ -3817,6 +3828,22 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
     post_event ((unsigned long)hComp,(unsigned long)buffer,m_input_msg_id);
     return OMX_ErrorNone;
 }
+
+bool omx_video::profile_etb() {
+    if (profile_mode) {
+        struct timeval act_time = {0, 0};
+        gettimeofday(&act_time, NULL);
+        if (profile_start_time == 0) {
+            profile_start_time = (act_time.tv_usec + act_time.tv_sec * 1e6);
+        } else {
+            profile_last_time = (act_time.tv_usec + act_time.tv_sec * 1e6);
+        }
+        profile_frame_count++;
+        return true;
+    }
+    return false;
+}
+
 /* ======================================================================
    FUNCTION
    omx_video::empty_this_buffer_proxy
@@ -3850,6 +3877,11 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     if (buffer == NULL) {
         DEBUG_PRINT_ERROR("ERROR: ETBProxy: Invalid buffer[%p]", buffer);
         return OMX_ErrorBadParameter;
+    }
+
+    if (profile_etb()) {
+        m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
+        return OMX_ErrorNone;
     }
 
     // Buffer sanity checks
@@ -4703,6 +4735,18 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
 }
 #endif
 
+static int get_max_h264_level() {
+#ifdef MAX_H264_LEVEL_4
+    return OMX_VIDEO_AVCLevel4;
+#elif MAX_H264_LEVEL_51
+    return OMX_VIDEO_AVCLevel51;
+#elif MAX_H264_LEVEL_52
+    return OMX_VIDEO_AVCLevel52;
+#else
+    return OMX_VIDEO_AVCLevel52;
+#endif
+}
+
 #ifdef MAX_RES_1080P
 OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVELTYPE *profileLevelType)
 {
@@ -4712,49 +4756,22 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
 
     if (profileLevelType->nPortIndex == 1) {
         if (m_sOutPortDef.format.video.eCompressionFormat == OMX_VIDEO_CodingAVC) {
-#if defined _MSM8974_ && !defined _MSM8226_
+            profileLevelType->eLevel   = get_max_h264_level();
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 1) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileMain;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 2) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileHigh;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 3) {
                 profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 4) {
                 profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedHigh;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else {
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %u",
                         (unsigned int)profileLevelType->nProfileIndex);
                 eRet = OMX_ErrorNoMore;
             }
-#else
-            if (profileLevelType->nProfileIndex == 0) {
-                profileLevelType->eProfile = OMX_VIDEO_AVCProfileBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-
-            } else if (profileLevelType->nProfileIndex == 1) {
-                profileLevelType->eProfile = OMX_VIDEO_AVCProfileMain;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-            } else if (profileLevelType->nProfileIndex == 2) {
-                profileLevelType->eProfile = OMX_VIDEO_AVCProfileHigh;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-#ifdef _MSM8226_
-            } else if (profileLevelType->nProfileIndex == 3) {
-                profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-#endif
-            } else {
-                DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %d",
-                        (int)profileLevelType->nProfileIndex);
-                eRet = OMX_ErrorNoMore;
-            }
-#endif
         } else if (m_sOutPortDef.format.video.eCompressionFormat == OMX_VIDEO_CodingH263) {
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_H263ProfileBaseline;
@@ -5112,6 +5129,11 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
     if (buffer == NULL) {
         DEBUG_PRINT_ERROR("ERROR: ETBProxyA: Invalid buffer[%p]",buffer);
         return OMX_ErrorBadParameter;
+    }
+
+    if (profile_etb()) {
+        m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
+        return OMX_ErrorNone;
     }
 
     if (!dev_buffer_ready_to_queue(buffer)) {
