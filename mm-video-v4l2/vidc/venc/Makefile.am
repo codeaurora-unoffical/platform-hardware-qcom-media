@@ -44,6 +44,8 @@ AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc
 AM_CPPFLAGS += -I$(top_srcdir)/libc2dcolorconvert
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/inc
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/src/common
+AM_CPPFLAGS += -I$(top_srcdir)/hyp-intercept
+
 sources = src/omx_video_base.cpp
 sources += src/omx_video_encoder.cpp
 
@@ -55,14 +57,14 @@ if TARGET_MSM8974
 sources += src/video_encoder_device_v4l2.cpp
 endif
 sources += ../common/src/extra_data_handler.cpp
-#Hypervisor
-sources += ../common/src/hypv_intercept.cpp
 
 lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
 libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVenc_la_CXXFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVenc_la_LDFLAGS = -shared -version-info $(OMXVIDEO_LIBRARY_VERSION)
+libOmxVenc_la_LDFLAGS += -L$(top_builddir)/hyp-intercept
+libOmxVenc_la_LDFLAGS += -lhypintercept
 
 bin_PROGRAMS = mm-venc-omx-test
 
