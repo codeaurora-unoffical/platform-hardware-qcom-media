@@ -66,6 +66,11 @@ AC_ARG_ENABLE([targets-that-support-pq],
                 [Enable conditional compile for target msm8953 [default=no]]),
         [targets_that_support_pq="${enableval}"])
 
+AC_ARG_ENABLE([targets-that-support-adsp-pq],
+        AC_HELP_STRING([--enable-targets-that-support-adsp-pq],
+                [Enable conditional compile for target msm8953 [default=no]]),
+        [targets_that_support_adsp_pq="${enableval}"])
+
 AC_ARG_ENABLE([targets-that-support-vqzip],
         AC_HELP_STRING([--enable-targets-that-support-vqzip],
                 [Enable conditional compile for target msm8953 [default=no]]),
@@ -142,6 +147,10 @@ AC_ARG_WITH([libpqstats-headers],
         [AS_HELP_STRING([--with-libpqstats-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
+AC_ARG_WITH([libvqzipstats-headers],
+        [AS_HELP_STRING([--with-libvqzipstats-headers=DIR],[location of common headers])],
+        [CPPFLAGS="$CPPFLAGS -I$withval"])
+
 AC_ARG_WITH([ui-headers],
         [AS_HELP_STRING([--with-ui-inc=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
@@ -178,6 +187,7 @@ AM_CONDITIONAL(TARGET_MSM8226, [test "x$target_msm8226" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8937, [test "x$target_msm8937" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_UBWC, [test "x$targets_that_support_ubwc" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_PQ, [test "x$targets_that_support_pq" = "xyes"])
+AM_CONDITIONAL(TARGETS_THAT_SUPPORT_ADSP_PQ, [test "x$targets_that_support_adsp_pq" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_VQZIP, [test "x$targets_that_support_vqzip" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_ION, [test "x$target_uses_ion" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_USE_FLAG_MSM8226, [test "x$targets_that_use_flag_msm8226" = "xyes"])

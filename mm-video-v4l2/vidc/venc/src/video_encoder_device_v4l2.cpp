@@ -48,12 +48,23 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <gralloc_priv.h>
 #endif
 
+#ifdef _USE_GLIB_
+#include <glib.h>
+#define strlcpy g_strlcpy
+#undef MIN
+#undef MAX
+#endif
+
 #include <qdMetaData.h>
 
 #define ATRACE_TAG ATRACE_TAG_VIDEO
 #include <utils/Trace.h>
 
-#define YUV_STATS_LIBRARY_NAME "libgpustats.so" // UBWC case: use GPU library
+#ifdef ENABLE_ADSP_PQ
+#define YUV_STATS_LIBRARY_NAME "libadspstats.so" // adsp based library
+#else
+#define YUV_STATS_LIBRARY_NAME "libgpustats.so" // GPU based library
+#endif
 
 #define ALIGN(x, to_align) ((((unsigned long) x) + (to_align - 1)) & ~(to_align - 1))
 #define EXTRADATA_IDX(__num_planes) ((__num_planes) ? (__num_planes) - 1 : 0)
@@ -265,6 +276,14 @@ venc_dev::venc_dev(class omx_venc *venc_class)
         m_pq.is_pq_force_disable = 1;
     } else {
         m_pq.is_pq_force_disable = 0;
+    }
+
+    property_value[0] = '\0';
+    property_get("vidc.enc.pq.library", property_value, "");
+    if (*property_value) {
+        snprintf(m_pq.libname, PROPERTY_VALUE_MAX, "lib%sstats.so", property_value);
+    } else {
+        strlcpy(m_pq.libname, YUV_STATS_LIBRARY_NAME, PROPERTY_VALUE_MAX);
     }
 #endif // _PQ_
 
@@ -498,10 +517,10 @@ void* venc_dev::async_venc_message_thread (void *input)
         OMX_U64 time_diff = (OMX_U32)((tv.tv_sec * 1000000 + tv.tv_usec) -
                 (stats.prev_tv.tv_sec * 1000000 + stats.prev_tv.tv_usec));
         if (time_diff >= 5000000) {
-            if (stats.prev_tv.tv_sec) {
-                OMX_U32 num_fbd = omx->handle->fbd - stats.prev_fbd;
+            OMX_U32 num_fbd = omx->handle->fbd - stats.prev_fbd;
+            if (stats.prev_tv.tv_sec && num_fbd && time_diff) {
                 float framerate = num_fbd * 1000000/(float)time_diff;
-                OMX_U32 bitrate = (stats.bytes_generated * 8/num_fbd) * framerate;
+                OMX_U32 bitrate = (stats.bytes_generated * 8 / num_fbd) * framerate;
                 DEBUG_PRINT_HIGH("stats: avg. fps %0.2f, bitrate %d",
                     framerate, bitrate);
             }
@@ -770,7 +789,7 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
        *     a) Send data to Venus as PQ.
        *     b) ROI enabled and dirty : Copy the ROI contents to pq_roi buffer
        *     c) ROI enabled and no dirty : pq_roi is already memset. Hence nothing to do here
-       *     d) ROI disabled : Just PQ data will be filled by GPU.
+       *     d) ROI disabled : Just PQ data will be filled by PQ.
        * 4) Normal ROI handling is in #else part as PQ can introduce delays.
        *     By this time if client sets next ROI, then we shouldn't process new ROI here.
        */
@@ -1515,8 +1534,9 @@ bool venc_dev::venc_open(OMX_U32 codec)
     }
 
 #ifdef _PQ_
-    if (codec == OMX_VIDEO_CodingAVC && !m_pq.is_pq_force_disable) {
-        m_pq.init(V4L2_DEFAULT_OUTPUT_COLOR_FMT);
+    if ((codec == OMX_VIDEO_CodingAVC || codec == OMX_VIDEO_CodingHEVC)
+                    && !m_pq.is_pq_force_disable) {
+        m_pq.init(V4L2_DEFAULT_OUTPUT_COLOR_FMT, m_sVenc_cfg.codectype);
         m_pq.get_caps();
     }
 #endif // _PQ_
@@ -4116,7 +4136,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
              * This is the place where all parameters for deciding
              * PQ enablement are available. Evaluate PQ for the final time.
              */
-            m_pq.reinit(m_sVenc_cfg.inputformat);
+            m_pq.reinit(m_sVenc_cfg.inputformat, m_sVenc_cfg.codectype);
             venc_configure_pq();
         }
     }
@@ -4288,7 +4308,7 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
             if (!streaming[OUTPUT_PORT]) {
                 m_pq.is_YUV_format_uncertain = false;
                 if(venc_check_for_pq()) {
-                    m_pq.reinit(m_sVenc_cfg.inputformat);
+                    m_pq.reinit(m_sVenc_cfg.inputformat, m_sVenc_cfg.codectype);
                     venc_configure_pq();
                 }
             }
@@ -4711,11 +4731,11 @@ bool venc_dev::venc_enable_initial_qp(QOMX_EXTNINDEX_VIDEO_INITIALQP* initqp)
     struct v4l2_ext_control ctrl[4];
     struct v4l2_ext_controls controls;
 
-    ctrl[0].id = V4L2_CID_MPEG_VIDC_VIDEO_I_FRAME_QP;
+    ctrl[0].id = V4L2_CID_MPEG_VIDC_VIDEO_INITIAL_I_FRAME_QP;
     ctrl[0].value = initqp->nQpI;
-    ctrl[1].id = V4L2_CID_MPEG_VIDC_VIDEO_P_FRAME_QP;
+    ctrl[1].id = V4L2_CID_MPEG_VIDC_VIDEO_INITIAL_P_FRAME_QP;
     ctrl[1].value = initqp->nQpP;
-    ctrl[2].id = V4L2_CID_MPEG_VIDC_VIDEO_B_FRAME_QP;
+    ctrl[2].id = V4L2_CID_MPEG_VIDC_VIDEO_INITIAL_B_FRAME_QP;
     ctrl[2].value = initqp->nQpB;
     ctrl[3].id = V4L2_CID_MPEG_VIDC_VIDEO_ENABLE_INITIAL_QP;
     ctrl[3].value = initqp->bEnableInitQp;
@@ -4825,8 +4845,22 @@ bool venc_dev::venc_set_session_qp(OMX_U32 i_frame_qp, OMX_U32 p_frame_qp,OMX_U3
 {
     int rc;
     struct v4l2_control control;
-
-    control.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP;
+    switch (m_sVenc_cfg.codectype) {
+        case V4L2_PIX_FMT_VP8:
+            control.id = V4L2_CID_MPEG_VIDEO_VPX_I_FRAME_QP;
+            break;
+        case V4L2_PIX_FMT_HEVC:
+        case V4L2_PIX_FMT_H264:
+            control.id = V4L2_CID_MPEG_VIDEO_H264_I_FRAME_QP;
+            break;
+        case V4L2_PIX_FMT_H263:
+        case V4L2_PIX_FMT_MPEG4:
+            control.id = V4L2_CID_MPEG_VIDEO_H263_I_FRAME_QP;
+            break;
+        default:
+            DEBUG_PRINT_ERROR("Session QP set for invalid codec");
+            return false;
+    }
     control.value = i_frame_qp;
 
     DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
@@ -4840,7 +4874,22 @@ bool venc_dev::venc_set_session_qp(OMX_U32 i_frame_qp, OMX_U32 p_frame_qp,OMX_U3
     DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
     session_qp.iframeqp = control.value;
 
-    control.id = V4L2_CID_MPEG_VIDEO_H264_P_FRAME_QP;
+    switch (m_sVenc_cfg.codectype) {
+        case V4L2_PIX_FMT_VP8:
+            control.id = V4L2_CID_MPEG_VIDEO_VPX_P_FRAME_QP;
+            break;
+        case V4L2_PIX_FMT_HEVC:
+        case V4L2_PIX_FMT_H264:
+            control.id = V4L2_CID_MPEG_VIDEO_H264_P_FRAME_QP;
+            break;
+        case V4L2_PIX_FMT_H263:
+        case V4L2_PIX_FMT_MPEG4:
+            control.id = V4L2_CID_MPEG_VIDEO_H263_P_FRAME_QP;
+            break;
+        default:
+            DEBUG_PRINT_ERROR("Session QP set for invalid codec");
+            return false;
+    }
     control.value = p_frame_qp;
 
     DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
@@ -4855,24 +4904,39 @@ bool venc_dev::venc_set_session_qp(OMX_U32 i_frame_qp, OMX_U32 p_frame_qp,OMX_U3
 
     session_qp.pframeqp = control.value;
 
-    if ((codec_profile.profile == V4L2_MPEG_VIDEO_H264_PROFILE_MAIN) ||
-            (codec_profile.profile == V4L2_MPEG_VIDEO_H264_PROFILE_HIGH)) {
-
-        control.id = V4L2_CID_MPEG_VIDEO_H264_B_FRAME_QP;
-        control.value = b_frame_qp;
-
-        DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
-        rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
-
-        if (rc) {
-            DEBUG_PRINT_ERROR("Failed to set control");
-            return false;
-        }
-
-        DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
-
-        session_qp.bframeqp = control.value;
+    //VP8 Doesn't Support B frames, If client tries to send QP value for B frames for VP8 error out.
+    if ((m_sVenc_cfg.codectype == V4L2_PIX_FMT_VP8 || !((codec_profile.profile == V4L2_MPEG_VIDEO_H264_PROFILE_MAIN) ||
+                (codec_profile.profile == V4L2_MPEG_VIDEO_H264_PROFILE_HIGH))) && b_frame_qp) {
+        DEBUG_PRINT_ERROR("%s: Invalid configuration for B Frame setting", __func__);
+        return false;
     }
+
+    switch (m_sVenc_cfg.codectype) {
+    case V4L2_PIX_FMT_HEVC:
+    case V4L2_PIX_FMT_H264:
+        control.id = V4L2_CID_MPEG_VIDEO_H264_B_FRAME_QP;
+        break;
+    case V4L2_PIX_FMT_H263:
+    case V4L2_PIX_FMT_MPEG4:
+        control.id = V4L2_CID_MPEG_VIDEO_H263_B_FRAME_QP;
+        break;
+    default:
+        DEBUG_PRINT_ERROR("Session QP set for invalid codec");
+        return false;
+    }
+    control.value = b_frame_qp;
+
+    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
+    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+
+    if (rc) {
+        DEBUG_PRINT_ERROR("Failed to set control");
+        return false;
+    }
+
+    DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
+
+    session_qp.bframeqp = control.value;
 
     return true;
 }
@@ -4884,10 +4948,22 @@ bool venc_dev::venc_set_session_qp_range(OMX_U32 min_qp, OMX_U32 max_qp)
 
     if ((min_qp >= session_qp_range.minqp) && (max_qp <= session_qp_range.maxqp)) {
 
-        if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_VP8)
-            control.id = V4L2_CID_MPEG_VIDC_VIDEO_VP8_MIN_QP;
-        else
-            control.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP;
+        switch (m_sVenc_cfg.codectype) {
+            case V4L2_PIX_FMT_VP8:
+                control.id = V4L2_CID_MPEG_VIDEO_VPX_MIN_QP;
+                break;
+            case V4L2_PIX_FMT_HEVC:
+            case V4L2_PIX_FMT_H264:
+                control.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP;
+                break;
+            case V4L2_PIX_FMT_H263:
+            case V4L2_PIX_FMT_MPEG4:
+                control.id = V4L2_CID_MPEG_VIDEO_MPEG4_MIN_QP;
+                break;
+            default:
+                DEBUG_PRINT_ERROR("QP range set for invalid codec");
+                return false;
+        }
         control.value = min_qp;
 
         DEBUG_PRINT_LOW("Calling IOCTL set MIN_QP control id=%d, val=%d",
@@ -4898,10 +4974,22 @@ bool venc_dev::venc_set_session_qp_range(OMX_U32 min_qp, OMX_U32 max_qp)
             return false;
         }
 
-        if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_VP8)
-            control.id = V4L2_CID_MPEG_VIDC_VIDEO_VP8_MAX_QP;
-        else
-            control.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP;
+        switch (m_sVenc_cfg.codectype) {
+            case V4L2_PIX_FMT_VP8:
+                control.id = V4L2_CID_MPEG_VIDEO_VPX_MAX_QP;
+                break;
+            case V4L2_PIX_FMT_HEVC:
+            case V4L2_PIX_FMT_H264:
+                control.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP;
+                break;
+            case V4L2_PIX_FMT_H263:
+            case V4L2_PIX_FMT_MPEG4:
+                control.id = V4L2_CID_MPEG_VIDEO_MPEG4_MAX_QP;
+                break;
+            default:
+                DEBUG_PRINT_ERROR("QP range set for invalid codec");
+                return false;
+        }
         control.value = max_qp;
 
         DEBUG_PRINT_LOW("Calling IOCTL set MAX_QP control id=%d, val=%d",
@@ -8032,7 +8120,7 @@ bool venc_dev::venc_check_for_pq(void)
     bool is_non_vpe_session = false;
     bool enable = false;
 
-    codec_supported = m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264;
+    codec_supported = (m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264) || (m_sVenc_cfg.codectype == V4L2_PIX_FMT_HEVC);
 
     rc_mode_supported = (rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_CFR) ||
         (rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_CFR) ||
@@ -8045,7 +8133,11 @@ bool venc_dev::venc_check_for_pq(void)
         (m_sVenc_cfg.fps_num / m_sVenc_cfg.fps_den) <=
         (m_pq.caps.max_mb_per_sec / ((m_sVenc_cfg.input_height * m_sVenc_cfg.input_width) / 256));
 
+#ifdef QLE_BUILD
     frame_rate_supported = (((operating_rate >> 16) > 0) && ((operating_rate >> 16) < 5)) ? false : frame_rate_supported;
+#else
+    frame_rate_supported = (((operating_rate >> 16) > 0) && (((operating_rate >> 16) < 5) || ((operating_rate >> 16) >= 120))) ? false : frame_rate_supported;
+#endif
 
     yuv_format_supported = ((m_sVenc_cfg.inputformat == V4L2_PIX_FMT_NV12 && (m_pq.caps.color_formats & BIT(COLOR_FMT_NV12)))
             || (m_sVenc_cfg.inputformat == V4L2_PIX_FMT_NV21 && (m_pq.caps.color_formats & BIT(COLOR_FMT_NV21)))
@@ -8107,17 +8199,18 @@ venc_dev::venc_dev_pq::venc_dev_pq()
     configured_format = 0;
     is_pq_force_disable = 0;
     pthread_mutex_init(&lock, NULL);
-    memset(&pConfig, 0, sizeof(gpu_stats_lib_input_config));
+    memset(&pConfig, 0, sizeof(pq_stats_lib_input_config));
     memset(&roi_extradata_info, 0, sizeof(extradata_buffer_info));
     roi_extradata_info.size = 16 * 1024;            // Max size considering 4k
     roi_extradata_info.buffer_size = 16 * 1024;     // Max size considering 4k
     roi_extradata_info.port_index = OUTPUT_PORT;
 }
 
-bool venc_dev::venc_dev_pq::init(unsigned long format)
+bool venc_dev::venc_dev_pq::init(unsigned long format, unsigned long codec)
 {
     bool status = true;
     enum color_compression_format yuv_format;
+    enum codec_type output_fmt;
 
     if (mLibHandle) {
         DEBUG_PRINT_ERROR("PQ init called twice");
@@ -8135,20 +8228,32 @@ bool venc_dev::venc_dev_pq::init(unsigned long format)
             break;
     }
 
+    switch (codec) {
+        case V4L2_PIX_FMT_H264:
+            output_fmt = codec_type::AVC;
+            break;
+        case V4L2_PIX_FMT_HEVC:
+            output_fmt = codec_type::HEVC;
+            break;
+        default:
+            status = false;
+    }
+
     ATRACE_BEGIN("PQ init");
     if (status) {
-        mLibHandle = dlopen(YUV_STATS_LIBRARY_NAME, RTLD_NOW);
+        mLibHandle = dlopen(libname, RTLD_NOW);
+        DEBUG_PRINT_HIGH("PQ lib loading %s ", libname);
         if (mLibHandle) {
-            mPQInit = (gpu_stats_lib_init_t)
-                dlsym(mLibHandle,"gpu_stats_lib_init");
-            mPQDeInit = (gpu_stats_lib_deinit_t)
-                dlsym(mLibHandle,"gpu_stats_lib_deinit");
-            mPQGetCaps = (gpu_stats_lib_get_caps_t)
-                dlsym(mLibHandle,"gpu_stats_lib_get_caps");
-            mPQConfigure = (gpu_stats_lib_configure_t)
-                dlsym(mLibHandle,"gpu_stats_lib_configure");
-            mPQComputeStats = (gpu_stats_lib_fill_data_t)
-                dlsym(mLibHandle,"gpu_stats_lib_fill_data");
+            mPQInit = (pq_stats_lib_init_t)
+                dlsym(mLibHandle,"pq_stats_lib_init");
+            mPQDeInit = (pq_stats_lib_deinit_t)
+                dlsym(mLibHandle,"pq_stats_lib_deinit");
+            mPQGetCaps = (pq_stats_lib_get_caps_t)
+                dlsym(mLibHandle,"pq_stats_lib_get_caps");
+            mPQConfigure = (pq_stats_lib_configure_t)
+                dlsym(mLibHandle,"pq_stats_lib_configure");
+            mPQComputeStats = (pq_stats_lib_fill_data_t)
+                dlsym(mLibHandle,"pq_stats_lib_fill_data");
             if (!mPQInit || !mPQDeInit || !mPQGetCaps || !mPQConfigure || !mPQComputeStats)
                 status = false;
         } else {
@@ -8156,12 +8261,12 @@ bool venc_dev::venc_dev_pq::init(unsigned long format)
             status = false;
         }
         if (status) {
-            mPQInit(&mPQHandle, perf_hint::NORMAL, yuv_format);
+            mPQInit(&mPQHandle, perf_hint::NORMAL, yuv_format, output_fmt);
             if (mPQHandle == NULL) {
                 DEBUG_PRINT_ERROR("Failed to get handle for PQ Library");
                 status = false;
             } else {
-                DEBUG_PRINT_HIGH("GPU PQ lib initialized successfully");
+                DEBUG_PRINT_HIGH("PQ lib initialized successfully");
             }
 
         }
@@ -8201,7 +8306,7 @@ void venc_dev::venc_dev_pq::deinit()
     }
 }
 
-bool venc_dev::venc_dev_pq::reinit(unsigned long format)
+bool venc_dev::venc_dev_pq::reinit(unsigned long format, unsigned long codec_type)
 {
     bool status = false;
 
@@ -8209,7 +8314,7 @@ bool venc_dev::venc_dev_pq::reinit(unsigned long format)
         DEBUG_PRINT_HIGH("New format (%lu) is different from configure format (%lu);"
                                 " reinitializing PQ lib", format, configured_format);
         deinit();
-        status = init(format);
+        status = init(format, codec_type);
     } else {
         // ignore if new format is same as configured
     }
@@ -8219,12 +8324,12 @@ bool venc_dev::venc_dev_pq::reinit(unsigned long format)
 
 void venc_dev::venc_dev_pq::get_caps()
 {
-    memset(&caps, 0, sizeof(gpu_stats_lib_caps_t));
+    memset(&caps, 0, sizeof(pq_stats_lib_caps_t));
     if (mPQHandle)
         mPQGetCaps(mPQHandle, &caps);
-    DEBUG_PRINT_HIGH("GPU lib stats caps max (w,h) = (%u, %u)",caps.max_width, caps.max_height);
-    DEBUG_PRINT_HIGH("GPU lib stats caps max mb per sec = %u",caps.max_mb_per_sec);
-    DEBUG_PRINT_HIGH("GPU lib stats caps color_format = %u",caps.color_formats);
+    DEBUG_PRINT_HIGH("PQ lib stats caps max (w,h) = (%u, %u)",caps.max_width, caps.max_height);
+    DEBUG_PRINT_HIGH("PQ lib stats caps max mb per sec = %u",caps.max_mb_per_sec);
+    DEBUG_PRINT_HIGH("PQ lib stats caps color_format = %u",caps.color_formats);
 }
 
 bool venc_dev::venc_dev_pq::is_color_format_supported(unsigned long format)
@@ -8258,9 +8363,9 @@ bool venc_dev::venc_dev_pq::is_color_format_supported(unsigned long format)
     }
 
     if (support == true)
-        DEBUG_PRINT_HIGH("GPU lib supports this format %lu",format);
+        DEBUG_PRINT_HIGH("PQ lib supports this format %lu",format);
     else
-        DEBUG_PRINT_HIGH("GPU lib doesn't support this format %lu",format);
+        DEBUG_PRINT_HIGH("PQ lib doesn't support this format %lu",format);
 
     return support;
 }
@@ -8297,8 +8402,8 @@ bool venc_dev::venc_dev_pq::is_pq_handle_valid()
 int venc_dev::venc_dev_pq::fill_pq_stats(struct v4l2_buffer buf,
     unsigned int data_offset)
 {
-    gpu_stats_lib_buffer_params_t input, output;
-    gpu_stats_lib_buffer_params_t roi_input;
+    pq_stats_lib_buffer_params_t input, output;
+    pq_stats_lib_buffer_params_t roi_input;
 
     if (!mPQHandle || !is_pq_enabled) {
         DEBUG_PRINT_HIGH("Invalid Usage : Handle = %p PQ = %d",
