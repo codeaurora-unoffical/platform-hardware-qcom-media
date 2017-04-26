@@ -40,7 +40,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifdef _PQ_
-#include "gpustats.h"
+#include "pqstats.h"
 #endif
 #include "omx_video_common.h"
 #include "omx_video_base.h"
@@ -402,33 +402,35 @@ class venc_dev
                 bool is_pq_enabled;
                 bool is_pq_force_disable;
                 bool is_YUV_format_uncertain;
+                char libname[PROPERTY_VALUE_MAX];
                 pthread_mutex_t lock;
                 struct extradata_buffer_info roi_extradata_info;
-                bool init(unsigned long);
+                bool init(unsigned long, unsigned long codec_type);
                 void deinit();
                 void get_caps();
                 int configure(unsigned long width, unsigned long height);
                 bool is_pq_handle_valid();
                 bool is_color_format_supported(unsigned long);
-                bool reinit(unsigned long);
-                struct gpu_stats_lib_input_config pConfig;
+                bool reinit(unsigned long, unsigned long);
+                struct pq_stats_lib_input_config pConfig;
                 int fill_pq_stats(struct v4l2_buffer buf, unsigned int data_offset);
-                gpu_stats_lib_caps_t caps;
-                typedef gpu_stats_lib_op_status (*gpu_stats_lib_init_t)(void**, enum perf_hint gpu_hint, enum color_compression_format format);
-                typedef gpu_stats_lib_op_status (*gpu_stats_lib_deinit_t)(void*);
-                typedef gpu_stats_lib_op_status (*gpu_stats_lib_get_caps_t)(void* handle, gpu_stats_lib_caps_t *caps);
-                typedef gpu_stats_lib_op_status (*gpu_stats_lib_configure_t)(void* handle, gpu_stats_lib_input_config *input_t);
-                typedef gpu_stats_lib_op_status (*gpu_stats_lib_fill_data_t)(void *handle, gpu_stats_lib_buffer_params_t *yuv_input,
-                        gpu_stats_lib_buffer_params_t *roi_input,
-                        gpu_stats_lib_buffer_params_t *stats_output, void *addr, void *user_data);
+                pq_stats_lib_caps_t caps;
+                typedef pq_stats_lib_op_status (*pq_stats_lib_init_t)(void**, enum perf_hint pq_hint, enum color_compression_format format,
+                                uint32_t codec_type);
+                typedef pq_stats_lib_op_status (*pq_stats_lib_deinit_t)(void*);
+                typedef pq_stats_lib_op_status (*pq_stats_lib_get_caps_t)(void* handle, pq_stats_lib_caps_t *caps);
+                typedef pq_stats_lib_op_status (*pq_stats_lib_configure_t)(void* handle, pq_stats_lib_input_config *input_t);
+                typedef pq_stats_lib_op_status (*pq_stats_lib_fill_data_t)(void *handle, pq_stats_lib_buffer_params_t *yuv_input,
+                        pq_stats_lib_buffer_params_t *roi_input,
+                        pq_stats_lib_buffer_params_t *stats_output, void *addr, void *user_data);
             private:
                 void *mLibHandle;
                 void *mPQHandle;
-                gpu_stats_lib_init_t mPQInit;
-                gpu_stats_lib_get_caps_t mPQGetCaps;
-                gpu_stats_lib_configure_t mPQConfigure;
-                gpu_stats_lib_deinit_t mPQDeInit;
-                gpu_stats_lib_fill_data_t mPQComputeStats;
+                pq_stats_lib_init_t mPQInit;
+                pq_stats_lib_get_caps_t mPQGetCaps;
+                pq_stats_lib_configure_t mPQConfigure;
+                pq_stats_lib_deinit_t mPQDeInit;
+                pq_stats_lib_fill_data_t mPQComputeStats;
                 unsigned long configured_format;
         };
         venc_dev_pq m_pq;
