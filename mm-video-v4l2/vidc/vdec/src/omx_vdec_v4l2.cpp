@@ -1800,6 +1800,7 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                         if (p2 == OMX_IndexParamPortDefinition) {
                                             DEBUG_PRINT_HIGH("Rxd PORT_RECONFIG: OMX_IndexParamPortDefinition");
                                             pThis->in_reconfig = true;
+                                            pThis->prev_n_filled_len = 0;
                                             pThis->m_need_turbo &= ~TURBO_MODE_HIGH_FPS;
                                         }  else if (p2 == OMX_IndexConfigCommonOutputCrop) {
                                             DEBUG_PRINT_HIGH("Rxd PORT_RECONFIG: OMX_IndexConfigCommonOutputCrop");
@@ -12956,10 +12957,12 @@ void omx_vdec::buf_ref_remove()
                         out_dynamic_list[i].mapped_size);
         }
 
-         DEBUG_PRINT_LOW("buf_ref_remove: [REMOVED] fd = %u ref_count = %u",
-                 (unsigned int)out_dynamic_list[i].fd, (unsigned int)out_dynamic_list[i].ref_count);
-         close(out_dynamic_list[i].dup_fd);
-         out_dynamic_list[i].dup_fd = -1;
+        if (out_dynamic_list[i].dup_fd > -1) {
+            DEBUG_PRINT_LOW("buf_ref_remove: [REMOVED] fd = %u ref_count = %u",
+                    (unsigned int)out_dynamic_list[i].fd, (unsigned int)out_dynamic_list[i].ref_count);
+            close(out_dynamic_list[i].dup_fd);
+            out_dynamic_list[i].dup_fd = -1;
+        }
     }
     pthread_mutex_unlock(&m_lock);
 
