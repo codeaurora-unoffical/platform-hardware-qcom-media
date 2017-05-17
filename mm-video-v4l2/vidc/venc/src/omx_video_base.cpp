@@ -4176,11 +4176,15 @@ OMX_ERRORTYPE  omx_video::set_callbacks(OMX_IN OMX_HANDLETYPE        hComp,
         OMX_IN OMX_PTR             appData)
 {
     (void)hComp;
+
+    if (!callbacks)
+       return OMX_ErrorBadParameter;
+
     m_pCallbacks       = *callbacks;
     DEBUG_PRINT_LOW("Callbacks Set %p %p %p",m_pCallbacks.EmptyBufferDone,\
             m_pCallbacks.EventHandler,m_pCallbacks.FillBufferDone);
     m_app_data =    appData;
-    return OMX_ErrorNotImplemented;
+    return OMX_ErrorNone;
 }
 
 
@@ -4558,7 +4562,8 @@ OMX_ERRORTYPE omx_video::fill_buffer_done(OMX_HANDLETYPE hComp,
             m_fbd_count++;
 
             if (dev_get_output_log_flag()) {
-                dev_output_log_buffers((const char*)buffer->pBuffer, buffer->nFilledLen);
+                dev_output_log_buffers((const char*)buffer->pBuffer,
+                                       buffer->nFilledLen, buffer->nTimeStamp);
             }
         }
         if (buffer->nFlags & OMX_BUFFERFLAG_EXTRADATA) {
