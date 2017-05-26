@@ -139,12 +139,14 @@ omx_venc::omx_venc()
     mUseProxyColorFormat = false;
     get_syntaxhdr_enable = false;
 #endif
+    bframes = 0;
+    entropy = 1;
+    handle = NULL;
 #ifdef _LINUX_
     char *env_ptr = getenv("OMX_DEBUG_LEVEL");
     debug_level = env_ptr ? atoi(env_ptr) : 0;
     meta_mode_enable = false;
 #else
-    bframes = entropy = 0;
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vidc.debug.level", property_value, "1");
     debug_level = atoi(property_value);
@@ -158,7 +160,6 @@ omx_venc::omx_venc()
     property_get("vidc.debug.perf.mode", property_value, "0");
     perfmode = atoi(property_value);
     property_value[0] = '\0';
-    handle = NULL;
     property_get("vidc.debug.lowlatency", property_value, "0");
     lowlatency = atoi(property_value);
     property_value[0] = '\0';
