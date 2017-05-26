@@ -1800,6 +1800,7 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                         if (p2 == OMX_IndexParamPortDefinition) {
                                             DEBUG_PRINT_HIGH("Rxd PORT_RECONFIG: OMX_IndexParamPortDefinition");
                                             pThis->in_reconfig = true;
+                                            pThis->prev_n_filled_len = 0;
                                             pThis->m_need_turbo &= ~TURBO_MODE_HIGH_FPS;
                                         }  else if (p2 == OMX_IndexConfigCommonOutputCrop) {
                                             DEBUG_PRINT_HIGH("Rxd PORT_RECONFIG: OMX_IndexConfigCommonOutputCrop");
@@ -2019,7 +2020,7 @@ OMX_ERRORTYPE omx_vdec::is_video_session_supported()
     return OMX_ErrorNone;
 }
 
-int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len)
+int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len, uint64_t timeStamp)
 {
     if (m_debug.in_buffer_log && !m_debug.infile) {
         if(!strncmp(drv_ctx.kind,"OMX.qcom.video.decoder.mpeg4", OMX_MAX_STRINGNAME_SIZE)) {
@@ -2062,55 +2063,20 @@ int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len)
         }
         if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp8", OMX_MAX_STRINGNAME_SIZE) ||
                 !strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp9", OMX_MAX_STRINGNAME_SIZE)) {
-            struct ivf_file_header {
-                OMX_U8 signature[4]; //='DKIF';
-                OMX_U8 version         ; //= 0;
-                OMX_U8 headersize      ; //= 32;
-                OMX_U32 FourCC;
-                OMX_U8 width;
-                OMX_U8 height;
-                OMX_U32 rate;
-                OMX_U32 scale;
-                OMX_U32 length;
-                OMX_U8 unused[4];
-            } file_header;
-
-            memset((void *)&file_header,0,sizeof(file_header));
-            file_header.signature[0] = 'D';
-            file_header.signature[1] = 'K';
-            file_header.signature[2] = 'I';
-            file_header.signature[3] = 'F';
-            file_header.version = 0;
-            file_header.headersize = 32;
-            switch (drv_ctx.decoder_format) {
-                case VDEC_CODECTYPE_VP8:
-                    file_header.FourCC = 0x30385056;
-                    break;
-                case VDEC_CODECTYPE_VP9:
-                    file_header.FourCC = 0x30395056;
-                    break;
-                default:
-                    DEBUG_PRINT_ERROR("unsupported format for VP8/VP9");
-                    break;
-            }
-            fwrite((const char *)&file_header,
-                    sizeof(file_header),1,m_debug.infile);
+            bool isVp9 = drv_ctx.decoder_format == VDEC_CODECTYPE_VP9;
+            int width = drv_ctx.video_resolution.frame_width;
+            int height = drv_ctx.video_resolution.frame_height;
+            int fps = drv_ctx.frame_rate.fps_numerator;
+            IvfFileHeader ivfHeader(isVp9, width, height, 1, fps, 0);
+            fwrite((const char *)&ivfHeader,
+                    sizeof(ivfHeader),1,m_debug.infile);
          }
     }
     if (m_debug.infile && buffer_addr && buffer_len) {
         if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp8", OMX_MAX_STRINGNAME_SIZE) ||
                 !strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp9", OMX_MAX_STRINGNAME_SIZE)) {
-            struct vpx_ivf_frame_header {
-                OMX_U32 framesize;
-                OMX_U32 timestamp_lo;
-                OMX_U32 timestamp_hi;
-            } vpx_frame_header;
-            vpx_frame_header.framesize = buffer_len;
-            /* Currently FW doesn't use timestamp values */
-            vpx_frame_header.timestamp_lo = 0;
-            vpx_frame_header.timestamp_hi = 0;
-            fwrite((const char *)&vpx_frame_header,
-                    sizeof(vpx_frame_header),1,m_debug.infile);
+            IvfFrameHeader ivfFrameHeader(buffer_len, timeStamp);
+            fwrite(&ivfFrameHeader, sizeof(ivfFrameHeader), 1, m_debug.infile);
         }
         fwrite(buffer_addr, buffer_len, 1, m_debug.infile);
     }
@@ -7654,7 +7620,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     }
 #endif
 
-    log_input_buffers((const char *)temp_buffer->bufferaddr, temp_buffer->buffer_len);
+    log_input_buffers((const char *)temp_buffer->bufferaddr, temp_buffer->buffer_len, buffer->nTimeStamp);
 
 if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
         frameinfo.flags |= QOMX_VIDEO_BUFFERFLAG_EOSEQ;
@@ -7996,11 +7962,15 @@ OMX_ERRORTYPE  omx_vdec::set_callbacks(OMX_IN OMX_HANDLETYPE        hComp,
         OMX_IN OMX_PTR             appData)
 {
     (void) hComp;
+
+    if (!callbacks)
+        return OMX_ErrorBadParameter;
+
     m_cb       = *callbacks;
     DEBUG_PRINT_LOW("Callbacks Set %p %p %p",m_cb.EmptyBufferDone,\
             m_cb.EventHandler,m_cb.FillBufferDone);
     m_app_data =    appData;
-    return OMX_ErrorNotImplemented;
+    return OMX_ErrorNone;
 }
 
 /* ======================================================================
@@ -12956,10 +12926,12 @@ void omx_vdec::buf_ref_remove()
                         out_dynamic_list[i].mapped_size);
         }
 
-         DEBUG_PRINT_LOW("buf_ref_remove: [REMOVED] fd = %u ref_count = %u",
-                 (unsigned int)out_dynamic_list[i].fd, (unsigned int)out_dynamic_list[i].ref_count);
-         close(out_dynamic_list[i].dup_fd);
-         out_dynamic_list[i].dup_fd = -1;
+        if (out_dynamic_list[i].dup_fd > -1) {
+            DEBUG_PRINT_LOW("buf_ref_remove: [REMOVED] fd = %u ref_count = %u",
+                    (unsigned int)out_dynamic_list[i].fd, (unsigned int)out_dynamic_list[i].ref_count);
+            close(out_dynamic_list[i].dup_fd);
+            out_dynamic_list[i].dup_fd = -1;
+        }
     }
     pthread_mutex_unlock(&m_lock);
 

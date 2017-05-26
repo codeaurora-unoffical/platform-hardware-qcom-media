@@ -177,6 +177,15 @@ static const unsigned int hevc_profile_level_table[][MAX_PROFILE_PARAMS]= {
 
 #define BUFFER_LOG_LOC "/data/misc/media"
 
+static void init_extradata_info(struct extradata_buffer_info *info) {
+    if (!info)
+        return;
+    memset(info, 0, sizeof(*info));
+    info->m_ion_dev = -1;
+    info->ion.ion_device_fd = -1;
+    info->ion.fd_ion_data.fd = -1;
+}
+
 //constructor
 venc_dev::venc_dev(class omx_venc *venc_class)
 {
@@ -202,8 +211,8 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     pthread_mutex_init(&m_roilock, NULL);
     pthread_mutex_init(&pause_resume_mlock, NULL);
     pthread_cond_init(&pause_resume_cond, NULL);
-    memset(&input_extradata_info, 0, sizeof(input_extradata_info));
-    memset(&output_extradata_info, 0, sizeof(output_extradata_info));
+    init_extradata_info(&input_extradata_info);
+    init_extradata_info(&output_extradata_info);
     memset(&idrperiod, 0, sizeof(idrperiod));
     memset(&multislice, 0, sizeof(multislice));
     memset (&slice_mode, 0 , sizeof(slice_mode));
@@ -1068,12 +1077,10 @@ void venc_dev::free_extradata(struct extradata_buffer_info *extradata_info)
         venc_handle->free_ion_memory(&extradata_info->ion);
     }
 
-    if (extradata_info->m_ion_dev)
+    if (extradata_info->m_ion_dev > -1)
         close(extradata_info->m_ion_dev);
 
-    memset(extradata_info, 0, sizeof(*extradata_info));
-    extradata_info->ion.fd_ion_data.fd = -1;
-    extradata_info->allocated = OMX_FALSE;
+    init_extradata_info(extradata_info);
 
 #endif // USE_ION
 }
@@ -1092,7 +1099,7 @@ bool venc_dev::venc_get_output_log_flag()
     return (m_debug.out_buffer_log == 1);
 }
 
-int venc_dev::venc_output_log_buffers(const char *buffer_addr, int buffer_len)
+int venc_dev::venc_output_log_buffers(const char *buffer_addr, int buffer_len, uint64_t timestamp)
 {
     if (venc_handle->is_secure_session()) {
         DEBUG_PRINT_ERROR("logging secure output buffers is not allowed!");
@@ -1128,8 +1135,16 @@ int venc_dev::venc_output_log_buffers(const char *buffer_addr, int buffer_len)
             m_debug.outfile_name[0] = '\0';
             return -1;
         }
+        if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_VP8) {
+            int fps = m_sVenc_cfg.fps_num / m_sVenc_cfg.fps_den;
+            IvfFileHeader ivfFileHeader(false, m_sVenc_cfg.input_width,
+                                        m_sVenc_cfg.input_height, fps, 1, 0);
+            fwrite(&ivfFileHeader, sizeof(ivfFileHeader), 1, m_debug.outfile);
+        }
     }
     if (m_debug.outfile && buffer_len) {
+        IvfFrameHeader ivfFrameHeader(buffer_len, timestamp);
+        fwrite(&ivfFrameHeader, sizeof(ivfFrameHeader), 1, m_debug.outfile);
         DEBUG_PRINT_LOW("%s buffer_len:%d", __func__, buffer_len);
         fwrite(buffer_addr, buffer_len, 1, m_debug.outfile);
     }
@@ -1269,10 +1284,8 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
                 ptemp += stride;
             }
         } else if (color_format == COLOR_FMT_NV12_UBWC || color_format == COLOR_FMT_RGBA8888_UBWC) {
-            if (color_format == COLOR_FMT_NV12_UBWC) {
-                msize -= 2 * extra_size;
-            }
-            fwrite(ptemp, msize, 1, m_debug.infile);
+            int size = getYuvSize(color_format, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
+            fwrite(ptemp, size, 1, m_debug.infile);
         }
 
         if (metadatamode == 1 && pvirt) {
@@ -2169,7 +2182,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 if (!venc_set_inloop_filter(OMX_VIDEO_AVCLoopFilterEnable))
                     DEBUG_PRINT_HIGH("WARN: Request for setting Inloop filter failed for HEVC encoder");
 
-                OMX_U32 fps = m_sVenc_cfg.fps_num ? m_sVenc_cfg.fps_num / m_sVenc_cfg.fps_den : 30;
+                OMX_U32 fps = m_sVenc_cfg.fps_den ? m_sVenc_cfg.fps_num / m_sVenc_cfg.fps_den : 30;
                 OMX_U32 nPFrames = pParam->nKeyFrameInterval > 0 ? pParam->nKeyFrameInterval - 1 : fps - 1;
                 if (!venc_set_intra_period (nPFrames, 0 /* nBFrames */)) {
                     DEBUG_PRINT_ERROR("ERROR: Request for setting intra period failed");
@@ -4162,7 +4175,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         buf.flags |= V4L2_QCOM_BUF_FLAG_EOS;
 
     if (m_debug.in_buffer_log) {
-        venc_input_log_buffers(bufhdr, fd, plane[0].data_offset, m_sVenc_cfg.inputformat);
+        OMX_BUFFERHEADERTYPE buffer = *bufhdr;
+        buffer.nFilledLen = plane[0].bytesused;
+        venc_input_log_buffers(&buffer, fd, plane[0].data_offset, m_sVenc_cfg.inputformat);
     }
     if (m_debug.extradata_log && extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
         DEBUG_PRINT_ERROR("Extradata Addr 0x%llx, Buffer Addr = 0x%x", (OMX_U64)input_extradata_info.uaddr, (unsigned int)plane[extra_idx].m.userptr);
@@ -8200,7 +8215,7 @@ venc_dev::venc_dev_pq::venc_dev_pq()
     is_pq_force_disable = 0;
     pthread_mutex_init(&lock, NULL);
     memset(&pConfig, 0, sizeof(pq_stats_lib_input_config));
-    memset(&roi_extradata_info, 0, sizeof(extradata_buffer_info));
+    init_extradata_info(&roi_extradata_info);
     roi_extradata_info.size = 16 * 1024;            // Max size considering 4k
     roi_extradata_info.buffer_size = 16 * 1024;     // Max size considering 4k
     roi_extradata_info.port_index = OUTPUT_PORT;
