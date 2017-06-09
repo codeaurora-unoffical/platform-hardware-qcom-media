@@ -388,7 +388,7 @@ typedef struct QOMX_VIDEO_INTRAPERIODTYPE  {
     OMX_U32 nBFrames;
 } QOMX_VIDEO_INTRAPERIODTYPE;
 
-
+#ifdef _ANDROID_
 /**
  * Enumeration used to define the extended video extra data payload types not
  * present in the OpenMax IL 1.1.2 specification.
@@ -431,7 +431,7 @@ typedef enum QOMX_VIDEO_EXTRADATATYPE
    QOMX_ExtraDataOMXIndex,
    QOMX_ExtraDataHDCPEncryptionInfo
 } QOMX_VIDEO_EXTRADATATYPE;
-
+#endif
 
 /**
  * Enumeration used to define the video encoder modes
