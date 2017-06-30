@@ -747,8 +747,20 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 #elif _LINUX_
     char *env_ptr = getenv("OMX_DEBUG_LEVEL");
     debug_level = env_ptr ? atoi(env_ptr) : 0;
+
     env_ptr = getenv("OMX_DEBUG_PERF");
     perf_flag = env_ptr ? atoi(env_ptr) : 0;
+
+    env_ptr = getenv("VIDC_DEBUG_LOG_IN");
+    m_debug.in_buffer_log = env_ptr ? atoi(env_ptr) : 0;
+
+    env_ptr = getenv("VIDC_DEBUG_LOG_OUT");
+    m_debug.out_buffer_log = env_ptr ? atoi(env_ptr) : 0;
+
+    snprintf(m_debug.log_loc, PROPERTY_VALUE_MAX, "%s", BUFFER_LOG_LOC);
+    env_ptr = getenv("VIDC_DEBUG_LOG_LOC");
+    if (env_ptr)
+      strlcpy(m_debug.log_loc, env_ptr, PROPERTY_VALUE_MAX);
 
 #ifdef _UBWC_
     env_ptr = getenv("VIDC_UBWC_DIS");
