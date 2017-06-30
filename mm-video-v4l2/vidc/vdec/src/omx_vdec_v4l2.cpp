@@ -749,6 +749,15 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     debug_level = env_ptr ? atoi(env_ptr) : 0;
     env_ptr = getenv("OMX_DEBUG_PERF");
     perf_flag = env_ptr ? atoi(env_ptr) : 0;
+
+#ifdef _UBWC_
+    env_ptr = getenv("VIDC_UBWC_DIS");
+    m_disable_ubwc_mode = env_ptr ? atoi(env_ptr) : 0;
+    DEBUG_PRINT_HIGH("UBWC mode is %s", m_disable_ubwc_mode ? "disabled" : "enabled");
+#else
+    m_disable_ubwc_mode = true;
+#endif
+
 #endif
     if (perf_flag) {
         DEBUG_PRINT_HIGH("vidc.dec.debug.perf is %d", perf_flag);
