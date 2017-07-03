@@ -1100,7 +1100,8 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode(bool split_opb_dpb_with_same_colo
     }
 
 
-    if (!BITMASK_PRESENT(&m_flags ,OMX_COMPONENT_IDLE_PENDING) &&
+    if (m_state != OMX_StateLoaded &&
+        !BITMASK_PRESENT(&m_flags ,OMX_COMPONENT_IDLE_PENDING) &&
         !BITMASK_PRESENT(&m_flags, OMX_COMPONENT_OUTPUT_ENABLE_PENDING)) {
         DEBUG_PRINT_LOW("Invalid state to decide on dpb-opb split");
         return eRet;
