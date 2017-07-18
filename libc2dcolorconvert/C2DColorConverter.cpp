@@ -68,6 +68,7 @@ public:
     C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags,size_t srcStride);
     int32_t getBuffReq(int32_t port, C2DBuffReq *req);
     int32_t dumpOutput(char * filename, char mode);
+    int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight);
 protected:
     virtual ~C2DColorConverter();
     virtual int convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData);
@@ -205,6 +206,21 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mBlit.target_rect.height = dstHeight << 16;
     mBlit.config_mask = C2D_ALPHA_BLEND_NONE | C2D_NO_BILINEAR_BIT | C2D_NO_ANTIALIASING_BIT | C2D_TARGET_RECT_BIT | mFlags;
     mBlit.surface_id = mSrcSurface;
+}
+
+int C2DColorConverter::SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight)
+{
+    mBlit.source_rect.x = x << 16;
+    mBlit.source_rect.y = y << 16;
+    mBlit.source_rect.width = srcWidth << 16;
+    mBlit.source_rect.height = srcHeight << 16;
+    mBlit.config_mask |= C2D_SOURCE_RECT_BIT;
+    DEBUG_PRINT_INFO("C2D library: source rect x = %d, y = %d, width = %d, height = %d",
+         mBlit.source_rect.x >> 16,
+         mBlit.source_rect.y >> 16,
+         mBlit.source_rect.width >> 16,
+         mBlit.source_rect.height >> 16);
+    return 0;
 }
 
 C2DColorConverter::~C2DColorConverter()
