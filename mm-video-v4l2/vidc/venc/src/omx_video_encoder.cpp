@@ -93,6 +93,11 @@ void omx_venc::perf_control::send_hint_to_mpctl(bool state)
 
 bool omx_venc::perf_control::load_lib()
 {
+
+#ifndef PERF_ENABLE
+    return false;
+#endif
+
     char perf_lib_path[PROPERTY_VALUE_MAX] = {0};
     if (m_perf_lib)
         return true;
@@ -139,20 +144,20 @@ omx_venc::omx_venc()
 #endif
     bframes = entropy = 0;
     char property_value[PROPERTY_VALUE_MAX] = {0};
-    property_get("vidc.debug.level", property_value, "1");
+    property_get("vendor.vidc.debug.level", property_value, "1");
     debug_level = strtoul(property_value, NULL, 16);
     property_value[0] = '\0';
-    property_get("vidc.debug.bframes", property_value, "0");
+    property_get("vendor.vidc.debug.bframes", property_value, "0");
     bframes = atoi(property_value);
     property_value[0] = '\0';
-    property_get("vidc.debug.entropy", property_value, "1");
+    property_get("vendor.vidc.debug.entropy", property_value, "1");
     entropy = !!atoi(property_value);
     property_value[0] = '\0';
-    property_get("vidc.debug.perf.mode", property_value, "0");
+    property_get("vendor.vidc.debug.perf.mode", property_value, "0");
     perfmode = atoi(property_value);
     property_value[0] = '\0';
     handle = NULL;
-    property_get("vidc.debug.lowlatency", property_value, "0");
+    property_get("vendor.vidc.debug.lowlatency", property_value, "0");
     lowlatency = atoi(property_value);
     property_value[0] = '\0';
     m_perf_control.send_hint_to_mpctl(true);
@@ -1574,12 +1579,13 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 break;
             }
         case OMX_QcomIndexParamH264AUDelimiter:
+        case OMX_QcomIndexParamAUDelimiter:
             {
-                VALIDATE_OMX_PARAM_DATA(paramData, OMX_QCOM_VIDEO_CONFIG_H264_AUD);
+                VALIDATE_OMX_PARAM_DATA(paramData, OMX_QCOM_VIDEO_CONFIG_AUD);
                 if(!handle->venc_set_param(paramData,
-                            (OMX_INDEXTYPE)OMX_QcomIndexParamH264AUDelimiter)) {
+                            (OMX_INDEXTYPE)OMX_QcomIndexParamAUDelimiter)) {
                     DEBUG_PRINT_ERROR("%s: %s",
-                            "OMX_QComIndexParamh264AUDelimiter:",
+                            "OMX_QComIndexParamAUDelimiter:",
                             "request for AU Delimiters failed.");
                     return OMX_ErrorUnsupportedSetting;
                 }
@@ -2777,9 +2783,10 @@ bool omx_venc::dev_get_output_log_flag()
     return handle->venc_get_output_log_flag();
 }
 
-int omx_venc::dev_output_log_buffers(const char *buffer, int bufferlen)
+int omx_venc::dev_output_log_buffers(const char *buffer,
+                  int bufferlen, uint64_t timestamp)
 {
-    return handle->venc_output_log_buffers(buffer, bufferlen);
+    return handle->venc_output_log_buffers(buffer, bufferlen, timestamp);
 }
 
 int omx_venc::dev_extradata_log_buffers(char *buffer)

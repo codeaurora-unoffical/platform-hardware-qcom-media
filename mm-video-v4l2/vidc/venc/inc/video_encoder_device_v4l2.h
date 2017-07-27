@@ -363,7 +363,8 @@ class venc_dev
                 OMX_U32 * /*nMaxBLayers*/);
         bool venc_get_output_log_flag();
         bool venc_check_valid_config();
-        int venc_output_log_buffers(const char *buffer_addr, int buffer_len);
+        int venc_output_log_buffers(const char *buffer_addr, int buffer_len,
+                        uint64_t timestamp);
         int venc_input_log_buffers(OMX_BUFFERHEADERTYPE *buffer, int fd, int plane_offset,
                         unsigned long inputformat);
         int venc_extradata_log_buffers(char *buffer_addr);
@@ -517,6 +518,7 @@ class venc_dev
         struct msm_venc_hybrid_hp           hybrid_hp;
         struct msm_venc_color_space         color_space;
         msm_venc_temporal_layers            temporal_layers_config;
+        bool m_hypervisor;
 
         bool venc_set_profile_level(OMX_U32 eProfile,OMX_U32 eLevel);
         bool venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames);

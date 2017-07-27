@@ -287,6 +287,7 @@ omx_video::omx_video():
     output_use_buffer (false),
     pending_input_buffers(0),
     pending_output_buffers(0),
+    allocate_native_handle(false),
     m_out_bm_count(0),
     m_inp_bm_count(0),
     m_flags(0),
@@ -2929,6 +2930,7 @@ OMX_ERRORTYPE  omx_video::use_buffer(
         return OMX_ErrorInvalidState;
     }
     if (port == PORT_INDEX_IN) {
+        auto_lock l(m_lock);
         eRet = use_input_buffer(hComp,bufferHdr,port,appData,bytes,buffer);
     } else if (port == PORT_INDEX_OUT) {
         eRet = use_output_buffer(hComp,bufferHdr,port,appData,bytes,buffer);
@@ -3130,7 +3132,9 @@ OMX_ERRORTYPE omx_video::allocate_input_meta_buffer(
                 meta_buffer_hdr, m_inp_mem_ptr);
     }
     for (index = 0; ((index < m_sInPortDef.nBufferCountActual) &&
-                meta_buffer_hdr[index].pBuffer); index++);
+                meta_buffer_hdr[index].pBuffer &&
+                BITMASK_PRESENT(&m_inp_bm_count, index)); index++);
+
     if (index == m_sInPortDef.nBufferCountActual) {
         DEBUG_PRINT_ERROR("All buffers are allocated input_meta_buffer");
         return OMX_ErrorBadParameter;
@@ -3554,6 +3558,7 @@ OMX_ERRORTYPE  omx_video::allocate_buffer(OMX_IN OMX_HANDLETYPE                h
 
     // What if the client calls again.
     if (port == PORT_INDEX_IN) {
+        auto_lock l(m_lock);
 #ifdef _ANDROID_ICS_
         if (meta_mode_enable)
             eRet = allocate_input_meta_buffer(hComp,bufferHdr,appData,bytes);
@@ -3648,10 +3653,12 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 
         DEBUG_PRINT_LOW("free_buffer on i/p port - Port idx %u, actual cnt %u",
                 nPortIndex, (unsigned int)m_sInPortDef.nBufferCountActual);
+        pthread_mutex_lock(&m_lock);
         if (nPortIndex < m_sInPortDef.nBufferCountActual &&
                 BITMASK_PRESENT(&m_inp_bm_count, nPortIndex)) {
             // Clear the bit associated with it.
             BITMASK_CLEAR(&m_inp_bm_count,nPortIndex);
+            pthread_mutex_unlock(&m_lock);
             free_input_buffer (buffer);
             m_sInPortDef.bPopulated = OMX_FALSE;
 
@@ -3679,6 +3686,7 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 #endif
             }
         } else {
+            pthread_mutex_unlock(&m_lock);
             DEBUG_PRINT_ERROR("ERROR: free_buffer ,Port Index Invalid");
             eRet = OMX_ErrorBadPortIndex;
         }
@@ -3980,7 +3988,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
 
         auto_lock l(m_lock);
         pmem_data_buf = (OMX_U8 *)m_pInput_pmem[nBufIndex].buffer;
-        if (pmem_data_buf) {
+        if (pmem_data_buf && BITMASK_PRESENT(&m_inp_bm_count, nBufIndex)) {
             memcpy (pmem_data_buf, (buffer->pBuffer + buffer->nOffset),
                     buffer->nFilledLen);
         }
@@ -4532,7 +4540,8 @@ OMX_ERRORTYPE omx_video::fill_buffer_done(OMX_HANDLETYPE hComp,
             m_fbd_count++;
 
             if (dev_get_output_log_flag()) {
-                dev_output_log_buffers((const char*)buffer->pBuffer, buffer->nFilledLen);
+                dev_output_log_buffers((const char*)(buffer->pBuffer + buffer->nOffset),
+                                       buffer->nFilledLen, buffer->nTimeStamp);
             }
         }
         if (buffer->nFlags & OMX_BUFFERFLAG_EXTRADATA) {
@@ -4710,6 +4719,18 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
 }
 #endif
 
+static int get_max_h264_level() {
+#ifdef MAX_H264_LEVEL_4
+    return OMX_VIDEO_AVCLevel4;
+#elif MAX_H264_LEVEL_51
+    return OMX_VIDEO_AVCLevel51;
+#elif MAX_H264_LEVEL_52
+    return OMX_VIDEO_AVCLevel52;
+#else
+    return OMX_VIDEO_AVCLevel52;
+#endif
+}
+
 #ifdef MAX_RES_1080P
 OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVELTYPE *profileLevelType)
 {
@@ -4719,49 +4740,22 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
 
     if (profileLevelType->nPortIndex == 1) {
         if (m_sOutPortDef.format.video.eCompressionFormat == OMX_VIDEO_CodingAVC) {
-#if defined _MSM8974_ && !defined _MSM8226_
+            profileLevelType->eLevel   = get_max_h264_level();
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 1) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileMain;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 2) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileHigh;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 3) {
                 profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else if (profileLevelType->nProfileIndex == 4) {
                 profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedHigh;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel52;
             } else {
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %u",
                         (unsigned int)profileLevelType->nProfileIndex);
                 eRet = OMX_ErrorNoMore;
             }
-#else
-            if (profileLevelType->nProfileIndex == 0) {
-                profileLevelType->eProfile = OMX_VIDEO_AVCProfileBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-
-            } else if (profileLevelType->nProfileIndex == 1) {
-                profileLevelType->eProfile = OMX_VIDEO_AVCProfileMain;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-            } else if (profileLevelType->nProfileIndex == 2) {
-                profileLevelType->eProfile = OMX_VIDEO_AVCProfileHigh;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-#ifdef _MSM8226_
-            } else if (profileLevelType->nProfileIndex == 3) {
-                profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
-                profileLevelType->eLevel   = OMX_VIDEO_AVCLevel4;
-#endif
-            } else {
-                DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %d",
-                        (int)profileLevelType->nProfileIndex);
-                eRet = OMX_ErrorNoMore;
-            }
-#endif
         } else if (m_sOutPortDef.format.video.eCompressionFormat == OMX_VIDEO_CodingH263) {
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_H263ProfileBaseline;
@@ -4860,6 +4854,9 @@ int omx_video::alloc_map_ion_memory(int size,
                 (unsigned int)alloc_data->len, (unsigned int)alloc_data->align,
                 alloc_data->flags);
     }
+#ifdef _HYPERVISOR_
+    alloc_data->flags &= (~ION_FLAG_CACHED);
+#endif
 
     rc = ioctl(ion_device_fd,ION_IOC_ALLOC,alloc_data);
     if (rc || !alloc_data->handle) {
@@ -5285,10 +5282,21 @@ OMX_ERRORTYPE omx_video::convert_queue_buffer(OMX_HANDLETYPE hComp,
                     pdest_frame, (unsigned int)pdest_frame->nFilledLen);
         }
     } else {
+        unsigned int input_buf_size = 0;
+        if (!c2d_conv.get_buffer_size(C2D_INPUT, input_buf_size)) {
+            DEBUG_PRINT_ERROR("convert_queue_buffer: failed to get C2D i/p buf-size!");
+            return OMX_ErrorBadParameter;
+        } else if (Input_pmem_info.size < input_buf_size) {
+            DEBUG_PRINT_ERROR("convert_queue_buffer: insufficient handle size(%u) v/s min(%u)",
+                    Input_pmem_info.size, input_buf_size);
+            return OMX_ErrorBadParameter;
+        }
         uva = (unsigned char *)mmap(NULL, Input_pmem_info.size,
                 PROT_READ|PROT_WRITE,
                 MAP_SHARED,Input_pmem_info.fd,0);
         if (uva == MAP_FAILED) {
+            DEBUG_PRINT_ERROR("convert_queue_buffer: failed to map handle fd(%d) size(%u)",
+                    Input_pmem_info.fd, Input_pmem_info.size);
             ret = OMX_ErrorBadParameter;
         } else {
             if (!c2d_conv.convert(Input_pmem_info.fd, uva, uva,

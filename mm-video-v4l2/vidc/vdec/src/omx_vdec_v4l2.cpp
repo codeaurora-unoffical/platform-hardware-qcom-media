@@ -51,6 +51,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
+#include "hypv_intercept.h"
 #include <media/hardware/HardwareAPI.h>
 #include <sys/eventfd.h>
 
@@ -87,11 +88,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define EGL_BUFFER_OFFSET 0x4F01
 #endif
 
-#define BUFFER_LOG_LOC "/data/misc/media"
+#define BUFFER_LOG_LOC "/data/vendor/media"
 
 #ifdef OUTPUT_EXTRADATA_LOG
 FILE *outputExtradataFile;
-char output_extradata_filename [] = "/data/misc/media/extradata";
+char output_extradata_filename [] = "/data/vendor/media/extradata";
 #endif
 
 #define DEFAULT_FPS 30
@@ -160,6 +161,13 @@ extern "C" {
 
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
+
+#ifdef _HYPERVISOR_
+#define ioctl(x, y, z) hypv_ioctl(x, y, z)
+#define HYPERVISOR 1
+#else
+#define HYPERVISOR 0
+#endif
 
 static OMX_U32 maxSmoothStreamingWidth = 1920;
 static OMX_U32 maxSmoothStreamingHeight = 1088;
@@ -679,13 +687,13 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     memset(&m_debug,0,sizeof(m_debug));
 #ifdef _ANDROID_
     char property_value[PROPERTY_VALUE_MAX] = {0};
-    property_get("vidc.debug.level", property_value, "1");
+    property_get("vendor.vidc.debug.level", property_value, "1");
     debug_level = strtoul(property_value, NULL, 16);
     property_value[0] = '\0';
 
     DEBUG_PRINT_HIGH("In OMX vdec Constructor");
 
-    property_get("vidc.dec.debug.perf", property_value, "0");
+    property_get("vendor.vidc.dec.debug.perf", property_value, "0");
     perf_flag = atoi(property_value);
     if (perf_flag) {
         DEBUG_PRINT_HIGH("vidc.dec.debug.perf is %d", perf_flag);
@@ -694,7 +702,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     proc_frms = latency = 0;
     prev_n_filled_len = 0;
     property_value[0] = '\0';
-    property_get("vidc.dec.debug.ts", property_value, "0");
+    property_get("vendor.vidc.dec.debug.ts", property_value, "0");
     m_debug_timestamp = atoi(property_value);
     DEBUG_PRINT_HIGH("vidc.dec.debug.ts value is %d",m_debug_timestamp);
     if (m_debug_timestamp) {
@@ -703,36 +711,36 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     }
 
     property_value[0] = '\0';
-    property_get("vidc.dec.debug.concealedmb", property_value, "0");
+    property_get("vendor.vidc.dec.debug.concealedmb", property_value, "0");
     m_debug_concealedmb = atoi(property_value);
     DEBUG_PRINT_HIGH("vidc.dec.debug.concealedmb value is %d",m_debug_concealedmb);
 
     property_value[0] = '\0';
-    property_get("vidc.dec.profile.check", property_value, "0");
+    property_get("vendor.vidc.dec.profile.check", property_value, "0");
     m_reject_avc_1080p_mp = atoi(property_value);
-    DEBUG_PRINT_HIGH("vidc.dec.profile.check value is %d",m_reject_avc_1080p_mp);
+    DEBUG_PRINT_HIGH("vendor.vidc.dec.profile.check value is %d",m_reject_avc_1080p_mp);
 
     property_value[0] = '\0';
-    property_get("vidc.dec.log.in", property_value, "0");
+    property_get("vendor.vidc.dec.log.in", property_value, "0");
     m_debug.in_buffer_log = atoi(property_value);
 
     property_value[0] = '\0';
-    property_get("vidc.dec.log.out", property_value, "0");
+    property_get("vendor.vidc.dec.log.out", property_value, "0");
     m_debug.out_buffer_log = atoi(property_value);
     snprintf(m_debug.log_loc, PROPERTY_VALUE_MAX, "%s", BUFFER_LOG_LOC);
 
     property_value[0] = '\0';
-    property_get("vidc.dec.meta.log.out", property_value, "0");
+    property_get("vendor.vidc.dec.meta.log.out", property_value, "0");
     m_debug.out_meta_buffer_log = atoi(property_value);
     snprintf(m_debug.log_loc, PROPERTY_VALUE_MAX, "%s", BUFFER_LOG_LOC);
 
     property_value[0] = '\0';
-    property_get("vidc.log.loc", property_value, "");
+    property_get("vendor.vidc.log.loc", property_value, "");
     if (*property_value)
         strlcpy(m_debug.log_loc, property_value, PROPERTY_VALUE_MAX);
 
     property_value[0] = '\0';
-    property_get("vidc.dec.120fps.enabled", property_value, "0");
+    property_get("vendor.vidc.dec.120fps.enabled", property_value, "0");
 
     //if this feature is not enabled then reset this value -ve
     if(atoi(property_value)) {
@@ -741,12 +749,12 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     }
 
     property_value[0] = '\0';
-    property_get("vidc.dec.debug.dyn.disabled", property_value, "0");
+    property_get("vendor.vidc.dec.debug.dyn.disabled", property_value, "0");
     m_disable_dynamic_buf_mode = atoi(property_value);
     DEBUG_PRINT_HIGH("vidc.dec.debug.dyn.disabled value is %d",m_disable_dynamic_buf_mode);
 
     property_value[0] = '\0';
-    property_get("vidc.dec.drc.enable", property_value, "0");
+    property_get("vendor.vidc.dec.drc.enable", property_value, "0");
     if (atoi(property_value)) {
         m_drc_enable = true;
         DEBUG_PRINT_HIGH("DRC enabled");
@@ -800,9 +808,9 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
         streaming[OUTPUT_PORT] = false;
 #ifdef _ANDROID_
     char extradata_value[PROPERTY_VALUE_MAX] = {0};
-    property_get("vidc.dec.debug.extradata", extradata_value, "0");
+    property_get("vendor.vidc.dec.debug.extradata", extradata_value, "0");
     m_debug_extradata = atoi(extradata_value);
-    DEBUG_PRINT_HIGH("vidc.dec.debug.extradata value is %d",m_debug_extradata);
+    DEBUG_PRINT_HIGH("vendor.vidc.dec.debug.extradata value is %d",m_debug_extradata);
 #endif
     m_fill_output_msg = OMX_COMPONENT_GENERATE_FTB;
     client_buffers.set_vdec_client(this);
@@ -842,7 +850,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     pthread_mutex_init(&m_hdr_info_client_lock, NULL);
 
     char dither_value[PROPERTY_VALUE_MAX] = {0};
-    property_get("vidc.dec.dither", dither_value, "0");
+    property_get("vendor.vidc.dec.dither", dither_value, "0");
     if ((atoi(dither_value) > DITHER_ALL_COLORSPACE) ||
         (atoi(dither_value) < DITHER_DISABLE)) {
         m_dither_config = DITHER_ALL_COLORSPACE;
@@ -852,6 +860,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 
     DEBUG_PRINT_HIGH("Dither config is %d", m_dither_config);
     m_color_space = EXCEPT_BT2020;
+    m_hypervisor = !!HYPERVISOR;
 }
 
 static const int event_type[] = {
@@ -961,7 +970,11 @@ omx_vdec::~omx_vdec()
         pthread_join(async_thread_id,NULL);
     unsubscribe_to_events(drv_ctx.video_driver_fd);
     close(m_poll_efd);
-    close(drv_ctx.video_driver_fd);
+    if (m_hypervisor) {
+        hypv_close(drv_ctx.video_driver_fd);
+    } else {
+        close(drv_ctx.video_driver_fd);
+    }
     pthread_mutex_destroy(&m_lock);
     pthread_mutex_destroy(&c_lock);
     pthread_mutex_destroy(&buf_lock);
@@ -1584,14 +1597,8 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                                     pThis->omx_report_error ();
                                                 } else {
                                                     /*Check if we need generate event for Flush done*/
-                                                    if (BITMASK_PRESENT(&pThis->m_flags,
-                                                                OMX_COMPONENT_INPUT_FLUSH_PENDING)) {
-                                                        BITMASK_CLEAR (&pThis->m_flags,OMX_COMPONENT_INPUT_FLUSH_PENDING);
-                                                        DEBUG_PRINT_LOW("Input Flush completed - Notify Client");
-                                                        pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
-                                                                OMX_EventCmdComplete,OMX_CommandFlush,
-                                                                OMX_CORE_INPUT_PORT_INDEX,NULL );
-                                                    }
+                                                    pThis->notify_flush_done(ctxt);
+
                                                     if (BITMASK_PRESENT(&pThis->m_flags,
                                                                 OMX_COMPONENT_IDLE_PENDING)) {
                                                         if (pThis->stream_off(OMX_CORE_INPUT_PORT_INDEX)) {
@@ -1625,14 +1632,8 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                                     pThis->omx_report_error ();
                                                 } else {
                                                     /*Check if we need generate event for Flush done*/
-                                                    if (BITMASK_PRESENT(&pThis->m_flags,
-                                                                OMX_COMPONENT_OUTPUT_FLUSH_PENDING)) {
-                                                        DEBUG_PRINT_LOW("Notify Output Flush done");
-                                                        BITMASK_CLEAR (&pThis->m_flags,OMX_COMPONENT_OUTPUT_FLUSH_PENDING);
-                                                        pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
-                                                                OMX_EventCmdComplete,OMX_CommandFlush,
-                                                                OMX_CORE_OUTPUT_PORT_INDEX,NULL );
-                                                    }
+                                                    pThis->notify_flush_done(ctxt);
+
                                                     if (BITMASK_PRESENT(&pThis->m_flags,
                                                                 OMX_COMPONENT_OUTPUT_FLUSH_IN_DISABLE_PENDING)) {
                                                         DEBUG_PRINT_LOW("Internal flush complete");
@@ -1778,6 +1779,7 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                         if (p2 == OMX_IndexParamPortDefinition) {
                                             DEBUG_PRINT_HIGH("Rxd PORT_RECONFIG: OMX_IndexParamPortDefinition");
                                             pThis->in_reconfig = true;
+                                            pThis->prev_n_filled_len = 0;
                                             pThis->m_need_turbo &= ~TURBO_MODE_HIGH_FPS;
                                         }  else if (p2 == OMX_IndexConfigCommonOutputCrop) {
                                             DEBUG_PRINT_HIGH("Rxd PORT_RECONFIG: OMX_IndexConfigCommonOutputCrop");
@@ -1997,7 +1999,7 @@ OMX_ERRORTYPE omx_vdec::is_video_session_supported()
     return OMX_ErrorNone;
 }
 
-int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len)
+int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len, uint64_t timeStamp)
 {
     if (m_debug.in_buffer_log && !m_debug.infile) {
         if(!strncmp(drv_ctx.kind,"OMX.qcom.video.decoder.mpeg4", OMX_MAX_STRINGNAME_SIZE)) {
@@ -2040,55 +2042,20 @@ int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len)
         }
         if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp8", OMX_MAX_STRINGNAME_SIZE) ||
                 !strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp9", OMX_MAX_STRINGNAME_SIZE)) {
-            struct ivf_file_header {
-                OMX_U8 signature[4]; //='DKIF';
-                OMX_U8 version         ; //= 0;
-                OMX_U8 headersize      ; //= 32;
-                OMX_U32 FourCC;
-                OMX_U8 width;
-                OMX_U8 height;
-                OMX_U32 rate;
-                OMX_U32 scale;
-                OMX_U32 length;
-                OMX_U8 unused[4];
-            } file_header;
-
-            memset((void *)&file_header,0,sizeof(file_header));
-            file_header.signature[0] = 'D';
-            file_header.signature[1] = 'K';
-            file_header.signature[2] = 'I';
-            file_header.signature[3] = 'F';
-            file_header.version = 0;
-            file_header.headersize = 32;
-            switch (drv_ctx.decoder_format) {
-                case VDEC_CODECTYPE_VP8:
-                    file_header.FourCC = 0x30385056;
-                    break;
-                case VDEC_CODECTYPE_VP9:
-                    file_header.FourCC = 0x30395056;
-                    break;
-                default:
-                    DEBUG_PRINT_ERROR("unsupported format for VP8/VP9");
-                    break;
-            }
-            fwrite((const char *)&file_header,
-                    sizeof(file_header),1,m_debug.infile);
+            bool isVp9 = drv_ctx.decoder_format == VDEC_CODECTYPE_VP9;
+            int width = drv_ctx.video_resolution.frame_width;
+            int height = drv_ctx.video_resolution.frame_height;
+            int fps = drv_ctx.frame_rate.fps_numerator;
+            IvfFileHeader ivfHeader(isVp9, width, height, 1, fps, 0);
+            fwrite((const char *)&ivfHeader,
+                    sizeof(ivfHeader),1,m_debug.infile);
          }
     }
     if (m_debug.infile && buffer_addr && buffer_len) {
         if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp8", OMX_MAX_STRINGNAME_SIZE) ||
                 !strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp9", OMX_MAX_STRINGNAME_SIZE)) {
-            struct vpx_ivf_frame_header {
-                OMX_U32 framesize;
-                OMX_U32 timestamp_lo;
-                OMX_U32 timestamp_hi;
-            } vpx_frame_header;
-            vpx_frame_header.framesize = buffer_len;
-            /* Currently FW doesn't use timestamp values */
-            vpx_frame_header.timestamp_lo = 0;
-            vpx_frame_header.timestamp_hi = 0;
-            fwrite((const char *)&vpx_frame_header,
-                    sizeof(vpx_frame_header),1,m_debug.infile);
+            IvfFrameHeader ivfFrameHeader(buffer_len, timeStamp);
+            fwrite(&ivfFrameHeader, sizeof(ivfFrameHeader), 1, m_debug.infile);
         }
         fwrite(buffer_addr, buffer_len, 1, m_debug.infile);
     }
@@ -2272,7 +2239,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
      * Clients may configure OMX_QCOM_FramePacking_Arbitrary to enable this mode
      */
     arbitrary_bytes = false;
-    property_get("vidc.dec.debug.arbitrarybytes.mode", property_value, "0");
+    property_get("vendor.vidc.dec.debug.arbitrarybytes.mode", property_value, "0");
     if (atoi(property_value)) {
         DEBUG_PRINT_HIGH("arbitrary_bytes mode enabled via property command");
         arbitrary_bytes = true;
@@ -2322,7 +2289,14 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         role = (OMX_STRING)"OMX.qcom.video.decoder.vp8";
     }
 
-    drv_ctx.video_driver_fd = open(device_name, O_RDWR);
+    if (m_hypervisor) {
+        hvfe_callback_t hvfe_cb;
+        hvfe_cb.handler = async_message_process;
+        hvfe_cb.context = (void *)this;
+        drv_ctx.video_driver_fd = hypv_open(device_name, O_RDWR, &hvfe_cb);
+    } else {
+        drv_ctx.video_driver_fd = open(device_name, O_RDWR);
+    }
 
     DEBUG_PRINT_INFO("component_init: %s : fd=%d", role, drv_ctx.video_driver_fd);
 
@@ -2339,15 +2313,18 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         return OMX_ErrorInsufficientResources;
     }
     ret = subscribe_to_events(drv_ctx.video_driver_fd);
-    if (!ret) {
-        async_thread_created = true;
-        ret = pthread_create(&async_thread_id,0,async_message_thread,this);
+    if (!m_hypervisor) {
+        if (!ret) {
+            async_thread_created = true;
+            ret = pthread_create(&async_thread_id,0,async_message_thread,this);
+        }
+        if (ret) {
+            DEBUG_PRINT_ERROR("Failed to create async_message_thread");
+            async_thread_created = false;
+            return OMX_ErrorInsufficientResources;
+        }
     }
-    if (ret) {
-        DEBUG_PRINT_ERROR("Failed to create async_message_thread");
-        async_thread_created = false;
-        return OMX_ErrorInsufficientResources;
-    }
+
 
 #ifdef OUTPUT_EXTRADATA_LOG
     outputExtradataFile = fopen (output_extradata_filename, "ab");
@@ -2578,7 +2555,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
             }
         }
 
-        property_get("persist.vidc.dec.conceal_color", property_value, DEFAULT_CONCEAL_COLOR);
+        property_get("persist.vendor.vidc.dec.conceal_color", property_value, DEFAULT_CONCEAL_COLOR);
         m_conceal_color= atoi(property_value);
         DEBUG_PRINT_HIGH("trying to set 0x%u as conceal color\n", (unsigned int)m_conceal_color);
         control.id = V4L2_CID_MPEG_VIDC_VIDEO_CONCEAL_COLOR;
@@ -2674,14 +2651,14 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         drv_ctx.idr_only_decoding = 0;
 
 #ifdef _ANDROID_
-        property_get("vidc.dec.enable.downscalar",property_value,"0");
+        property_get("vendor.vidc.dec.enable.downscalar",property_value,"0");
         if (atoi(property_value)) {
             m_enable_downscalar =  atoi(property_value);
-            property_get("vidc.dec.downscalar_width",property_value,"0");
+            property_get("vendor.vidc.dec.downscalar_width",property_value,"0");
             if (atoi(property_value)) {
                 m_downscalar_width = atoi(property_value);
             }
-            property_get("vidc.dec.downscalar_height",property_value,"0");
+            property_get("vendor.vidc.dec.downscalar_height",property_value,"0");
             if (atoi(property_value)) {
                 m_downscalar_height = atoi(property_value);
             }
@@ -2695,7 +2672,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
             DEBUG_PRINT_LOW("Downscaler configured WxH %dx%d\n",
                 m_downscalar_width, m_downscalar_height);
         }
-        property_get("vidc.disable.split.mode",property_value,"0");
+        property_get("vendor.vidc.disable.split.mode",property_value,"0");
         m_disable_split_mode = atoi(property_value);
         DEBUG_PRINT_HIGH("split mode is %s", m_disable_split_mode ? "disabled" : "enabled");
 #endif
@@ -3504,6 +3481,42 @@ bool omx_vdec::execute_input_flush()
     return bRet;
 }
 
+/*=========================================================================
+FUNCTION : notify_flush_done
+
+DESCRIPTION
+Notifies flush done to the OMX Client.
+
+PARAMETERS
+ctxt -- Context information related to the self..
+
+RETURN VALUE
+NONE
+==========================================================================*/
+void omx_vdec::notify_flush_done(void *ctxt) {
+
+    omx_vdec *pThis = (omx_vdec *) ctxt;
+
+    if (!pThis->input_flush_progress && !pThis->output_flush_progress) {
+        if (BITMASK_PRESENT(&pThis->m_flags,
+                OMX_COMPONENT_OUTPUT_FLUSH_PENDING)) {
+            DEBUG_PRINT_LOW("Notify Output Flush done");
+            BITMASK_CLEAR (&pThis->m_flags,OMX_COMPONENT_OUTPUT_FLUSH_PENDING);
+            pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
+                OMX_EventCmdComplete,OMX_CommandFlush,
+                OMX_CORE_OUTPUT_PORT_INDEX,NULL );
+        }
+
+        if (BITMASK_PRESENT(&pThis->m_flags,
+                OMX_COMPONENT_INPUT_FLUSH_PENDING)) {
+            BITMASK_CLEAR (&pThis->m_flags,OMX_COMPONENT_INPUT_FLUSH_PENDING);
+            DEBUG_PRINT_LOW("Input Flush completed - Notify Client");
+            pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
+                    OMX_EventCmdComplete,OMX_CommandFlush,
+                    OMX_CORE_INPUT_PORT_INDEX,NULL );
+        }
+    }
+}
 
 /* ======================================================================
    FUNCTION
@@ -3566,6 +3579,18 @@ bool omx_vdec::post_event(unsigned long p1,
     return bRet;
 }
 
+static int get_max_h264_level() {
+#ifdef MAX_H264_LEVEL_4
+    return OMX_VIDEO_AVCLevel4;
+#elif MAX_H264_LEVEL_51
+    return OMX_VIDEO_AVCLevel51;
+#elif MAX_H264_LEVEL_52
+    return OMX_VIDEO_AVCLevel52;
+#else
+    return OMX_VIDEO_AVCLevel52;
+#endif
+}
+
 OMX_ERRORTYPE omx_vdec::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVELTYPE *profileLevelType)
 {
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
@@ -3574,7 +3599,7 @@ OMX_ERRORTYPE omx_vdec::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVEL
 
     if (profileLevelType->nPortIndex == 0) {
         if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.avc",OMX_MAX_STRINGNAME_SIZE)) {
-            profileLevelType->eLevel = OMX_VIDEO_AVCLevel51;
+            profileLevelType->eLevel = get_max_h264_level();
             if (profileLevelType->nProfileIndex == 0) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileBaseline;
             } else if (profileLevelType->nProfileIndex == 1) {
@@ -4558,7 +4583,7 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                         OMX_QCOM_FramePacking_OnlyOneCompleteFrame) {
                                     arbitrary_bytes = false;
 #ifdef _ANDROID_
-                                    property_get("vidc.dec.debug.arbitrarybytes.mode", property_value, "0");
+                                    property_get("vendor.vidc.dec.debug.arbitrarybytes.mode", property_value, "0");
                                     if (atoi(property_value)) {
                                         DEBUG_PRINT_HIGH("arbitrary_bytes enabled via property command");
                                         arbitrary_bytes = true;
@@ -7749,7 +7774,7 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     }
 #endif
 
-    log_input_buffers((const char *)temp_buffer->bufferaddr, temp_buffer->buffer_len);
+    log_input_buffers((const char *)temp_buffer->bufferaddr, temp_buffer->buffer_len, buffer->nTimeStamp);
 
 if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
         frameinfo.flags |= QOMX_VIDEO_BUFFERFLAG_EOSEQ;
@@ -7873,6 +7898,11 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         return OMX_ErrorInvalidState;
     }
 
+    if (!buffer || !buffer->pBuffer) {
+        DEBUG_PRINT_ERROR("%s: invalid params", __FUNCTION__);
+        return OMX_ErrorBadParameter;
+    }
+
     if (buffer->nOutputPortIndex != OMX_CORE_OUTPUT_PORT_INDEX) {
         DEBUG_PRINT_ERROR("ERROR:FTB invalid port in header %u", (unsigned int)buffer->nOutputPortIndex);
         return OMX_ErrorBadPortIndex;
@@ -7888,11 +7918,6 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         private_handle_t *handle = NULL;
         struct VideoDecoderOutputMetaData *meta;
         unsigned int nPortIndex = 0;
-
-        if (!buffer || !buffer->pBuffer) {
-            DEBUG_PRINT_ERROR("%s: invalid params: %p", __FUNCTION__, buffer);
-            return OMX_ErrorBadParameter;
-        }
 
         //get the buffer type and fd info
         meta = (struct VideoDecoderOutputMetaData *)buffer->pBuffer;
@@ -9297,11 +9322,6 @@ int omx_vdec::async_message_process (void *context, void* message)
                    vdec_msg->msgdata.output_frame.bufferaddr =
                        omx->drv_ctx.ptr_outputbuffer[v4l2_buf_ptr->index].bufferaddr;
 
-                   if (vdec_msg->msgdata.output_frame.len)
-                       memcpy(&omx->drv_ctx.frame_size,
-                               &vdec_msg->msgdata.output_frame.framesize,
-                               sizeof(struct vdec_framesize));
-
                    DEBUG_PRINT_LOW("[RespBufDone] Fd(%d) Buf(%p) Ts(%lld) PicType(%u) Flags (0x%x)"
                            " FillLen(%u) Crop: L(%u) T(%u) R(%u) B(%u)",
                            omx->drv_ctx.ptr_outputbuffer[v4l2_buf_ptr->index].pmem_fd,
@@ -9337,6 +9357,10 @@ int omx_vdec::async_message_process (void *context, void* message)
                                vdec_msg->msgdata.output_frame.framesize.top,
                                vdec_msg->msgdata.output_frame.framesize.right,
                                vdec_msg->msgdata.output_frame.framesize.bottom);
+
+                       memcpy(&omx->drv_ctx.frame_size,
+                               &vdec_msg->msgdata.output_frame.framesize,
+                               sizeof(struct vdec_framesize));
 
                        omx->drv_ctx.video_resolution.frame_width =
                                vdec_msg->msgdata.output_frame.picsize.frame_width;
@@ -10131,7 +10155,10 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
         return fd;
     }
 
-    alloc_data->flags = flag;
+    if (m_hypervisor)
+        alloc_data->flags = 0;
+    else
+        alloc_data->flags = flag;
     alloc_data->len = buffer_size;
     alloc_data->align = clip2(alignment);
     if (alloc_data->align < 4096) {
@@ -12497,7 +12524,7 @@ void omx_vdec::request_perf_level(enum vidc_perf_level perf_level)
     struct v4l2_control control;
     char property_value[PROPERTY_VALUE_MAX] = {0};
 
-    property_get("vidc.debug.turbo", property_value, "0");
+    property_get("vendor.vidc.debug.turbo", property_value, "0");
     memset(&control, 0, sizeof(v4l2_control));
     control.id = V4L2_CID_MPEG_VIDC_SET_PERF_LEVEL;
     switch (perf_level) {
@@ -13237,6 +13264,11 @@ void omx_vdec::perf_control::request_cores(int frame_duration_us)
 
 bool omx_vdec::perf_control::load_lib()
 {
+
+#ifndef PERF_ENABLE
+    return false;
+#endif
+
     char perf_lib_path[PROPERTY_VALUE_MAX] = {0};
     if (m_perf_lib)
         return true;
