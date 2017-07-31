@@ -6556,6 +6556,20 @@ bool venc_dev::venc_set_ratectrl_cfg(OMX_VIDEO_CONTROLRATETYPE eControlRate)
         rate_ctrl.rcmode = control.value;
     }
 
+    if ((eControlRate == OMX_Video_ControlRateVariableSkipFrames) ||
+        (eControlRate == OMX_Video_ControlRateConstantSkipFrames) ||
+        (eControlRate == QOMX_Video_ControlRateMaxBitrateSkipFrames)) {
+        struct v4l2_control control;
+        int rc = 0;
+        control.id = V4L2_CID_MPEG_VIDC_VIDEO_SEND_SKIPPED_FRAME;
+        control.value = V4L2_MPEG_VIDC_VIDEO_SEND_SKIPPED_FRAME_ENABLE;
+        rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
+        if (rc) {
+            DEBUG_PRINT_ERROR("Failed to set control for id=%d, value=%d", control.id, control.value);
+            return false;
+        }
+        DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
+    }
 #ifdef _VQZIP_
     if (eControlRate == OMX_Video_ControlRateVariable && (supported_rc_modes & RC_VBR_CFR)
             && m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264) {
