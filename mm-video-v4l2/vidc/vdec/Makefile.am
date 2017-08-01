@@ -81,6 +81,9 @@ endif
 
 mm_vdec_omx_test_SOURCES = test/queue.c
 mm_vdec_omx_test_SOURCES += test/omx_vdec_test.cpp
+mm_vdec_omx_test_SOURCES += test/xdg-shell-protocol.c
+mm_vdec_omx_test_SOURCES += test/ivi-application-protocol.c
+mm_vdec_omx_test_SOURCES += test/scaler-protocol.c
 mm_vdec_omx_test_LDADD = -ldl -lpthread
 mm_vdec_omx_test_LDADD += ../../../mm-core/libOmxCore.la
 mm_vdec_omx_test_LDADD +=  ./libOmxVdec.la
