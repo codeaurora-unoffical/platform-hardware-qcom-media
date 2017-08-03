@@ -662,7 +662,7 @@ inline int get_yuv_size(unsigned long fmt, int width, int height) {
         case COLOR_FMT_NV12:
             y_plane = y_stride * y_sclines;
             uv_plane = uv_stride * uv_sclines;
-            size = MSM_MEDIA_ALIGN(y_plane + uv_plane, 4096);
+            size = MSM_MEDIA_ALIGN(y_plane + uv_plane, 128);
             break;
          default:
             break;
