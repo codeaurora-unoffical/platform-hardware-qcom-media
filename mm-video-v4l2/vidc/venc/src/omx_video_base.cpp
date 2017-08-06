@@ -335,6 +335,8 @@ omx_video::omx_video():
     property_get("vidc.enc.profile.in", property_value, "0");
     profile_mode = !!atoi(property_value);
 #endif
+
+    pthread_mutex_init(&m_buf_lock, NULL);
 }
 
 
@@ -380,6 +382,8 @@ omx_video::~omx_video()
         DEBUG_PRINT_HIGH("Input frame rate = %f",
             ((profile_frame_count - 1) * 1e6) / (profile_last_time - profile_start_time));
     }
+
+    pthread_mutex_destroy(&m_buf_lock);
     DEBUG_PRINT_HIGH("omx_video: Destructor exit");
     DEBUG_PRINT_HIGH("Exiting OMX Video Encoder ...");
 }
@@ -2753,6 +2757,7 @@ OMX_ERRORTYPE  omx_video::use_output_buffer(
         return OMX_ErrorBadParameter;
     }
 
+    auto_lock l(m_buf_lock);
     if (!m_out_mem_ptr) {
         output_use_buffer = true;
         int nBufHdrSize        = 0;
@@ -2941,6 +2946,7 @@ OMX_ERRORTYPE  omx_video::use_buffer(
         return OMX_ErrorInvalidState;
     }
     if (port == PORT_INDEX_IN) {
+        auto_lock l(m_lock);
         eRet = use_input_buffer(hComp,bufferHdr,port,appData,bytes,buffer);
     } else if (port == PORT_INDEX_OUT) {
         eRet = use_output_buffer(hComp,bufferHdr,port,appData,bytes,buffer);
@@ -3134,7 +3140,9 @@ OMX_ERRORTYPE omx_video::allocate_input_meta_buffer(
                 meta_buffer_hdr, m_inp_mem_ptr);
     }
     for (index = 0; ((index < m_sInPortDef.nBufferCountActual) &&
-                meta_buffer_hdr[index].pBuffer); index++);
+                meta_buffer_hdr[index].pBuffer &&
+                BITMASK_PRESENT(&m_inp_bm_count, index)); index++);
+
     if (index == m_sInPortDef.nBufferCountActual) {
         DEBUG_PRINT_ERROR("All buffers are allocated input_meta_buffer");
         return OMX_ErrorBadParameter;
@@ -3558,6 +3566,7 @@ OMX_ERRORTYPE  omx_video::allocate_buffer(OMX_IN OMX_HANDLETYPE                h
 
     // What if the client calls again.
     if (port == PORT_INDEX_IN) {
+        auto_lock l(m_lock);
 #ifdef _ANDROID_ICS_
         if (meta_mode_enable)
             eRet = allocate_input_meta_buffer(hComp,bufferHdr,appData,bytes);
@@ -3652,10 +3661,12 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 
         DEBUG_PRINT_LOW("free_buffer on i/p port - Port idx %u, actual cnt %u",
                 nPortIndex, (unsigned int)m_sInPortDef.nBufferCountActual);
+        pthread_mutex_lock(&m_lock);
         if (nPortIndex < m_sInPortDef.nBufferCountActual &&
                 BITMASK_PRESENT(&m_inp_bm_count, nPortIndex)) {
             // Clear the bit associated with it.
             BITMASK_CLEAR(&m_inp_bm_count,nPortIndex);
+            pthread_mutex_unlock(&m_lock);
             free_input_buffer (buffer);
             m_sInPortDef.bPopulated = OMX_FALSE;
 
@@ -3683,6 +3694,7 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 #endif
             }
         } else {
+            pthread_mutex_unlock(&m_lock);
             DEBUG_PRINT_ERROR("ERROR: free_buffer ,Port Index Invalid");
             eRet = OMX_ErrorBadPortIndex;
         }
@@ -3703,6 +3715,7 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
                 nPortIndex, (unsigned int)m_sOutPortDef.nBufferCountActual);
         if (nPortIndex < m_sOutPortDef.nBufferCountActual &&
                 BITMASK_PRESENT(&m_out_bm_count, nPortIndex)) {
+            auto_lock l(m_buf_lock);
             // Clear the bit associated with it.
             BITMASK_CLEAR(&m_out_bm_count,nPortIndex);
             m_sOutPortDef.bPopulated = OMX_FALSE;
@@ -4005,7 +4018,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
 
         auto_lock l(m_lock);
         pmem_data_buf = (OMX_U8 *)m_pInput_pmem[nBufIndex].buffer;
-        if (pmem_data_buf) {
+        if (pmem_data_buf && BITMASK_PRESENT(&m_inp_bm_count, nBufIndex)) {
             memcpy (pmem_data_buf, (buffer->pBuffer + buffer->nOffset),
                     buffer->nFilledLen);
         }
