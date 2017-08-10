@@ -3251,21 +3251,7 @@ unsigned venc_dev::venc_set_message_thread_id(pthread_t tid)
 bool venc_dev::venc_set_vqzip_defaults()
 {
     struct v4l2_control control;
-    int rc = 0, num_mbs_per_frame;
-
-    num_mbs_per_frame = m_sVenc_cfg.input_height * m_sVenc_cfg.input_width;
-
-    switch (num_mbs_per_frame) {
-    case OMX_CORE_720P_WIDTH  * OMX_CORE_720P_HEIGHT:
-    case OMX_CORE_1080P_WIDTH * OMX_CORE_1080P_HEIGHT:
-    case OMX_CORE_4KUHD_WIDTH * OMX_CORE_4KUHD_HEIGHT:
-    case OMX_CORE_4KDCI_WIDTH * OMX_CORE_4KDCI_HEIGHT:
-        break;
-    default:
-        DEBUG_PRINT_ERROR("VQZIP is not supported for this resoultion : %lu X %lu",
-            m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
-        return false;
-    }
+    int rc = 0;
 
     control.id = V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL;
     control.value = V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_OFF;
