@@ -51,6 +51,7 @@
 #define ALIGN4K 4096
 #define ALIGN2K 2048
 #define ALIGN128 128
+#define ALIGN64 64
 #define ALIGN32 32
 #define ALIGN16 16
 
@@ -494,7 +495,7 @@ size_t C2DColorConverter::calcStride(ColorConvertFormat format, size_t width)
         case NV12_UBWC:
             return VENUS_Y_STRIDE(COLOR_FMT_NV12_UBWC, width);
         case CbYCrY:
-            return ALIGN(width*2, ALIGN16);
+            return ALIGN(width*2, ALIGN64);
         default:
             return 0;
     }
@@ -590,7 +591,7 @@ size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size
             size = VENUS_BUFFER_SIZE(COLOR_FMT_NV12_UBWC, width, height);
             break;
         case CbYCrY:
-            size = ALIGN(ALIGN(width * 2, ALIGN16) * height, ALIGN4K);
+            size = ALIGN(ALIGN(width * 2, ALIGN64) * height, ALIGN4K);
             break;
         default:
             break;
