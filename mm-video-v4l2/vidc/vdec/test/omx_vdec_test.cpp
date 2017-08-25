@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2013, 2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2013, 2016 - 2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -24,6 +24,28 @@ OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+ * Copyright (c) 2011 Benjamin Franzke
+ * Copyright (c) 2010 Intel Corporation
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
 --------------------------------------------------------------------------*/
 /*
     An Open max test application ....
@@ -107,10 +129,24 @@ enum {
 extern "C" {
 #include "queue.h"
 }
-
+#define WL_DISPLAY
 #include <inttypes.h>
 #include <linux/msm_mdp.h>
+#ifdef FB_DISPLAY
 #include <linux/fb.h>
+#elif defined WL_DISPLAY
+#include <poll.h>
+#include <wayland-client.h>
+#include "xdg-shell-client-protocol.h"
+#include "ivi-application-client-protocol.h"
+#include <drm_fourcc.h>
+#include <gl2.h>
+#include <egl.h>
+#include <eglext.h>
+
+#include "gbm.h"
+#include "msm_drm.h"
+#endif
 
 #ifdef USE_ION
 #include <linux/msm_ion.h>
@@ -379,22 +415,63 @@ unsigned int color_fmt_type = 1;
 #else
 unsigned int color_fmt_type = 0;
 #endif
-
+static char tempbuf[16];
+#ifdef FB_DISPLAY
 #define CLR_KEY  0xe8fd
 #define COLOR_BLACK_RGBA_8888 0x00000000
 #define FRAMEBUFFER_32
-
 static int fb_fd = -1;
 static struct fb_var_screeninfo vinfo;
 static struct fb_fix_screeninfo finfo;
 static struct mdp_overlay overlay, *overlayp;
 static struct msmfb_overlay_data ov_front;
 static int vid_buf_front_id;
-static char tempbuf[16];
 int overlay_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr);
 void overlay_set();
 void overlay_unset();
 void render_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr);
+
+#elif defined WL_DISPLAY
+struct display {
+    struct wl_display *display;
+    struct wl_event_queue *queue;
+    struct wl_registry *registry;
+    struct wl_compositor *compositor;
+    struct xdg_shell *shell;
+    struct wl_shm *shm;
+    uint32_t formats;
+    struct ivi_application *ivi_application;
+    GThread *thread;
+};
+struct window {
+	struct display *display;
+	int width, height;
+	struct wl_surface *surface;
+	struct xdg_surface *xdg_surface;
+	struct ivi_surface *ivi_surface;
+	struct wl_callback *callback;
+};
+struct eglimage {
+	  /* EGL */
+  EGLDisplay egldpy;
+  PFNEGLCREATEIMAGEKHRPROC eglCreateImage;
+  PFNEGLDESTROYIMAGEKHRPROC eglDestroyImage;
+  PFNEGLCREATEWAYLANDBUFFERFROMIMAGEWL eglCreateWaylandBufferFromImage;
+};
+struct listen_buffer {
+	struct wl_buffer *wlbuf;
+	void *shm_data;
+	int busy;
+};
+
+struct display *display;
+struct window *window;
+struct eglimage *eglimage;
+GHashTable *buffer_table;
+static bool isdisplayopened = FALSE;
+static int
+wl_buf_render(struct OMX_BUFFERHEADERTYPE *pBufHdr);
+#endif
 int disable_output_port();
 int enable_output_port();
 int output_port_reconfig();
@@ -890,14 +967,32 @@ void* fbd_thread(void* pArg)
           }
         }
       }
+#ifdef WL_DISPLAY
+      if ( isdisplayopened == FALSE)
+      {
+        if (open_display() != 0)
+        {
+           DEBUG_PRINT_ERROR(" Error opening display! Video won't be displayed...");
+           displayYuv = 0;
+        }
+        else
+        {
+           isdisplayopened = TRUE;
+        }
+      }
+#endif
       if (displayYuv && canDisplay)
       {
           if (display_time)
               usleep(display_time);
+#ifdef FB_DISPLAY
           ret = overlay_fb(pBuffer);
+#elif defined WL_DISPLAY
+          ret = wl_buf_render(pBuffer);
+#endif
           if (ret != 0)
           {
-            DEBUG_PRINT_ERROR("ERROR in overlay_fb, disabling display!");
+            DEBUG_PRINT_ERROR("ERROR in display, disabling display!");
             close_display();
             displayYuv = 0;
           }
@@ -1345,8 +1440,10 @@ OMX_ERRORTYPE FillBufferDone(OMX_OUT OMX_HANDLETYPE hComponent,
     if(waitForPortSettingsChanged)
     {
       waitForPortSettingsChanged = 0;
+#ifdef FB_DISPLAY
       if(displayYuv)
         overlay_set();
+#endif
       event_complete();
     }
 
@@ -1783,7 +1880,7 @@ int main(int argc, char **argv)
       free_queue(fbd_queue);
       return -1;
     }
-
+#if 0 /* move to where we render the frame */
     if (displayYuv)
     {
       if (open_display() != 0)
@@ -1792,8 +1889,10 @@ int main(int argc, char **argv)
         displayYuv = 0;
       }
     }
-
+#endif
     run_tests();
+    if (displayYuv)
+      close_display();
     pthread_cond_destroy(&cond);
     pthread_mutex_destroy(&lock);
     pthread_mutex_destroy(&etb_lock);
@@ -1821,8 +1920,6 @@ int main(int argc, char **argv)
     {
       DEBUG_PRINT_ERROR("Error - sem_destroy failed %d", errno);
     }
-    if (displayYuv)
-      close_display();
     return 0;
 }
 
@@ -3996,6 +4093,7 @@ void swap_byte(char *pByte, int nbyte)
   }
 }
 
+#ifdef FB_DISPLAY
 int drawBG(void)
 {
     int result;
@@ -4386,6 +4484,324 @@ void render_fb(struct OMX_BUFFERHEADERTYPE *pBufHdr)
 
     DEBUG_PRINT("render_fb complete!");
 }
+#elif defined WL_DISPLAY
+static gpointer
+mm_vidc_display_thread_run (gpointer data)
+{
+	int ret =0;
+  struct display *display =(struct display *) data;
+    struct pollfd fds[] = {
+        { wl_display_get_fd(display->display), POLLIN },
+    };
+   while(1) {
+    while (wl_display_prepare_read_queue (display->display, display->queue) != 0)
+    {
+      wl_display_dispatch_queue_pending (display->display, display->queue);
+    }
+
+    wl_display_flush (display->display);
+
+    ret = poll(fds, 1, 1000);
+    if (ret > 0)
+    {
+      wl_display_read_events (display->display);
+      wl_display_dispatch_queue_pending (display->display, display->queue);
+    }
+    else
+    {
+      DEBUG_PRINT_ERROR("poll failed ret %d",ret);
+      wl_display_cancel_read (display->display);
+      break;
+    }
+  }
+  return NULL;
+}
+static void
+shm_format(void *data, struct wl_shm *wl_shm, uint32_t format)
+{
+  struct display *d = (struct display *)data;
+
+  d->formats |= (1 << format);
+}
+
+struct wl_shm_listener shm_listener = {
+  shm_format
+};
+
+static void
+xdg_shell_ping(void *data, struct xdg_shell *shell, uint32_t serial)
+{
+  xdg_shell_pong(shell, serial);
+}
+
+static const struct xdg_shell_listener xdg_shell_listener = {
+  xdg_shell_ping,
+};
+#define XDG_VERSION 5 /* The version of xdg-shell that we implement */
+static void
+registry_handle_global(void *data, struct wl_registry *registry,
+           uint32_t id, const char *interface, uint32_t version)
+{
+  struct display *d = (struct display *)data;
+  if (strcmp(interface, "wl_compositor") == 0) {
+    d->compositor =(struct wl_compositor *)
+        wl_registry_bind(registry,
+        id, &wl_compositor_interface, 1);
+  } else if (strcmp(interface, "xdg_shell") == 0) {
+    d->shell = (struct xdg_shell *)wl_registry_bind(registry,
+        id, &xdg_shell_interface, 1);
+    xdg_shell_use_unstable_version(d->shell, XDG_VERSION);
+
+    xdg_shell_add_listener(d->shell, &xdg_shell_listener, d);
+
+  } else if (strcmp(interface, "wl_shm") == 0) {
+    d->shm = (struct wl_shm *)wl_registry_bind(registry,
+      id, &wl_shm_interface, 1);
+    wl_shm_add_listener(d->shm, &shm_listener, d);
+  } else if (strcmp(interface, "ivi_application") == 0) {
+    d->ivi_application = (struct ivi_application *)
+       wl_registry_bind(registry, id,
+       &ivi_application_interface, 1);
+  }
+
+}
+
+static void
+registry_handle_global_remove(void *data, struct wl_registry *registry,
+          uint32_t name)
+{
+}
+
+static const struct wl_registry_listener registry_listener = {
+ registry_handle_global,
+ registry_handle_global_remove
+};
+ static struct display *create_display(void)
+{
+  struct display *display;
+  GError *err = NULL;
+  display = (struct display *)g_malloc(sizeof *display);
+  if (display == NULL) {
+    DEBUG_PRINT_ERROR("display alloc error");
+    return NULL;
+  }
+  display->display = NULL;
+
+  /*wait for display being connected*/
+  while (display->display == NULL)
+  {
+    display->display = wl_display_connect(NULL);
+    if(display->display == NULL)
+    {
+      DEBUG_PRINT_ERROR("wl_display_connect is NULL reconnecting ....");
+      usleep(10000);
+    }
+  }
+
+  display->formats = 0;
+  display->queue = wl_display_create_queue(display->display);
+  display->registry = wl_display_get_registry(display->display);
+  wl_registry_add_listener(display->registry,
+      &registry_listener, display);
+  wl_display_roundtrip(display->display);
+  if (display->shm == NULL) {
+    DEBUG_PRINT_ERROR("display->shm not exist");
+    return NULL;
+  }
+
+  wl_display_roundtrip(display->display);
+
+  if (!(display->formats & (1 << WL_SHM_FORMAT_XRGB8888))) {
+    DEBUG_PRINT_ERROR("WL_SHM_FORMAT_XRGB8888 not support");
+    return NULL;
+  }
+  display->thread = g_thread_try_new ("mm-vidc-display", mm_vidc_display_thread_run,
+      display,&err);
+  if (err) {
+    DEBUG_PRINT_ERROR("g_thread_try_new mm-vidc-display error");
+    return NULL;
+  }
+  return display;
+}
+static void
+destroy_display(struct display *display)
+{
+  if (display->thread)
+    g_thread_join (display->thread);
+
+  if (buffer_table)
+     g_hash_table_remove_all(buffer_table);
+  if (buffer_table)
+    g_hash_table_destroy(buffer_table);
+  buffer_table = NULL;
+
+  if (display->shm)
+    wl_shm_destroy(display->shm);
+
+  if (display->shell)
+    xdg_shell_destroy(display->shell);
+
+  if (display->compositor)
+    wl_compositor_destroy(display->compositor);
+
+  if (display->registry)
+    wl_registry_destroy(display->registry);
+
+  if (display->queue)
+    wl_event_queue_destroy (display->queue);
+
+  if (display->display) {
+    wl_display_flush(display->display);
+    wl_display_disconnect(display->display);
+  }
+  g_free(display);
+}
+
+static void
+buffer_release(void *data, struct wl_buffer *buffer)
+{
+  struct listen_buffer *listen_buf =(listen_buffer *)data;
+  DEBUG_PRINT("buffer_release listen_buf = %p",listen_buf);
+  listen_buf->busy = 0;
+}
+
+static const struct wl_buffer_listener buffer_listener = {
+  buffer_release
+};
+static  struct wl_buffer *
+gst_wayland_sink_create_wl_buffer(int w,int h, int fd, int offset)
+{
+  EGLImageKHR eglimg;
+  struct wl_buffer *wlbuf;
+  EGLint attribs[] = {
+    EGL_WIDTH, 0,
+    EGL_HEIGHT, 0,
+    EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_NV12,
+    EGL_DMA_BUF_PLANE0_FD_EXT, 0,
+    EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
+    EGL_DMA_BUF_PLANE1_FD_EXT, 0,
+    EGL_DMA_BUF_PLANE1_OFFSET_EXT, 0,
+    EGL_NONE};
+
+  attribs[1]  = w;
+  attribs[3]  = h;
+  attribs[7]  = fd;
+  attribs[9] = offset;
+  attribs[11] = fd;
+  /* MSM8996: Updated the offset with correct width allignment */
+  attribs[13] = offset + ((w + 127) & ~127) * ((h + 31) & ~31);
+
+  eglimg = eglimage->eglCreateImage(eglimage->egldpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL, attribs);
+  if (eglimg == EGL_NO_IMAGE_KHR) {
+    DEBUG_PRINT_ERROR("failed to create EGLImage");
+    return NULL;
+  }
+  wlbuf = eglimage->eglCreateWaylandBufferFromImage(eglimage->egldpy, eglimg);
+  if(wlbuf)
+  {
+    struct listen_buffer *lstbuf =(struct listen_buffer *) g_malloc (sizeof *lstbuf);
+    lstbuf->wlbuf = wlbuf;
+    wl_proxy_set_queue((struct wl_proxy*)wlbuf, display->queue);
+    wl_buffer_add_listener (wlbuf, &buffer_listener, lstbuf);
+    eglimage->eglDestroyImage(eglimage->egldpy, eglimg);
+    return wlbuf;
+  }
+
+  return NULL;
+
+}
+
+static void
+destroy_wl_buffer(gpointer data)
+{
+  struct wl_buffer *wlbuf = (struct wl_buffer *)data;
+  struct listen_buffer *lstenbuf = (struct listen_buffer *)wl_buffer_get_user_data(wlbuf);
+  DEBUG_PRINT("destroy_listen_buffer = %p",lstenbuf);
+  g_free(lstenbuf);
+  wl_buffer_destroy(wlbuf);
+}
+static struct wl_buffer *
+gst_wayland_sink_get_wl_buffer(int w, int h, int fd, int offset)
+{
+  struct wl_buffer *wlbuf;
+  gint64 key;
+  if (!buffer_table) {
+    buffer_table = g_hash_table_new_full (g_int64_hash, g_int64_equal, g_free, destroy_wl_buffer);
+  }
+  /* put fd and offset into a int64 key*/
+  key = ((gint64)(fd & 0xFFFFFFFF) << 32) | (offset & 0xFFFFFFFF);
+
+  wlbuf = (struct wl_buffer*) g_hash_table_lookup(buffer_table, &key);
+  if ( !wlbuf) {
+    /* create a new wl_buffer */
+    gint64 *bufkey = (gint64 *)g_malloc(sizeof(*bufkey));
+    *bufkey = key;
+    wlbuf = gst_wayland_sink_create_wl_buffer(w, h, fd, offset);
+    if (wlbuf)
+      g_hash_table_insert(buffer_table, bufkey, wlbuf);
+  }
+  else {
+    listen_buffer *lstbuf = (struct listen_buffer *)wl_buffer_get_user_data(wlbuf);
+    if(lstbuf->busy ==TRUE)
+    {
+      DEBUG_PRINT_ERROR("listen_buf %p is busy",lstbuf);
+      return NULL;
+    }
+  }
+  return wlbuf;
+}
+static void
+frame_redraw_callback (void *data, struct wl_callback *callback, uint32_t time)
+{
+  DEBUG_PRINT("frame_redraw_callback");
+
+  wl_callback_destroy (callback);
+}
+
+static const struct wl_callback_listener frame_callback_listener = {
+  frame_redraw_callback
+};
+static int
+wl_buf_render(struct OMX_BUFFERHEADERTYPE *pBufHdr)
+{
+  struct wl_surface *surface = window->surface;;
+  struct wl_buffer  *wlbuf;
+
+  OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *pPMEMInfo = NULL;
+
+  pPMEMInfo  = (OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *)
+              ((OMX_QCOM_PLATFORM_PRIVATE_LIST *)
+                pBufHdr->pPlatformPrivate)->entryList->entry;
+  if (pPMEMInfo == NULL) {
+    DEBUG_PRINT_ERROR("pmem_info is null");
+    return -1;
+  }
+  DEBUG_PRINT("wl_buf_render pmem_fd =%d width height %d %d",pPMEMInfo->pmem_fd,width,height);
+
+  wlbuf = gst_wayland_sink_get_wl_buffer(width, height, pPMEMInfo->pmem_fd,pPMEMInfo->offset);
+  if (!wlbuf)
+  {
+    DEBUG_PRINT_ERROR("wlbuf is null");
+    goto done;
+  }
+  wl_surface_attach (surface, wlbuf, 0, 0);
+  wl_surface_damage (surface, 0, 0, width, height);
+
+  window->callback = wl_surface_frame (surface);
+  wl_proxy_set_queue((struct wl_proxy *) window->callback, display->queue);
+  wl_callback_add_listener (window->callback, &frame_callback_listener, window);
+
+  wl_surface_commit (surface);
+  {
+    listen_buffer *lstbuf = (struct listen_buffer *)wl_buffer_get_user_data(wlbuf);
+    lstbuf->busy  = TRUE;
+  }
+  wl_display_flush (display->display);
+
+done:
+  return 0;
+}
+#endif
 
 int disable_output_port()
 {
@@ -4550,6 +4966,7 @@ int output_port_reconfig()
     crop_rect.nWidth = width;
     crop_rect.nHeight = height;
 
+#ifdef FB_DISPLAY
     if (displayYuv == 2)
     {
       DEBUG_PRINT("Reconfiguration at middle of playback...");
@@ -4563,6 +4980,7 @@ int output_port_reconfig()
 
     if (displayYuv)
         overlay_set();
+#endif
 
     if (enable_output_port() != 0)
 	    return -1;
@@ -4646,9 +5064,146 @@ static bool align_pmem_buffers(int pmem_fd, OMX_U32 buffer_size,
   return true;
 }
 #endif
+#ifdef WL_DISPLAY
+#define IVI_SURFACE_ID 9000
+static void
+handle_surface_configure(void *data, struct xdg_surface *surface,
+		 int32_t width, int32_t height,
+		 struct wl_array *states, uint32_t serial)
+{
+	xdg_surface_ack_configure(surface, serial);
+}
 
+static void
+handle_surface_delete(void *data, struct xdg_surface *xdg_surface)
+{
+//	running = 0;
+}
+
+static const struct xdg_surface_listener xdg_surface_listener = {
+	handle_surface_configure,
+	handle_surface_delete,
+};
+
+static void
+handle_ivi_surface_configure(void *data, struct ivi_surface *ivi_surface,
+                             int32_t width, int32_t height)
+{
+}
+
+static const struct ivi_surface_listener ivi_surface_listener = {
+        handle_ivi_surface_configure,
+};
+static struct window *
+create_window(struct display *display, int width, int height)
+{
+  struct window *window;
+
+  window =(struct window *) calloc(1, sizeof *window);
+  if (!window)
+  return NULL;
+
+  window->callback = NULL;
+  window->display = display;
+  window->width = width;
+  window->height = height;
+  window->surface = wl_compositor_create_surface(display->compositor);
+
+  if (display->shell) {
+     window->xdg_surface =
+         xdg_shell_get_xdg_surface(display->shell,
+         window->surface);
+
+     g_assert(window->xdg_surface);
+
+     xdg_surface_add_listener(window->xdg_surface,
+         &xdg_surface_listener, window);
+
+     xdg_surface_set_title(window->xdg_surface, "mm-vidc-display");
+     xdg_surface_set_fullscreen(window->xdg_surface,NULL);
+     wl_display_roundtrip(display->display);
+
+  } else if (display->ivi_application) {
+    uint32_t id_ivisurf = IVI_SURFACE_ID + (uint32_t)getpid();
+    window->ivi_surface =
+    ivi_application_surface_create(display->ivi_application,
+        id_ivisurf, window->surface);
+
+    if (window->ivi_surface == NULL) {
+       DEBUG_PRINT_ERROR("Failed to create ivi_client_surface\n");
+       return NULL;
+    }
+
+    ivi_surface_add_listener(window->ivi_surface,
+    &ivi_surface_listener, window);
+  } else {
+     g_assert(0);
+  }
+
+  return window;
+}
+static void
+destroy_window(struct window *window)
+{
+  if (window->xdg_surface)
+     xdg_surface_destroy(window->xdg_surface);
+  if (window->display->ivi_application) {
+     ivi_surface_destroy(window->ivi_surface);
+     ivi_application_destroy(window->display->ivi_application);
+  }
+  if (window->surface)
+     wl_surface_destroy(window->surface);
+  if (window)
+    free(window);
+}
+static struct eglimage *
+create_egl (struct display *display)
+{
+  if (display->display) {
+    struct eglimage *eglimage;
+    int major = 0, minor = 0;
+    eglimage =(struct eglimage *) calloc(1, sizeof *eglimage);
+    if (!eglimage)
+    return NULL;
+
+    /* Setup EGL */
+    eglimage->egldpy = eglGetDisplay(display->display);
+    if (! eglInitialize(eglimage->egldpy, &major, &minor)) {
+      eglimage->egldpy = EGL_NO_DISPLAY;
+      DEBUG_PRINT_ERROR("Failed to initialise EGLDisplay");
+      return NULL;
+    }
+
+    eglimage->eglCreateImage =
+      (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
+    eglimage->eglDestroyImage =
+      (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
+    eglimage->eglCreateWaylandBufferFromImage =
+      (PFNEGLCREATEWAYLANDBUFFERFROMIMAGEWL)
+        eglGetProcAddress("eglCreateWaylandBufferFromImageWL");
+
+    if (eglimage->eglCreateImage == NULL || eglimage->eglDestroyImage == NULL) {
+      DEBUG_PRINT_ERROR( "Failed to get EGL_KHR_image_base");
+    }
+
+    if (eglimage->eglCreateWaylandBufferFromImage == NULL) {
+      DEBUG_PRINT_ERROR("Failed to get EGL_WL_create_wayland_buffer_from_image");
+    }
+    return eglimage;
+  }
+  return NULL;
+}
+static void destroy_egl (struct eglimage * eglimage)
+{
+  if (eglimage->egldpy)
+    eglTerminate(eglimage->egldpy);
+  if (eglimage)
+    free(eglimage);
+  }
+#endif
 int open_display()
 {
+#ifdef FB_DISPLAY
 #ifdef _ANDROID_
   DEBUG_PRINT(" Opening /dev/graphics/fb0");
   fb_fd = open("/dev/graphics/fb0", O_RDWR);
@@ -4676,14 +5231,46 @@ int open_display()
   }
   DEBUG_PRINT("Display xres = %d, yres = %d ", vinfo.xres, vinfo.yres);
   return 0;
+#elif defined WL_DISPLAY
+ int major = 0, minor = 0;
+  int idx = -1;
+  display = create_display();
+  if (!display) {
+    DEBUG_PRINT_ERROR("create_display failed\n");
+    goto display_error;
+  }
+  eglimage = create_egl (display);
+  if (!eglimage) {
+    DEBUG_PRINT_ERROR("create_egl failed\n");
+    goto eglimage_error;
+  }
+  window = create_window(display, 480, 360);
+  if (!window) {
+    DEBUG_PRINT_ERROR("create_window failed\n");
+    goto window_error;
+  }
+  return 0;
+window_error:
+  destroy_egl(eglimage);
+eglimage_error:
+  destroy_display(display);
+display_error:
+  return -1;
+#endif
 }
 
 void close_display()
 {
+#ifdef FB_DISPLAY
   overlay_unset();
   overlay_vsync_ctrl(OMX_FALSE);
   close(fb_fd);
   fb_fd = -1;
+#elif defined WL_DISPLAY
+  destroy_window(window);
+  destroy_egl(eglimage);
+  destroy_display(display);
+#endif
 }
 
 void getFreePmem()
