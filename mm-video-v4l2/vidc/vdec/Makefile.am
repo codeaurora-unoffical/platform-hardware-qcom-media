@@ -70,6 +70,5 @@ c_sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_color_converter.cp
 lib_LTLIBRARIES = libOmxVdec.la
 libOmxVdec_la_SOURCES = $(c_sources)
 libOmxVdec_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
-libOmxVdec_la_CFLAGS += ../libc2d2colorconvert/libc2dcolorconvert.la
-libOmxVdec_la_LDFLAGS = -llog -lutils -lbinder -lcutils -ldl -lqdMetaData -lglib-2.0 -shared -version-info 0
-
+libOmxVdec_la_LIBADD = -llog -lbinder -lcutils -lqdMetaData
+libOmxVdec_la_LDFLAGS = -module -shared -avoid-version $(GLIB_LIBS)
