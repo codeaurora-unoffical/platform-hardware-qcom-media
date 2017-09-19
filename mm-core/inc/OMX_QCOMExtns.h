@@ -466,7 +466,7 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     /* OMX.google.android.index.prependSPSPPSToIDRFrames */
     OMX_QcomIndexParamSequenceHeaderWithIDR = 0x7F00002A,
 
-    OMX_QcomIndexParamH264AUDelimiter = 0x7F00002B,
+    OMX_QcomIndexParamAUDelimiter = 0x7F00002B,
 
     OMX_QcomIndexParamVideoDownScalar = 0x7F00002C,
 
@@ -639,7 +639,6 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     /* Suggest how big Iframe sizes should be */
     OMX_QTIIndexParamIframeSizeType = 0x7F000070,
 
-    OMX_QcomIndexParamAUDelimiter = 0x7F000071,
 };
 
 /**
@@ -1092,18 +1091,6 @@ typedef struct OMX_QCOM_VIDEO_CONFIG_QPRANGE
    OMX_U32 nMinQP;          /** The number for minimum quantization parameter */
    OMX_U32 nMaxQP;          /** The number for maximum quantization parameter */
 } OMX_QCOM_VIDEO_CONFIG_QPRANGE;
-
-/**
- * This structure describes the parameters for the
- * OMX_QcomIndexParamH264AUDelimiter extension.  It enables/disables
- * the AU delimiters in the H264 stream, which is used by WFD.
- */
-typedef struct OMX_QCOM_VIDEO_CONFIG_H264_AUD
-{
-   OMX_U32 nSize;           /** Size of the structure in bytes */
-   OMX_VERSIONTYPE nVersion;/** OMX specification version information */
-   OMX_BOOL bEnable;        /** Enable/disable the setting */
-} OMX_QCOM_VIDEO_CONFIG_H264_AUD;
 
 /**
  * This structure describes the parameters for the
