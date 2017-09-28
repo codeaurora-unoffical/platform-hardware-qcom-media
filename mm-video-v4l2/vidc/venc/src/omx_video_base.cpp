@@ -304,7 +304,7 @@ omx_video::omx_video():
     m_fbd_count(0),
     m_event_port_settings_sent(false),
     hw_overload(false),
-    m_graphicbuffer_size(0)
+    m_graphicbuffer_size(0),
     m_buffer_freed(0)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
