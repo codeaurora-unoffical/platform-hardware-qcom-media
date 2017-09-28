@@ -721,6 +721,8 @@ class omx_video: public qc_omx_component
         OMX_U64 profile_start_time;
         OMX_U64 profile_last_time;
         bool profile_etb();
+
+        bool m_buffer_freed;
 };
 
 #endif // __OMX_VIDEO_BASE_H__
