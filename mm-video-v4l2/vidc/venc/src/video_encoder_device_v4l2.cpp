@@ -939,7 +939,7 @@ bool venc_dev::handle_output_extradata(void *buffer, int index)
                 p_extra->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE) + p_extradata->data_size, 4);
                 p_extra->nVersion.nVersion = OMX_SPEC_VERSION;
                 p_extra->nPortIndex = OMX_DirOutput;
-                p_extra->eType = (OMX_EXTRADATATYPE) QOMX_ExtraDataVideoMultiSliceInfo;
+                p_extra->eType = (OMX_EXTRADATATYPE) OMX_ExtraDataVideoMultiSliceInfo;
                 p_extra->nDataSize = p_extradata->data_size;
                 memcpy(p_extra->data, p_extradata->data, p_extradata->data_size);
                 DEBUG_PRINT_LOW("MultiSlice Info Extradata: num slices = %d", *((OMX_U32 *)p_extra->data));

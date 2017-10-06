@@ -636,49 +636,6 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
 #ifndef _ANDROID_
 /**
- * Enumeration used to define the extended video extra data payload types not
- * present in the OpenMax IL 1.1.2 specification.
- *
- * ENUMS:
- *  VideoMultiSliceInfo : Multi slice layout information
- *
- *  Slice information layout:
- *  First 4 bytes = Number of Slice Entries
- *
- *  Then individual slice entries: 8 bytes per entry.
- *  Slice1 information: offset (4 bytes), Length (4 bytes)
- *  Slice2 information: offset (4 bytes), Length (4 bytes)
- *  Slice3 information: offset (4 bytes), Length (4 bytes)
- *  ...................................
- *  ...................................
- *  SliceN information: offset (4 bytes), Length (4 bytes)
- *
- *
- *  VideoNumConcealedMB : Number of concealed MBs
- *
- *  The data array consists of an unsigned 32-bit size field
- *  indicating the number of concealed macroblocks in the
- *  uncompressed frame.
- *
- *
- *  QOMX_ExtraDataOMXIndex : Indicates that the data payload contains an
- *  OpenMax index and associated payload.
- *
- *  The data of the extra data payload shall contain the value of the
- *  OMX_INDEXTYPE corresponding to the requested operation as an unsigned
- *  32 bit number occupying the first four bytes of the payload. The index
- *  will be immediately followed by the associated structure. Padding bytes
- *  are appended to ensure 32 bit address alignment if needed.
- */
-typedef enum QOMX_VIDEO_EXTRADATATYPE
-{
-   QOMX_ExtraDataVideoMultiSliceInfo = 0x7F100000,
-   QOMX_ExtraDataVideoNumConcealedMB,
-   QOMX_ExtraDataOMXIndex,
-   QOMX_ExtraDataHDCPEncryptionInfo
-} QOMX_VIDEO_EXTRADATATYPE;
-
-/**
 * A pointer to this struct is passed to OMX_SetParameter when the extension
 * index for the 'OMX.google.android.index.prependSPSPPSToIDRFrames' extension
 * is given.
@@ -1508,6 +1465,7 @@ typedef enum OMX_QCOM_EXTRADATATYPE
     OMX_ExtraDataDisplayColourSEI =        0x7F000011,
     OMX_ExtraDataLightLevelSEI =           0x7F000012,
     OMX_ExtraDataEncoderOverrideQPInfo =   0x7F000013,
+    OMX_ExtraDataVideoMultiSliceInfo =     0x7F000014,
 } OMX_QCOM_EXTRADATATYPE;
 
 typedef struct  OMX_STREAMINTERLACEFORMATTYPE {
