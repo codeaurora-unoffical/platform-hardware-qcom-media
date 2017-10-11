@@ -968,7 +968,7 @@ void* fbd_thread(void* pArg)
         }
       }
 #ifdef WL_DISPLAY
-      if ( isdisplayopened == FALSE)
+      if ( displayYuv && isdisplayopened == FALSE)
       {
         if (open_display() != 0)
         {
