@@ -833,6 +833,7 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     m_smoothstreaming_width = 0;
     m_smoothstreaming_height = 0;
     m_decode_order_mode = false;
+    m_client_req_turbo_mode = false;
     is_q6_platform = false;
     m_input_pass_buffer_fd = false;
     memset(&m_extradata_info, 0, sizeof(m_extradata_info));
@@ -2411,6 +2412,9 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
             m_decoder_capability.min_height = frmsize.stepwise.min_height;
             m_decoder_capability.max_height = frmsize.stepwise.max_height;
         }
+
+        /* Based on UBWC enable, decide split mode to driver before calling S_FMT */
+        eRet = set_dpb(m_disable_ubwc_mode, V4L2_MPEG_VIDC_VIDEO_DPB_COLOR_FMT_UBWC);
 
         memset(&fmt, 0x0, sizeof(struct v4l2_format));
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -5175,7 +5179,14 @@ OMX_ERRORTYPE  omx_vdec::set_config(OMX_IN OMX_HANDLETYPE      hComp,
         control.id = V4L2_CID_MPEG_VIDC_VIDEO_OPERATING_RATE;
         control.value = rate->nU32;
 
-        operating_frame_rate = rate->nU32 >> 16;
+        if (rate->nU32 == QOMX_VIDEO_HIGH_PERF_OPERATING_MODE) {
+            DEBUG_PRINT_LOW("Turbo mode requested");
+            m_client_req_turbo_mode = true;
+        } else {
+            operating_frame_rate = rate->nU32 >> 16;
+            m_client_req_turbo_mode = false;
+            DEBUG_PRINT_LOW("Operating Rate Set = %d fps",  operating_frame_rate);
+        }
 
         if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control)) {
             ret = errno == -EBUSY ? OMX_ErrorInsufficientResources :
@@ -6919,10 +6930,10 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     memset( (void *)&plane, 0, sizeof(plane));
     int rc;
     unsigned long  print_count;
-    if (temp_buffer->buffer_len == 0 || (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
+    if (temp_buffer->buffer_len == 0 && (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
         struct v4l2_decoder_cmd dec;
 
-        DEBUG_PRINT_HIGH("INPUT EOS reached") ;
+        DEBUG_PRINT_HIGH("Input EOS reached. Converted to STOP command") ;
         memset(&dec, 0, sizeof(dec));
         dec.cmd = V4L2_DEC_CMD_STOP;
         rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_DECODER_CMD, &dec);
@@ -6934,6 +6945,13 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         }
         return OMX_ErrorNone;
     }
+
+    if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
+        DEBUG_PRINT_HIGH("Input EOS reached") ;
+        buf.flags = V4L2_QCOM_BUF_FLAG_EOS;
+    }
+
+
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
     buf.index = nPortIndex;
     buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -6944,6 +6962,8 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         (unsigned long)temp_buffer->offset;
     plane.reserved[0] = temp_buffer->pmem_fd;
     plane.reserved[1] = temp_buffer->offset;
+    plane.reserved[3] = (unsigned long)buffer->pMarkData;
+    plane.reserved[4] = (unsigned long)buffer->hMarkTargetComponent;
     plane.data_offset = 0;
     buf.m.planes = &plane;
     buf.length = 1;
@@ -8201,6 +8221,9 @@ int omx_vdec::async_message_process (void *context, void* message)
                    ((omxhdr - omx->m_out_mem_ptr) < (int)omx->drv_ctx.op_buf.actualcount) &&
                    (((struct vdec_output_frameinfo *)omxhdr->pOutputPortPrivate
                      - omx->drv_ctx.ptr_respbuffer) < (int)omx->drv_ctx.op_buf.actualcount)) {
+
+               omxhdr->pMarkData = (OMX_PTR)(unsigned long)plane[0].reserved[3];
+               omxhdr->hMarkTargetComponent = (OMX_HANDLETYPE)(unsigned long)plane[0].reserved[4];
 
                if (vdec_msg->msgdata.output_frame.len <=  omxhdr->nAllocLen) {
                    omxhdr->nFilledLen = vdec_msg->msgdata.output_frame.len;
@@ -9735,8 +9758,9 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                     struct msm_vidc_interlace_payload *payload;
                     payload = (struct msm_vidc_interlace_payload *)(void *)data->data;
                     if (payload) {
+                        DEBUG_PRINT_LOW("Interlace format %#x", payload->format);
                         enable = OMX_InterlaceFrameProgressive;
-                        switch (payload->format) {
+                        switch (payload->format & 0x1F) {
                             case MSM_VIDC_INTERLACE_FRAME_PROGRESSIVE:
                                 drv_ctx.interlace = VDEC_InterlaceFrameProgressive;
                                 break;
@@ -9771,10 +9795,10 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
 
                     }
                     if (client_extradata & OMX_INTERLACE_EXTRADATA) {
-                        append_interlace_extradata(p_extra, payload->format);
+                        append_interlace_extradata(p_extra, (payload->format & 0x1F));
                         p_extra = (OMX_OTHER_EXTRADATATYPE *) (((OMX_U8 *) p_extra) + ALIGN(p_extra->nSize, 4));
                         if (p_client_extra) {
-                            append_interlace_extradata(p_client_extra, payload->format);
+                            append_interlace_extradata(p_client_extra, (payload->format & 0x1F));
                             p_client_extra = (OMX_OTHER_EXTRADATATYPE *)
                                 (((OMX_U8 *)p_client_extra) + ALIGN(p_client_extra->nSize, 4));
                         }
@@ -11102,7 +11126,7 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr()
 
             DEBUG_PRINT_INFO("C2D: Start color convertion");
             status = c2dcc.convertC2D(omx->drv_ctx.ptr_outputbuffer[index].pmem_fd,
-                                      omx->m_out_mem_ptr->pBuffer, bufadd->pBuffer,
+                                      bufadd->pBuffer, bufadd->pBuffer,
                                       pmem_fd[index], pmem_baseaddress[index],
                                       pmem_baseaddress[index]);
 
