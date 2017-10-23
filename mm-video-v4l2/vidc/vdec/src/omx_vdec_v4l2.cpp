@@ -6664,15 +6664,40 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 #endif
                 if (drv_ctx.ptr_outputbuffer[index].pmem_fd > 0
                     && !ouput_egl_buffers && !m_use_output_pmem) {
-                    if (drv_ctx.op_buf_map_info[index].free_buffer) {
+                    if (drv_ctx.op_buf_map_info != NULL) {
+                        if (drv_ctx.op_buf_map_info[index].free_buffer) {
+                            if (!secure_mode) {
+                                DEBUG_PRINT_LOW("unmap the output buffer fd = %d",
+                                        drv_ctx.ptr_outputbuffer[0].pmem_fd);
+                                DEBUG_PRINT_LOW("unmap the ouput buffer size=%u  address = %p",
+                                        (unsigned int)drv_ctx.op_buf_map_info[index].map_size,
+                                        drv_ctx.op_buf_map_info[index].base_address);
+                                munmap (drv_ctx.op_buf_map_info[index].base_address,
+                                        drv_ctx.op_buf_map_info[index].map_size);
+                            }
+                            close (drv_ctx.ptr_outputbuffer[index].pmem_fd);
+                            drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
+#ifdef USE_ION
+                            free_ion_memory(&drv_ctx.op_buf_ion_info[index]);
+#endif
+                        } else {
+                            drv_ctx.op_buf_ion_info[index].ion_device_fd = -1;
+                            drv_ctx.op_buf_ion_info[index].ion_alloc_data.handle = 0;
+                            drv_ctx.op_buf_ion_info[index].fd_ion_data.fd = -1;
+                        }
+                        drv_ctx.op_buf_map_info[index].free_buffer = false;
+                        drv_ctx.op_buf_map_info[index].base_address = NULL;
+                        drv_ctx.op_buf_map_info[index].map_size = 0;
+                        drv_ctx.op_buf_map_info[index].offset = 0;
+                    } else {
                         if (!secure_mode) {
                             DEBUG_PRINT_LOW("unmap the output buffer fd = %d",
-                                    drv_ctx.ptr_outputbuffer[0].pmem_fd);
+                                    drv_ctx.ptr_outputbuffer[index].pmem_fd);
                             DEBUG_PRINT_LOW("unmap the ouput buffer size=%u  address = %p",
-                                    (unsigned int)drv_ctx.op_buf_map_info[index].map_size,
-                                    drv_ctx.op_buf_map_info[index].base_address);
-                            munmap (drv_ctx.op_buf_map_info[index].base_address,
-                                    drv_ctx.op_buf_map_info[index].map_size);
+                                    (unsigned int)drv_ctx.ptr_outputbuffer[index].mmaped_size * drv_ctx.op_buf.actualcount,
+                                    drv_ctx.ptr_outputbuffer[index].bufferaddr);
+                            munmap (drv_ctx.ptr_outputbuffer[index].bufferaddr,
+                                    drv_ctx.ptr_outputbuffer[index].mmaped_size * drv_ctx.op_buf.actualcount);
                         }
 #ifdef USE_GBM
                         free_gbm_memory(&drv_ctx.op_buf_gbm_info[index]);
@@ -6682,23 +6707,7 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
                         free_ion_memory(&drv_ctx.op_buf_ion_info[index]);
 #endif
 #endif
-                        drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
-
-                    } else {
-#ifdef USE_GBM
-                        drv_ctx.op_buf_gbm_info[index].gbm_device_fd = -1;
-                        drv_ctx.op_buf_gbm_info[index].bo = 0;
-                        drv_ctx.op_buf_gbm_info[index].bo_fd= -1;
-                        drv_ctx.op_buf_gbm_info[index].meta_fd= -1;
-#endif
-                        drv_ctx.op_buf_ion_info[index].ion_device_fd = -1;
-                        drv_ctx.op_buf_ion_info[index].ion_alloc_data.handle = 0;
-                        drv_ctx.op_buf_ion_info[index].fd_ion_data.fd = -1;
                     }
-                    drv_ctx.op_buf_map_info[index].free_buffer = false;
-                    drv_ctx.op_buf_map_info[index].base_address = NULL;
-                    drv_ctx.op_buf_map_info[index].map_size = 0;
-                    drv_ctx.op_buf_map_info[index].offset = 0;
                 }
 #ifdef _ANDROID_
             }
