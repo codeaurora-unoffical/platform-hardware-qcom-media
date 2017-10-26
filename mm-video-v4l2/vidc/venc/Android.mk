@@ -32,6 +32,7 @@ TARGETS_THAT_SUPPORT_MAX_H264_LEVEL_4 := msm8937
 TARGETS_THAT_SUPPORT_MAX_H264_LEVEL_51 := msm8953 sdm660
 TARGETS_THAT_SUPPORT_MAX_H264_LEVEL_52 := msm8996 msm8998 apq8098_latv
 TARGETS_THAT_DONOT_SUPPORT_TEMPORAL_LAYER := msm8909 msm8937
+TARGETS_THAT_SUPPORT_HYPERVISOR := msm8996_gvmq
 
 ifeq ($(TARGET_BOARD_PLATFORM),msm8610)
 libmm-venc-def += -DMAX_RES_720P
@@ -88,7 +89,7 @@ endif
 libmm-venc-def += -DUSE_CAMERA_METABUFFER_UTILS
 
 # Hypervisor
-ifneq (,$(filter $(MACHINE), "8x96autogvmquin" "8x96autogvmred"))
+ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_SUPPORT_HYPERVISOR)),true)
 libmm-venc-def += -D_HYPERVISOR_
 endif
 
