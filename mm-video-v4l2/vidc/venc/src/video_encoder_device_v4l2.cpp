@@ -334,7 +334,7 @@ void* venc_dev::async_venc_message_thread (void *input)
 
         if ((pfds[0].revents & POLLIN) || (pfds[0].revents & POLLRDNORM)) {
             v4l2_buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-            v4l2_buf.memory = V4L2_MEMORY_USERPTR;
+            v4l2_buf.memory = V4L2_MEMORY_DMABUF;
             v4l2_buf.length = omx->handle->num_output_planes;
             v4l2_buf.m.planes = plane;
 
@@ -387,7 +387,7 @@ void* venc_dev::async_venc_message_thread (void *input)
 
         if ((pfds[0].revents & POLLOUT) || (pfds[0].revents & POLLWRNORM)) {
             v4l2_buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-            v4l2_buf.memory = V4L2_MEMORY_USERPTR;
+            v4l2_buf.memory = V4L2_MEMORY_DMABUF;
             v4l2_buf.m.planes = plane;
             v4l2_buf.length = omx->handle->num_input_planes;
 
@@ -682,7 +682,7 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
     int height = m_sVenc_cfg.input_height;
     int width = m_sVenc_cfg.input_width;
     OMX_TICKS nTimeStamp = buf.timestamp.tv_sec * 1000000 + buf.timestamp.tv_usec;
-    int fd = buf.m.planes[0].reserved[0];
+    int fd = buf.m.planes[0].m.fd;
     bool vqzip_sei_found = false;
     char *p_extradata = NULL;
     OMX_OTHER_EXTRADATATYPE *data = NULL;
@@ -1833,7 +1833,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
     ret = ioctl(m_nDriver_fd, VIDIOC_S_FMT, &fmt);
     m_sInput_buff_property.datasize=fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 
-    bufreq.memory = V4L2_MEMORY_USERPTR;
+    bufreq.memory = V4L2_MEMORY_DMABUF;
     bufreq.count = 2;
 
     bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -2325,7 +2325,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                         }
                         m_sInput_buff_property.datasize=fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 
-                        bufreq.memory = V4L2_MEMORY_USERPTR;
+                        bufreq.memory = V4L2_MEMORY_DMABUF;
                         bufreq.count = portDefn->nBufferCountActual;
                         bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
                         if (ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
@@ -2408,7 +2408,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                             }
                         }
 
-                        bufreq.memory = V4L2_MEMORY_USERPTR;
+                        bufreq.memory = V4L2_MEMORY_DMABUF;
                         bufreq.count = portDefn->nBufferCountActual;
                         bufreq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
                         if (ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
@@ -3591,7 +3591,7 @@ unsigned venc_dev::venc_stop( void)
                 streaming[OUTPUT_PORT] = false;
 
             DEBUG_PRINT_LOW("Releasing registered buffers from driver on o/p port");
-            bufreq.memory = V4L2_MEMORY_USERPTR;
+            bufreq.memory = V4L2_MEMORY_DMABUF;
             bufreq.count = 0;
             bufreq.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
             ret = ioctl(m_nDriver_fd, VIDIOC_REQBUFS, &bufreq);
@@ -3613,7 +3613,7 @@ unsigned venc_dev::venc_stop( void)
                 streaming[CAPTURE_PORT] = false;
 
             DEBUG_PRINT_LOW("Releasing registered buffers from driver on capture port");
-            bufreq.memory = V4L2_MEMORY_USERPTR;
+            bufreq.memory = V4L2_MEMORY_DMABUF;
             bufreq.count = 0;
             bufreq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
             ret = ioctl(m_nDriver_fd, VIDIOC_REQBUFS, &bufreq);
@@ -3985,7 +3985,7 @@ bool venc_dev::venc_reconfig_reqbufs()
     DEBUG_PRINT_HIGH("venc_reconfig_reqbufs: output_mplane %lu, capture_mplane %lu",
         m_sInput_buff_property.actualcount, m_sOutput_buff_property.actualcount);
 
-    bufreq.memory = V4L2_MEMORY_USERPTR;
+    bufreq.memory = V4L2_MEMORY_DMABUF;
     bufreq.count = m_sInput_buff_property.actualcount;
     bufreq.type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
     if(ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
@@ -3993,7 +3993,7 @@ bool venc_dev::venc_reconfig_reqbufs()
         return false;
     }
 
-    bufreq.memory = V4L2_MEMORY_USERPTR;
+    bufreq.memory = V4L2_MEMORY_DMABUF;
     bufreq.count = m_sOutput_buff_property.actualcount;
     bufreq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     if(ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
@@ -4214,7 +4214,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     }
 
     bufhdr = (OMX_BUFFERHEADERTYPE *)buffer;
-    bufreq.memory = V4L2_MEMORY_USERPTR;
+    bufreq.memory = V4L2_MEMORY_DMABUF;
     bufreq.count = m_sInput_buff_property.actualcount;
     bufreq.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 
@@ -4701,11 +4701,10 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         plane[extra_idx].length = input_extradata_info.size;
         plane[extra_idx].m.userptr = (unsigned long) (input_extradata_info.uaddr + extradata_index * input_extradata_info.buffer_size);
 #ifdef USE_ION
-        plane[extra_idx].reserved[0] = input_extradata_info.ion.data_fd;
+        plane[extra_idx].m.fd = input_extradata_info.ion.data_fd;
 #endif
-        plane[extra_idx].reserved[1] = input_extradata_info.buffer_size * extradata_index;
+        plane[extra_idx].data_offset = input_extradata_info.buffer_size * extradata_index;
         plane[extra_idx].reserved[2] = input_extradata_info.size;
-        plane[extra_idx].data_offset = 0;
     } else if (extra_idx >= VIDEO_MAX_PLANES) {
         DEBUG_PRINT_ERROR("Extradata index higher than expected: %d\n", extra_idx);
         return false;
@@ -4713,9 +4712,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
     buf.index = index;
     buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-    buf.memory = V4L2_MEMORY_USERPTR;
-    plane[0].reserved[0] = fd;
-    plane[0].reserved[1] = 0;
+    buf.memory = V4L2_MEMORY_DMABUF;
+    plane[0].m.fd = fd;
+    plane[0].data_offset = 0;
     buf.m.planes = plane;
     buf.length = num_input_planes;
     buf.timestamp.tv_sec = bufhdr->nTimeStamp / 1000000;
@@ -4864,9 +4863,8 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
             DEBUG_PRINT_LOW("Batch: registering %d as %d", index, v4l2Id);
             buf.index = (unsigned)v4l2Id;
             buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-            buf.memory = V4L2_MEMORY_USERPTR;
-            plane[0].reserved[0] = MetaBufferUtil::getFdAt(hnd, i);
-            plane[0].reserved[1] = 0;
+            buf.memory = V4L2_MEMORY_DMABUF;
+            plane[0].m.fd = MetaBufferUtil::getFdAt(hnd, i);
             plane[0].data_offset = MetaBufferUtil::getIntAt(hnd, i, MetaBufferUtil::INT_OFFSET);
             plane[0].m.userptr = (unsigned long)meta_buf;
             plane[0].length = plane[0].bytesused = MetaBufferUtil::getIntAt(hnd, i, MetaBufferUtil::INT_SIZE);
@@ -4879,7 +4877,7 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
             extra_idx = EXTRADATA_IDX(num_input_planes);
 
             if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
-                int fd = plane[0].reserved[0];
+                int fd = plane[0].m.fd;
                 OMX_U32 extradata_index;
                 if (!venc_get_index_from_fd(fd, &extradata_index)) {
                     return false;
@@ -4888,10 +4886,9 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
                 plane[extra_idx].bytesused = 0;
                 plane[extra_idx].length = input_extradata_info.size;
                 plane[extra_idx].m.userptr = (unsigned long) (input_extradata_info.uaddr + extradata_index * input_extradata_info.buffer_size);
-                plane[extra_idx].reserved[0] = input_extradata_info.ion.data_fd;
-                plane[extra_idx].reserved[1] = input_extradata_info.buffer_size * extradata_index;
+                plane[extra_idx].m.fd = input_extradata_info.ion.data_fd;
+                plane[extra_idx].data_offset = input_extradata_info.buffer_size * extradata_index;
                 plane[extra_idx].reserved[2] = input_extradata_info.size;
-                plane[extra_idx].data_offset = 0;
             } else if (extra_idx >= VIDEO_MAX_PLANES) {
                 DEBUG_PRINT_ERROR("Extradata index higher than expected: %d\n", extra_idx);
                 return false;
@@ -4910,7 +4907,7 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
             bufTimeStamp = bufhdr->nTimeStamp + MetaBufferUtil::getIntAt(hnd, i, MetaBufferUtil::INT_TIMESTAMP) / 1000;
 
             DEBUG_PRINT_LOW(" Q Batch [%d of %d] : buf=%p fd=%d len=%d TS=%lld",
-                i, numBufs, bufhdr, plane[0].reserved[0], plane[0].length, bufTimeStamp);
+                i, numBufs, bufhdr, plane[0].m.fd, plane[0].length, bufTimeStamp);
             buf.timestamp.tv_sec = bufTimeStamp / 1000000;
             buf.timestamp.tv_usec = (bufTimeStamp % 1000000);
 
@@ -4996,11 +4993,10 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
 
     buf.index = index;
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    buf.memory = V4L2_MEMORY_USERPTR;
+    buf.memory = V4L2_MEMORY_DMABUF;
     plane[0].length = bufhdr->nAllocLen;
     plane[0].bytesused = bufhdr->nFilledLen;
-    plane[0].reserved[0] = fd;
-    plane[0].reserved[1] = 0;
+    plane[0].m.fd = fd;
     plane[0].data_offset = bufhdr->nOffset;
     buf.m.planes = plane;
     buf.length = num_output_planes;
@@ -5036,10 +5032,9 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
         plane[extra_idx].length = output_extradata_info.buffer_size;
         plane[extra_idx].m.userptr = (unsigned long) (output_extradata_info.uaddr + index * output_extradata_info.buffer_size);
 #ifdef USE_ION
-        plane[extra_idx].reserved[0] = output_extradata_info.ion.data_fd;
+        plane[extra_idx].m.fd = output_extradata_info.ion.data_fd;
 #endif
-        plane[extra_idx].reserved[1] = output_extradata_info.buffer_size * index;
-        plane[extra_idx].data_offset = 0;
+        plane[extra_idx].data_offset = output_extradata_info.buffer_size * index;
     } else if (extra_idx >= VIDEO_MAX_PLANES) {
         DEBUG_PRINT_ERROR("Extradata index higher than expected: %d", extra_idx);
         return false;

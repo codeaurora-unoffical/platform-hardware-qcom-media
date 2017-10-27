@@ -2749,9 +2749,9 @@ OMX_ERRORTYPE  omx_video::use_input_buffer(
 
         } else {
             OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *pParam = reinterpret_cast<OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *>((*bufferHdr)->pAppPrivate);
-            DEBUG_PRINT_LOW("Inside qcom_ext with luma:(fd:%lu,offset:0x%x)", pParam->pmem_fd, (unsigned)pParam->offset);
 
             if (pParam) {
+                DEBUG_PRINT_LOW("Inside qcom_ext with luma:(fd:%lu,offset:0x%x)", pParam->pmem_fd, (unsigned)pParam->offset);
                 m_pInput_pmem[i].fd = pParam->pmem_fd;
                 m_pInput_pmem[i].offset = pParam->offset;
                 m_pInput_pmem[i].size = m_sInPortDef.nBufferSize;
