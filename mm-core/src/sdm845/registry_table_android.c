@@ -602,22 +602,6 @@ omx_core_cb_type core[] =
     }
   },
   {
-    "OMX.qcom.file.muxer",
-    NULL, // Create instance function
-    // Unique instance handle
-    {
-      NULL,
-      NULL,
-      NULL,
-      NULL
-    },
-    NULL,   // Shared object library handle
-    "libOmxMux.so",
-    {
-      "container_muxer.mp2"
-    }
-  },
-  {
     "OMX.qti.vdec.vpp",
     NULL, // Create instance function
     // Unique instance handle
@@ -631,6 +615,22 @@ omx_core_cb_type core[] =
     "libOmxVpp.so",
     {
       "iv_processor.yuv"
+    }
+  },
+  {
+    "OMX.qcom.audio.decoder.multiaac",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxAacDec.so",
+    {
+      "audio_decoder.aac"
     }
   },
   {
@@ -650,8 +650,8 @@ omx_core_cb_type core[] =
     }
   },
   {
-    "OMX.qcom.audio.decoder.aac",
-    NULL,   // Create instance function
+    "OMX.qcom.file.muxer",
+    NULL, // Create instance function
     // Unique instance handle
     {
       NULL,
@@ -660,13 +660,13 @@ omx_core_cb_type core[] =
       NULL
     },
     NULL,   // Shared object library handle
-    "libOmxAacDec.so",
+    "libOmxMux.so",
     {
-      "audio_decoder.aac"
+      "container_muxer.mp2"
     }
   },
   {
-    "OMX.qcom.audio.decoder.multiaac",
+    "OMX.qcom.audio.decoder.aac",
     NULL,   // Create instance function
     // Unique instance handle
     {
