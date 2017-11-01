@@ -3035,6 +3035,7 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
             return OMX_ErrorNone;
         else {
             c2d_conv.close();
+            c2d_opened = false;
             opaque_buffer_hdr[index] = NULL;
         }
     }
