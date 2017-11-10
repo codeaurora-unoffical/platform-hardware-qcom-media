@@ -38,7 +38,7 @@
 #include <errno.h>
 #include <media/msm_media_info.h>
 #include <gralloc_priv.h>
-
+#include <stdint.h>
 #undef LOG_TAG
 #define LOG_TAG "C2DColorConvert"
 #define ALIGN( num, to ) (((num) + (to-1)) & (~(to-1)))
