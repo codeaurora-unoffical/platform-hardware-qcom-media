@@ -46,7 +46,7 @@ extern "C" {
 #include "OMX_Core.h"
 #include "OMX_Video.h"
 #include "string.h"
-
+#include <stdint.h>
 #define OMX_VIDEO_MAX_HP_LAYERS 6
 
 /**
@@ -2139,6 +2139,7 @@ typedef struct QOMX_VIDEO_CLIENT_EXTRADATA {
 #if defined(__cplusplus) && defined(USE_CAMERA_METABUFFER_UTILS)
 
 #define CAM_META_BUFFER_EVENT_PERF 0x01
+#include <cutils/native_handle.h>
 
 /**
  * Camera1 meta-buffer payload create/access/modify utility
