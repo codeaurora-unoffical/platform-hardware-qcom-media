@@ -674,6 +674,8 @@ class omx_video: public qc_omx_component
         int pending_output_buffers;
 
         uint64_t m_out_bm_count;
+        uint64_t m_client_out_bm_count;
+        uint64_t m_client_in_bm_count;
         uint64_t m_inp_bm_count;
         uint64_t m_flags;
         uint64_t m_etb_count;
@@ -688,6 +690,7 @@ class omx_video: public qc_omx_component
         extra_data_handler extra_data_handle;
         bool hw_overload;
         char m_platform[OMX_MAX_STRINGNAME_SIZE];
+        bool m_buffer_freed;
 };
 
 #endif // __OMX_VIDEO_BASE_H__
