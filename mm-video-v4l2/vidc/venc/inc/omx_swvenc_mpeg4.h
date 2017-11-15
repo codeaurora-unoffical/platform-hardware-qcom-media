@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -117,6 +117,7 @@ class omx_venc: public omx_video
         OMX_U32 dev_resume(void);
         OMX_U32 dev_start_done(void);
         OMX_U32 dev_set_message_thread_id(pthread_t);
+        bool dev_handle_empty_eos_buffer(void);
         bool dev_use_buf( void *,unsigned,unsigned);
         bool dev_free_buf( void *,unsigned);
         bool dev_empty_buf(void *, void *,unsigned,unsigned);
