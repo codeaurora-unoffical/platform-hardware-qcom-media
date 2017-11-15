@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -1755,6 +1755,24 @@ OMX_U32 omx_venc::dev_set_message_thread_id(pthread_t tid)
     // nothing to be done for sw encoder
     (void)tid;
 
+    RETURN(true);
+}
+
+bool omx_venc::dev_handle_empty_eos_buffer(void)
+{
+    ENTER_FUNC();
+    SWVENC_STATUS Ret;
+    SWVENC_IPBUFFER ipbuffer;
+    ipbuffer.p_buffer = NULL;
+    ipbuffer.filled_length = 0;
+    ipbuffer.flags = SWVENC_FLAG_EOS;
+    Ret = swvenc_emptythisbuffer(m_hSwVenc, &ipbuffer);
+    if (Ret != SWVENC_S_SUCCESS)
+    {
+        DEBUG_PRINT_ERROR("%s, swvenc_emptythisbuffer failed (%d)",
+                __FUNCTION__, Ret);
+        RETURN(false);
+    }
     RETURN(true);
 }
 

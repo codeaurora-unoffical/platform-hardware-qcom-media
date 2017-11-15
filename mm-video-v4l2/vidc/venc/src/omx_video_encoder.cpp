@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -2503,6 +2503,11 @@ OMX_U32 omx_venc::dev_start_done(void)
 OMX_U32 omx_venc::dev_set_message_thread_id(pthread_t tid)
 {
     return handle->venc_set_message_thread_id(tid);
+}
+
+bool omx_venc::dev_handle_empty_eos_buffer(void)
+{
+    return true;
 }
 
 bool omx_venc::dev_use_buf(void *buf_addr,unsigned port,unsigned index)

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2017, Linux Foundation. All rights reserved.
+Copyright (c) 2010-2018, Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -3970,6 +3970,19 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         if (nBufIndex >= m_sInPortDef.nBufferCountActual) {
             DEBUG_PRINT_ERROR("ERROR: ETBProxy: Invalid bufIndex = %u", nBufIndex);
             return OMX_ErrorBadParameter;
+        }
+    }
+
+    if (meta_mode_enable && !mUsesColorConversion) {
+        VideoGrallocMetadata *media_buffer = (VideoGrallocMetadata *)meta_buffer_hdr[nBufIndex].pBuffer;
+        if (buffer->nFilledLen == 0 && (buffer->nFlags & OMX_BUFFERFLAG_EOS) && !media_buffer->pHandle) {
+            DEBUG_PRINT_LOW("Zero length EOS buffer");
+            if(!dev_handle_empty_eos_buffer())
+                return OMX_ErrorHardware;
+            else {
+                post_event((unsigned long)buffer, 0, OMX_COMPONENT_GENERATE_EBD);
+                return OMX_ErrorNone;
+            }
         }
     }
 
