@@ -1758,22 +1758,22 @@ OMX_U32 omx_venc::dev_set_message_thread_id(pthread_t tid)
     RETURN(true);
 }
 
-bool omx_venc::dev_handle_empty_eos_buffer(void)
+OMX_U32 omx_venc::dev_handle_empty_eos_buffer(void)
 {
     ENTER_FUNC();
     SWVENC_STATUS Ret;
     SWVENC_IPBUFFER ipbuffer;
     ipbuffer.p_buffer = NULL;
     ipbuffer.filled_length = 0;
-    ipbuffer.flags = SWVENC_FLAG_EOS;
+    ipbuffer.flags |= SWVENC_FLAG_EOS;
     Ret = swvenc_emptythisbuffer(m_hSwVenc, &ipbuffer);
     if (Ret != SWVENC_S_SUCCESS)
     {
         DEBUG_PRINT_ERROR("%s, swvenc_emptythisbuffer failed (%d)",
                 __FUNCTION__, Ret);
-        RETURN(false);
+        RETURN(2);
     }
-    RETURN(true);
+    RETURN(0);
 }
 
 bool omx_venc::dev_use_buf(void *buf_addr,unsigned port,unsigned index)
