@@ -327,6 +327,7 @@ enum OMX_QCOM_COLOR_FORMATTYPE
     QOMX_COLOR_Format32bitRGBA8888,
     QOMX_COLOR_Format32bitRGBA8888Compressed,
     QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m10bitCompressed,
+    QOMX_COLOR_FORMATYUV420SemiPlanarP010Venus,
     QOMX_COLOR_FormatAndroidOpaque = (OMX_COLOR_FORMATTYPE) OMX_COLOR_FormatVendorStartUnused  + 0x789,
 };
 
@@ -662,6 +663,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /* TME configuration */
     OMX_IndexParamVideoTme = 0x7F000077,
+
+    /* Set Color Space Conversion */
+    OMX_QTIIndexParamColorSpaceConversion = 0x7F000078,
 
     /* Capabilities */
     OMX_QTIIndexParamCapabilitiesVTDriverVersion = 0x7F100000,

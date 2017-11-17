@@ -37,8 +37,13 @@ void omx_video::init_vendor_extensions(VendorExtensionStore &store) {
     ADD_EXTENSION("qti-ext-enc-preprocess-mirror", OMX_IndexConfigCommonMirror, OMX_DirOutput)
     ADD_PARAM_END("flip", OMX_AndroidVendorValueInt32)
 
-    ADD_EXTENSION("qti-ext-enc-avc-intra-period", OMX_IndexConfigVideoAVCIntraPeriod, OMX_DirOutput)
+    ADD_EXTENSION("qti-ext-enc-avc-intra-period", QOMX_IndexConfigVideoIntraperiod, OMX_DirOutput)
     ADD_PARAM    ("n-pframes",    OMX_AndroidVendorValueInt32)
+    ADD_PARAM_END("n-idr-period", OMX_AndroidVendorValueInt32)
+
+    ADD_EXTENSION("qti-ext-enc-intra-period", QOMX_IndexConfigVideoIntraperiod, OMX_DirOutput)
+    ADD_PARAM    ("n-pframes",    OMX_AndroidVendorValueInt32)
+    ADD_PARAM    ("n-bframes",    OMX_AndroidVendorValueInt32)
     ADD_PARAM_END("n-idr-period", OMX_AndroidVendorValueInt32)
 
     ADD_EXTENSION("qti-ext-enc-error-correction", OMX_QcomIndexParamVideoSliceSpacing, OMX_DirOutput)
@@ -104,6 +109,8 @@ void omx_video::init_vendor_extensions(VendorExtensionStore &store) {
     ADD_PARAM    ("max-p-count", OMX_AndroidVendorValueInt32)
     ADD_PARAM_END("max-b-count", OMX_AndroidVendorValueInt32)
 
+    ADD_EXTENSION("qti-ext-enc-colorspace-conversion", OMX_QTIIndexParamColorSpaceConversion, OMX_DirInput)
+    ADD_PARAM_END("enable", OMX_AndroidVendorValueInt32)
 }
 
 OMX_ERRORTYPE omx_video::get_vendor_extension_config(
@@ -137,10 +144,16 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
             setStatus &= vExt.setParamInt32(ext, "flip", m_sConfigFrameMirror.eMirror);
             break;
         }
-        case OMX_IndexConfigVideoAVCIntraPeriod:
+        case QOMX_IndexConfigVideoIntraperiod:
         {
-            setStatus &= vExt.setParamInt32(ext, "n-pframes", m_sConfigAVCIDRPeriod.nPFrames);
-            setStatus &= vExt.setParamInt32(ext, "n-idr-period", m_sConfigAVCIDRPeriod.nIDRPeriod);
+            if (vExt.isConfigKey(ext, "qti-ext-enc-avc-intra-period")) {
+                setStatus &= vExt.setParamInt32(ext, "n-pframes", m_sIntraperiod.nPFrames);
+                setStatus &= vExt.setParamInt32(ext, "n-idr-period", m_sIntraperiod.nIDRPeriod);
+            } else if (vExt.isConfigKey(ext, "qti-ext-enc-intra-period")) {
+                setStatus &= vExt.setParamInt32(ext, "n-pframes", m_sIntraperiod.nPFrames);
+                setStatus &= vExt.setParamInt32(ext, "n-bframes",  m_sIntraperiod.nBFrames);
+                setStatus &= vExt.setParamInt32(ext, "n-idr-period", m_sIntraperiod.nIDRPeriod);
+            }
             break;
         }
         case OMX_QcomIndexParamVideoSliceSpacing:
@@ -221,8 +234,10 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
             char exType[OMX_MAX_STRINGVALUE_SIZE+1];
             memset (exType,0, (sizeof(char)*OMX_MAX_STRINGVALUE_SIZE));
             if ((OMX_BOOL)(m_sExtraData & VENC_EXTRADATA_LTRINFO)){
-                if((strlcat(exType, getStringForExtradataType(OMX_ExtraDataVideoLTRInfo),
-                                OMX_MAX_STRINGVALUE_SIZE)) >= OMX_MAX_STRINGVALUE_SIZE) {
+                const char *extraDataVideoLTRInfo = getStringForExtradataType(OMX_ExtraDataVideoLTRInfo);
+                if(extraDataVideoLTRInfo != NULL &&
+                        (strlcat(exType, extraDataVideoLTRInfo,
+                                   OMX_MAX_STRINGVALUE_SIZE)) >= OMX_MAX_STRINGVALUE_SIZE) {
                     DEBUG_PRINT_LOW("extradata string size exceeds size %d",OMX_MAX_STRINGVALUE_SIZE );
                 }
             }
@@ -230,8 +245,10 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
                 if (exType[0]!=0) {
                     strlcat(exType,"|", OMX_MAX_STRINGVALUE_SIZE);
                 }
-                if((strlcat(exType, getStringForExtradataType(OMX_ExtraDataVideoEncoderMBInfo),
-                                OMX_MAX_STRINGVALUE_SIZE)) >= OMX_MAX_STRINGVALUE_SIZE) {
+                const char *extraDataVideoEncoderMBInfo = getStringForExtradataType(OMX_ExtraDataVideoEncoderMBInfo);
+                if(extraDataVideoEncoderMBInfo != NULL &&
+                        (strlcat(exType, extraDataVideoEncoderMBInfo,
+                                 OMX_MAX_STRINGVALUE_SIZE)) >= OMX_MAX_STRINGVALUE_SIZE) {
                     DEBUG_PRINT_LOW("extradata string size exceeds size %d",OMX_MAX_STRINGVALUE_SIZE );
                 }
             }
@@ -270,6 +287,11 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
             }
             setStatus &= vExt.setParamInt32(ext, "max-p-count",nPLayerCountMax);
             setStatus &= vExt.setParamInt32(ext, "max-b-count",nBLayerCountMax);
+            break;
+        }
+        case OMX_QTIIndexParamColorSpaceConversion:
+        {
+            setStatus &= vExt.setParamInt32(ext, "enable", m_sParamColorSpaceConversion.bEnable);
             break;
         }
         default:
@@ -343,23 +365,33 @@ OMX_ERRORTYPE omx_video::set_vendor_extension_config(
             }
             break;
         }
-        case OMX_IndexConfigVideoAVCIntraPeriod:
+        case QOMX_IndexConfigVideoIntraperiod:
         {
-            OMX_VIDEO_CONFIG_AVCINTRAPERIOD idrConfig;
-            memcpy(&idrConfig, &m_sConfigAVCIDRPeriod, sizeof(OMX_VIDEO_CONFIG_AVCINTRAPERIOD));
-            valueSet |= vExt.readParamInt32(ext, "n-pframes", (OMX_S32 *)&(idrConfig.nPFrames));
-            valueSet |= vExt.readParamInt32(ext, "n-idr-period", (OMX_S32 *)&(idrConfig.nIDRPeriod));
+            QOMX_VIDEO_INTRAPERIODTYPE intraPeriodConfig;
+            memcpy(&intraPeriodConfig, &m_sIntraperiod, sizeof(QOMX_VIDEO_INTRAPERIODTYPE));
+
+            if (vExt.isConfigKey(ext, "qti-ext-enc-avc-intra-period")) {
+                valueSet |= vExt.readParamInt32(ext, "n-pframes", (OMX_S32 *)&(intraPeriodConfig.nPFrames));
+                valueSet |= vExt.readParamInt32(ext, "n-idr-period", (OMX_S32 *)&(intraPeriodConfig.nIDRPeriod));
+
+                DEBUG_PRINT_HIGH("VENDOR-EXT: set_config: AVC-intra-period : nP=%d, nIDR=%d",
+                    intraPeriodConfig.nPFrames, intraPeriodConfig.nIDRPeriod);
+            } else if (vExt.isConfigKey(ext, "qti-ext-enc-intra-period")) {
+                valueSet |= vExt.readParamInt32(ext, "n-bframes", (OMX_S32 *)&(intraPeriodConfig.nBFrames));
+                valueSet |= vExt.readParamInt32(ext, "n-pframes", (OMX_S32 *)&(intraPeriodConfig.nPFrames));
+                valueSet |= vExt.readParamInt32(ext, "n-idr-period", (OMX_S32 *)&(intraPeriodConfig.nIDRPeriod));
+
+                DEBUG_PRINT_HIGH("VENDOR-EXT: set_config: intra-period : nIDR=%d, nP=%d, nB=%d",
+                intraPeriodConfig.nIDRPeriod, intraPeriodConfig.nPFrames, intraPeriodConfig.nBFrames);
+            }
             if (!valueSet) {
                 break;
             }
 
-            DEBUG_PRINT_HIGH("VENDOR-EXT: set_config: AVC-intra-period : nP=%d, nIDR=%d",
-                    idrConfig.nPFrames, idrConfig.nIDRPeriod);
-
             err = set_config(
-                    NULL, OMX_IndexConfigVideoAVCIntraPeriod, &idrConfig);
+                    NULL, (OMX_INDEXTYPE)QOMX_IndexConfigVideoIntraperiod, &intraPeriodConfig);
             if (err != OMX_ErrorNone) {
-                DEBUG_PRINT_ERROR("set_config: OMX_IndexConfigVideoAVCIntraPeriod failed !");
+                DEBUG_PRINT_ERROR("set_config: QOMX_IndexConfigVideoIntraperiod failed !");
             }
             break;
         }
@@ -656,6 +688,25 @@ OMX_ERRORTYPE omx_video::set_vendor_extension_config(
                     DEBUG_PRINT_ERROR("set_config: OMX_QcomIndexParamIndexExtraDataType failed !");
                 }
             } while ((token = strtok_r(NULL, "|", &rest)));
+            break;
+        }
+        case OMX_QTIIndexParamColorSpaceConversion:
+        {
+            QOMX_ENABLETYPE colorspaceConversionParam;
+            memcpy(&colorspaceConversionParam, &m_sParamColorSpaceConversion, sizeof(QOMX_ENABLETYPE));
+            valueSet |= vExt.readParamInt32(ext, "enable", (OMX_S32 *)&(colorspaceConversionParam.bEnable));
+            if (!valueSet) {
+                break;
+            }
+
+            DEBUG_PRINT_HIGH("VENDOR-EXT: set_param: color space conversion enable=%u", colorspaceConversionParam.bEnable);
+
+            err = set_parameter(
+                   NULL, (OMX_INDEXTYPE)OMX_QTIIndexParamColorSpaceConversion, &colorspaceConversionParam);
+            if (err != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("set_param: OMX_QTIIndexParamColorSpaceConversion failed !");
+            }
+
             break;
         }
         case OMX_QTIIndexParamCapabilitiesVTDriverVersion:

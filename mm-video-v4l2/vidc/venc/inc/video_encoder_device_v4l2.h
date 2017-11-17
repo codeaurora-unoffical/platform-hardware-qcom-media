@@ -47,6 +47,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <media/msm_vidc.h>
 #include <poll.h>
 #include <list>
+#include "color_metadata.h"
 
 #define TIMEOUT 5*60*1000
 #define BIT(num) (1 << (num))
@@ -426,6 +427,7 @@ class venc_dev
         bool is_gralloc_source_ubwc;
         bool is_camera_source_ubwc;
         bool is_csc_custom_matrix_enabled;
+        bool csc_enable;
         OMX_U32 fd_list[64];
 
     private:
@@ -463,6 +465,7 @@ class venc_dev
         msm_venc_temporal_layers            temporal_layers_config;
         OMX_BOOL                            downscalar_enabled;
         bool client_req_disable_bframe;
+        bool bframe_implicitly_enabled;
         bool client_req_disable_temporal_layers;
         bool client_req_turbo_mode;
 
@@ -584,6 +587,7 @@ class venc_dev
         };
         BatchInfo mBatchInfo;
         bool mUseAVTimerTimestamps;
+        bool venc_set_hdr_info(const MasteringDisplay&, const ContentLightLevel&);
 };
 
 enum instance_state {

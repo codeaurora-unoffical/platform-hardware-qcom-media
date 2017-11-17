@@ -88,6 +88,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #undef LOG_TAG
 #define LOG_TAG "OMX-VENC: venc_dev"
+
 //constructor
 venc_dev::venc_dev(class omx_venc *venc_class)
 {
@@ -147,6 +148,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&color_space, 0x0, sizeof(color_space));
     memset(&temporal_layers_config, 0x0, sizeof(temporal_layers_config));
     client_req_disable_bframe   = false;
+    bframe_implicitly_enabled = false;
     client_req_disable_temporal_layers  = false;
     client_req_turbo_mode  = false;
     intra_period.num_pframes = 29;
@@ -755,6 +757,11 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
         data->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE) +
             sizeof(struct msm_vidc_roi_qp_payload) +
             roi.info.nRoiMBInfoSize - 2 * sizeof(unsigned int), 4);
+        if (data->nSize > input_extradata_info.buffer_size  - consumed_len) {
+           DEBUG_PRINT_ERROR("Buffer size (%lu) is less than ROI extradata size (%u)",
+                             (input_extradata_info.buffer_size - consumed_len) ,data->nSize);
+           return false;
+        }
         data->nVersion.nVersion = OMX_SPEC_VERSION;
         data->nPortIndex = 0;
         data->eType = (OMX_EXTRADATATYPE)MSM_VIDC_EXTRADATA_ROI_QP;
@@ -768,6 +775,7 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
         DEBUG_PRINT_HIGH("Using ROI QP map: Enable = %d", roiData->b_roi_info);
         memcpy(roiData->data, roi.info.pRoiMBInfo, roi.info.nRoiMBInfoSize);
         data = (OMX_OTHER_EXTRADATATYPE *)((char *)data + data->nSize);
+        consumed_len += data->nSize;
     }
 
     if (m_roi_enabled) {
@@ -937,7 +945,7 @@ OMX_ERRORTYPE venc_dev::venc_get_supported_profile_level(OMX_VIDEO_PARAM_PROFILE
                             QOMX_VIDEO_AVCProfileConstrainedHigh,
                             QOMX_VIDEO_AVCProfileHigh };
     int hevc_profiles[2] = { OMX_VIDEO_HEVCProfileMain,
-                             OMX_VIDEO_HEVCProfileMain10 };
+                             OMX_VIDEO_HEVCProfileMain10HDR10 };
 
     if (!profileLevelType)
         return OMX_ErrorBadParameter;
@@ -1972,8 +1980,13 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                             input_extradata_info.count = m_sInput_buff_property.actualcount + 1;
 
                         if (!downscalar_enabled) {
-                            m_sVenc_cfg.dvs_height = portDefn->format.video.nFrameHeight;
-                            m_sVenc_cfg.dvs_width = portDefn->format.video.nFrameWidth;
+                            if (m_rotation.rotation == 90 || m_rotation.rotation == 270) {
+                                m_sVenc_cfg.dvs_height = portDefn->format.video.nFrameWidth;
+                                m_sVenc_cfg.dvs_width = portDefn->format.video.nFrameHeight;
+                            } else {
+                                m_sVenc_cfg.dvs_height = portDefn->format.video.nFrameHeight;
+                                m_sVenc_cfg.dvs_width = portDefn->format.video.nFrameWidth;
+                            }
                         }
                         memset(&fmt, 0, sizeof(fmt));
                         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -2701,6 +2714,12 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 }
                 break;
             }
+        case OMX_QTIIndexParamColorSpaceConversion:
+            {
+                QOMX_ENABLETYPE *pParam = (QOMX_ENABLETYPE *)paramData;
+                csc_enable = pParam->bEnable;
+                DEBUG_PRINT_INFO("CSC settings: Enabled : %d ", pParam->bEnable);
+            }
         default:
             DEBUG_PRINT_ERROR("ERROR: Unsupported parameter in venc_set_param: %u",
                     index);
@@ -2759,6 +2778,11 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                 if (intraperiod->nPortIndex == (OMX_U32) PORT_INDEX_OUT) {
                     if (venc_set_intra_period(intraperiod->nPFrames, intraperiod->nBFrames) == false) {
                         DEBUG_PRINT_ERROR("ERROR: Request for setting intra period failed");
+                        return false;
+                    }
+
+                    if (venc_set_idr_period(intraperiod->nIDRPeriod) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: Setting idr period failed");
                         return false;
                     }
                 }
@@ -3088,7 +3112,7 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                         matrix_coeffs = MSM_VIDC_MATRIX_601_6_525;
                         break;
                     case ColorAspects::MatrixSMPTE240M:
-                        transfer_chars = MSM_VIDC_MATRIX_SMPTE_240M;
+                        matrix_coeffs = MSM_VIDC_MATRIX_SMPTE_240M;
                         break;
                     case ColorAspects::MatrixBT2020:
                         matrix_coeffs = MSM_VIDC_MATRIX_BT_2020;
@@ -3914,7 +3938,6 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     }
 
                     if (!streaming[OUTPUT_PORT]) {
-                        unsigned int is_csc_enabled = 0;
                         ColorMetaData colorData= {};
                         // Moment of truth... actual colorspace is known here..
                         if (getMetaData(handle, GET_COLOR_METADATA, &colorData) == 0) {
@@ -3956,28 +3979,27 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                                 DEBUG_PRINT_ERROR("ENC_CONFIG: TP10UBWC colorformat not supported for this codec and profile");
                                 return false;
                             }
+
+                            if(colorData.masteringDisplayInfo.colorVolumeSEIEnabled ||
+                               colorData.contentLightLevel.lightLevelSEIEnabled) {
+                                if (!venc_set_hdr_info(colorData.masteringDisplayInfo, colorData.contentLightLevel)) {
+                                    DEBUG_PRINT_ERROR("HDR10-PQ Info Setting failed");
+                                    return false;
+                                } else {
+                                    DEBUG_PRINT_INFO("Encoding in HDR10-PQ mode");
+                                }
+                            } else {
+                                DEBUG_PRINT_INFO("Encoding in HLG mode");
+                            }
                         }
 
                         DEBUG_PRINT_INFO("color_space.primaries %d colorData.colorPrimaries %d, is_csc_custom_matrix_enabled=%d",
                                          color_space.primaries, colorData.colorPrimaries, is_csc_custom_matrix_enabled);
 
-                        bool is_color_space_601fr = (colorData.colorPrimaries == ColorPrimaries_BT601_6_525) &&
-                                                    (colorData.range == Range_Full) &&
-                                                    (colorData.transfer == Transfer_SMPTE_170M) &&
-                                                    (colorData.matrixCoefficients == MatrixCoEff_BT601_6_525);
-
-                        if (is_color_space_601fr &&
-                            color_space.primaries == ColorPrimaries_BT709_5)
-                        {
-                            DEBUG_PRINT_INFO("Enable CSC from BT601 to BT709 supported.");
-                            is_csc_enabled = 1;
-                        }
-
-                        // If CSC is enabled, then set control with colorspace from gralloc metadata
-                        if (is_csc_enabled) {
+                        if (csc_enable) {
                             struct v4l2_control control;
 
-                            /* Set 601FR as the Color Space. When we set CSC, this will be passed to
+                            /* Set Camera Color Space. When we set CSC, this will be passed to
                                fimrware as the InputPrimaries */
                             venc_set_colorspace(colorData.colorPrimaries, colorData.range,
                                                 colorData.transfer, colorData.matrixCoefficients);
@@ -3987,18 +4009,21 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
                                 DEBUG_PRINT_ERROR("venc_empty_buf: Failed to set VPE CSC");
                             }
-                            if (is_csc_custom_matrix_enabled) {
-                                control.id = V4L2_CID_MPEG_VIDC_VIDEO_VPE_CSC_CUSTOM_MATRIX;
-                                control.value = 1;
-                                if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
-                                    DEBUG_PRINT_ERROR("venc_empty_buf: Failed to enable VPE CSC custom matrix");
-                                } else {
-                                    DEBUG_PRINT_INFO("venc_empty_buf: Enabled VPE CSC custom matrix");
-                                    colorData.colorPrimaries =  ColorPrimaries_BT709_5;
-                                    colorData.range = Range_Limited;
-                                    colorData.transfer = Transfer_sRGB;
-                                    colorData.matrixCoefficients = MatrixCoEff_BT709_5;
+                            else {
+                                if (is_csc_custom_matrix_enabled) {
+                                    control.id = V4L2_CID_MPEG_VIDC_VIDEO_VPE_CSC_CUSTOM_MATRIX;
+                                    control.value = 1;
+                                    if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
+                                        DEBUG_PRINT_ERROR("venc_empty_buf: Failed to enable VPE CSC custom matrix");
+                                    } else {
+                                        DEBUG_PRINT_INFO("venc_empty_buf: Enabled VPE CSC custom matrix");
+                                    }
                                 }
+                                /* Change Colorspace to 709*/
+                                colorData.colorPrimaries =  ColorPrimaries_BT709_5;
+                                colorData.range = Range_Limited;
+                                colorData.transfer = Transfer_sRGB;
+                                colorData.matrixCoefficients = MatrixCoEff_BT709_5;
                             }
                         }
 
@@ -4099,6 +4124,19 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
             plane[0].bytesused = bufhdr->nFilledLen;
             DEBUG_PRINT_LOW("venc_empty_buf: non-camera buf: fd = %d filled %d of %d",
                     fd, plane[0].bytesused, plane[0].length);
+        }
+    }
+
+    if (!streaming[OUTPUT_PORT] &&
+        (m_sVenc_cfg.inputformat != V4L2_PIX_FMT_NV12_TP10_UBWC &&
+         m_sVenc_cfg.inputformat != V4L2_PIX_FMT_NV12_P010_UBWC &&
+         m_sVenc_cfg.inputformat != V4L2_PIX_FMT_NV12_UBWC)) {
+        if (bframe_implicitly_enabled) {
+            DEBUG_PRINT_HIGH("Disabling implicitly enabled B-frames");
+            if (!venc_set_intra_period(intra_period.num_pframes, 0)) {
+                DEBUG_PRINT_ERROR("Failed to set nPframes/nBframes");
+                return OMX_ErrorUndefined;
+            }
         }
     }
 
@@ -5012,6 +5050,7 @@ bool venc_dev::venc_reconfigure_intra_period()
     if (enableBframes && intra_period.num_bframes == 0) {
         intra_period.num_bframes = VENC_BFRAME_MAX_COUNT;
         intra_period.num_pframes = intra_period.num_pframes / (1 + intra_period.num_bframes);
+        bframe_implicitly_enabled = true;
     } else if (!enableBframes && intra_period.num_bframes > 0) {
         intra_period.num_pframes = intra_period.num_pframes + (intra_period.num_pframes * intra_period.num_bframes);
         intra_period.num_bframes = 0;
@@ -5085,7 +5124,7 @@ bool venc_dev::venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
         (codec_profile.profile != V4L2_MPEG_VIDC_VIDEO_HEVC_PROFILE_MAIN)        &&
         (codec_profile.profile != V4L2_MPEG_VIDC_VIDEO_HEVC_PROFILE_MAIN10)      &&
         (codec_profile.profile != V4L2_MPEG_VIDEO_H264_PROFILE_HIGH)) {
-        nBFrames=0;
+        nBFrames = 0;
     }
 
     if (temporal_layers_config.nPLayers > 1 && nBFrames) {
@@ -6743,8 +6782,8 @@ bool venc_dev::venc_validate_temporal_settings() {
         return false;
     }
 
-    if (rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_OFF) {
-        DEBUG_PRINT_HIGH("TemporalLayer: Hier layers cannot be enabled when RC is off");
+    if (rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_CFR) {
+        DEBUG_PRINT_HIGH("TemporalLayer: Hier layers cannot be enabled when RC is not VBR_CFR");
         return false;
     }
 
@@ -7073,7 +7112,7 @@ bool venc_dev::venc_get_profile_level(OMX_U32 *eProfile,OMX_U32 *eLevel)
                 *eProfile = OMX_VIDEO_HEVCProfileMain;
                 break;
             case V4L2_MPEG_VIDC_VIDEO_HEVC_PROFILE_MAIN10:
-                *eProfile = OMX_VIDEO_HEVCProfileMain10;
+                *eProfile = OMX_VIDEO_HEVCProfileMain10HDR10;
                 break;
             default:
                 *eProfile = OMX_VIDEO_HEVCProfileMax;
@@ -7263,6 +7302,67 @@ bool venc_dev::BatchInfo::isPending(int bufferId) {
     return existsId < kMaxBufs;
 }
 
+bool venc_dev::venc_set_hdr_info(const MasteringDisplay& mastering_disp_info,
+                            const ContentLightLevel& content_light_level_info)
+{
+    struct v4l2_ext_control ctrl[13];
+    struct v4l2_ext_controls controls;
+    const unsigned int RGB_PRIMARY_TABLE[] = {
+        V4L2_CID_MPEG_VIDC_VENC_RGB_PRIMARY_00,
+        V4L2_CID_MPEG_VIDC_VENC_RGB_PRIMARY_01,
+        V4L2_CID_MPEG_VIDC_VENC_RGB_PRIMARY_10,
+        V4L2_CID_MPEG_VIDC_VENC_RGB_PRIMARY_11,
+        V4L2_CID_MPEG_VIDC_VENC_RGB_PRIMARY_20,
+        V4L2_CID_MPEG_VIDC_VENC_RGB_PRIMARY_21,
+    };
+
+    memset(&controls, 0, sizeof(controls));
+    memset(ctrl, 0, sizeof(ctrl));
+
+    controls.count = 13;
+    controls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+    controls.controls = ctrl;
+
+    ctrl[0].id = V4L2_CID_MPEG_VIDC_VENC_HDR_INFO;
+    ctrl[0].value = V4L2_MPEG_VIDC_VENC_HDR_INFO_ENABLED;
+
+    /* ctrl[1] - ctrl[6] */
+    for (int i = 0; i < 3; i++) {
+        int first_idx = 2*i+1;
+        int second_idx = 2*i+2;
+        ctrl[first_idx].id = RGB_PRIMARY_TABLE[first_idx];
+        ctrl[first_idx].value = mastering_disp_info.primaries.rgbPrimaries[i][0];
+
+        ctrl[second_idx].id = RGB_PRIMARY_TABLE[second_idx];
+        ctrl[second_idx].value = mastering_disp_info.primaries.rgbPrimaries[i][1];
+    }
+
+    ctrl[7].id = V4L2_CID_MPEG_VIDC_VENC_WHITEPOINT_X;
+    ctrl[7].value = mastering_disp_info.primaries.whitePoint[0];
+
+    ctrl[8].id = V4L2_CID_MPEG_VIDC_VENC_WHITEPOINT_Y;
+    ctrl[8].value = mastering_disp_info.primaries.whitePoint[1];
+
+    ctrl[9].id = V4L2_CID_MPEG_VIDC_VENC_MAX_DISP_LUM;
+    ctrl[9].value = mastering_disp_info.maxDisplayLuminance;
+
+    ctrl[10].id = V4L2_CID_MPEG_VIDC_VENC_MIN_DISP_LUM;
+    ctrl[10].value = mastering_disp_info.minDisplayLuminance;
+
+    ctrl[11].id = V4L2_CID_MPEG_VIDC_VENC_MAX_CLL;
+    ctrl[11].value = content_light_level_info.maxContentLightLevel;
+
+    ctrl[12].id = V4L2_CID_MPEG_VIDC_VENC_MAX_FLL;
+    ctrl[12].value = content_light_level_info.minPicAverageLightLevel;
+
+    if (ioctl(m_nDriver_fd, VIDIOC_S_EXT_CTRLS, &controls)) {
+        DEBUG_PRINT_ERROR("VIDIOC_S_EXT_CTRLS failed for HDR Info");
+        return false;
+    }
+
+    return true;
+}
+
 #ifdef _VQZIP_
 venc_dev::venc_dev_vqzip::venc_dev_vqzip()
 {
@@ -7346,4 +7446,3 @@ venc_dev::venc_dev_vqzip::~venc_dev_vqzip()
     pthread_mutex_destroy(&lock);
 }
 #endif
-
