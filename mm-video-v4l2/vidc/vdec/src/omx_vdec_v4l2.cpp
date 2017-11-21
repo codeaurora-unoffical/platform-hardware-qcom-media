@@ -6114,7 +6114,21 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
 #endif
 
             if (!ouput_egl_buffers && !m_use_output_pmem) {
-#ifdef USE_ION
+#ifdef USE_GBM
+                drv_ctx.op_buf_gbm_info[i].gbm_device_fd = alloc_map_gbm_memory(
+                        drv_ctx.video_resolution.frame_width,
+                        drv_ctx.video_resolution.frame_height,
+                        drv_ctx.op_buf.buffer_size,drv_ctx.op_buf.alignment,
+                        &drv_ctx.op_buf_gbm_info[i],
+                        secure_mode ? SECURE_FLAGS_OUTPUT_BUFFER : 0);
+                if (drv_ctx.op_buf_gbm_info[i].gbm_device_fd < 0) {
+                    DEBUG_PRINT_ERROR("GBM device fd is bad %d", drv_ctx.op_buf_gbm_info[i].gbm_device_fd);
+                    return OMX_ErrorInsufficientResources;
+                }
+                drv_ctx.ptr_outputbuffer[i].pmem_fd = \
+                                      drv_ctx.op_buf_gbm_info[i].bo_fd;
+                m_pmem_info[i].pmeta_fd = drv_ctx.op_buf_gbm_info[i].meta_fd;
+#elif defined USE_ION
                 drv_ctx.op_buf_ion_info[i].ion_device_fd = alloc_map_ion_memory(
                         drv_ctx.op_buf.buffer_size,drv_ctx.op_buf.alignment,
                         &drv_ctx.op_buf_ion_info[i].ion_alloc_data,
@@ -6159,9 +6173,13 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                                 PROT_READ|PROT_WRITE, MAP_SHARED,
                                 drv_ctx.ptr_outputbuffer[i].pmem_fd,0);
                     if (drv_ctx.ptr_outputbuffer[i].bufferaddr == MAP_FAILED) {
+#ifdef USE_GBM
+                        free_gbm_memory(&drv_ctx.op_buf_gbm_info[i]);
+#else
                         close(drv_ctx.ptr_outputbuffer[i].pmem_fd);
 #ifdef USE_ION
                         free_ion_memory(&drv_ctx.op_buf_ion_info[i]);
+#endif
 #endif
                         DEBUG_PRINT_ERROR("Unable to mmap output buffer");
                         return OMX_ErrorInsufficientResources;
@@ -6193,6 +6211,9 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                 DEBUG_PRINT_LOW("vdec: use buf: pmem_fd=0x%lx",
                         pmem_info->pmem_fd);
                 drv_ctx.ptr_outputbuffer[i].pmem_fd = pmem_info->pmem_fd;
+#ifdef USE_GBM
+                m_pmem_info[i].pmeta_fd = pmem_info->pmeta_fd;
+#endif
                 drv_ctx.ptr_outputbuffer[i].offset = pmem_info->offset;
                 drv_ctx.ptr_outputbuffer[i].bufferaddr = buff;
                 drv_ctx.ptr_outputbuffer[i].mmaped_size =
@@ -6620,12 +6641,23 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
                             munmap (drv_ctx.op_buf_map_info[index].base_address,
                                     drv_ctx.op_buf_map_info[index].map_size);
                         }
+#ifdef USE_GBM
+                        free_gbm_memory(&drv_ctx.op_buf_gbm_info[index]);
+#else
                         close (drv_ctx.ptr_outputbuffer[index].pmem_fd);
-                        drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
 #ifdef USE_ION
                         free_ion_memory(&drv_ctx.op_buf_ion_info[index]);
 #endif
+#endif
+                        drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
+
                     } else {
+#ifdef USE_GBM
+                        drv_ctx.op_buf_gbm_info[index].gbm_device_fd = -1;
+                        drv_ctx.op_buf_gbm_info[index].bo = 0;
+                        drv_ctx.op_buf_gbm_info[index].bo_fd= -1;
+                        drv_ctx.op_buf_gbm_info[index].meta_fd= -1;
+#endif
                         drv_ctx.op_buf_ion_info[index].ion_device_fd = -1;
                         drv_ctx.op_buf_ion_info[index].ion_alloc_data.handle = 0;
                         drv_ctx.op_buf_ion_info[index].fd_ion_data.fd = -1;
@@ -7000,9 +7032,45 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             block_count = (drv_ctx.op_buf.actualcount + block_buf_count - 1) / block_buf_count;
         }
         unsigned int idx = 0;
+#ifdef USE_GBM
+        int pmeta_fd[MAX_NUM_INPUT_OUTPUT_BUFFERS] = {-1};
+        block_buf_count =1;
+        block_count = drv_ctx.op_buf.actualcount;
+        last_block_buf_count = 0;
+#endif
         DEBUG_PRINT_LOW("block_count = %d block_buf_count = %d last_block_buf_count = %d",
             block_count, block_buf_count, last_block_buf_count);
-#ifdef USE_ION
+#ifdef USE_GBM
+        struct vdec_gbm op_buf_gbm_info_temp[MAX_NUM_INPUT_OUTPUT_BUFFERS];
+        int cache_flag = client_buffers.is_color_conversion_enabled() ? 0 : ION_FLAG_CACHED;
+        for (; idx < block_count; idx++) {
+            int cnt = ((idx == block_count - 1) && last_block_buf_count) ?
+                last_block_buf_count : block_buf_count;
+            alloc_size[idx] = drv_ctx.op_buf.buffer_size * cnt;
+            op_buf_gbm_info_temp[idx].gbm_device_fd = alloc_map_gbm_memory(
+                    drv_ctx.video_resolution.frame_width,
+                    drv_ctx.video_resolution.frame_height,
+                    alloc_size[idx],
+                    secure_scaling_to_non_secure_opb ? SZ_4K : drv_ctx.op_buf.alignment,
+                    &op_buf_gbm_info_temp[idx],
+                    (secure_mode && !secure_scaling_to_non_secure_opb) ?
+                    SECURE_FLAGS_OUTPUT_BUFFER : cache_flag);
+            if (op_buf_gbm_info_temp[idx].gbm_device_fd < 0) {
+                DEBUG_PRINT_LOW("Failed to allocate chunk %ul size = %d", idx, alloc_size[idx]);
+                break;
+            }
+            pmem_fd[idx] = op_buf_gbm_info_temp[idx].bo_fd;
+            pmeta_fd[idx] = op_buf_gbm_info_temp[idx].meta_fd;
+
+            DEBUG_PRINT_LOW("Allocated chunk %ul fd = %d meta_fd = %d size = %d", idx, pmem_fd[idx], pmem_fd[idx],alloc_size[idx]);
+        }
+        if (idx != block_count) {
+            for (OMX_U32 i = 0; i < idx; i++) {
+                free_gbm_memory(&op_buf_gbm_info_temp[i]);
+            }
+            return OMX_ErrorInsufficientResources;
+        }
+#elif defined USE_ION
         struct vdec_ion op_buf_ion_info_temp[MAX_NUM_INPUT_OUTPUT_BUFFERS];
         int cache_flag = client_buffers.is_color_conversion_enabled() ? 0 : ION_FLAG_CACHED;
         for (; idx < block_count; idx++) {
@@ -7033,7 +7101,6 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             }
             return OMX_ErrorInsufficientResources;
         }
-
 #else
         for (idx = 0; idx < block_count; idx++) {
             pmem_fd[idx] = open (MEM_DEVICE,O_RDWR);
@@ -7069,9 +7136,13 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
                 if (pmem_baseaddress_temp[idx] == MAP_FAILED) {
                     DEBUG_PRINT_ERROR("MMAP failed for Size %u for fd = %d",
                             (unsigned int)alloc_size[idx], pmem_fd[idx]);
+#ifdef USE_GBM
+                    free_gbm_memory(&op_buf_gbm_info_temp[idx]);
+#else
                     close(pmem_fd[idx]);
 #ifdef USE_ION
                     free_ion_memory(&op_buf_ion_info_temp[idx]);
+#endif
 #endif
                     break;
                 }
@@ -7080,7 +7151,9 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
                 for (i = 0; i < idx; i++) {
                     munmap(pmem_baseaddress_temp[idx], alloc_size[idx]);
                     close(pmem_fd[i]);
-#ifdef USE_ION
+#ifdef USE_GBM
+                    free_gbm_memory(&op_buf_gbm_info_temp[idx]);
+#elif defined USE_ION
                     free_ion_memory(&op_buf_ion_info_temp[i]);
 #endif
                 }
@@ -7104,7 +7177,16 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             return OMX_ErrorInsufficientResources;
         }
 
-#ifdef USE_ION
+#ifdef USE_GBM
+        drv_ctx.op_buf_gbm_info = (struct vdec_gbm *)\
+                      calloc (sizeof(struct vdec_gbm),
+                      drv_ctx.op_buf.actualcount);
+        if (!drv_ctx.op_buf_gbm_info) {
+                 DEBUG_PRINT_ERROR("Failed to alloc drv_ctx.op_buf_gbm_info");
+            return OMX_ErrorInsufficientResources;
+        }
+
+#elif defined USE_ION
         drv_ctx.op_buf_ion_info = (struct vdec_ion *)\
                       calloc (sizeof(struct vdec_ion),
                               drv_ctx.op_buf.actualcount);
@@ -7168,7 +7250,13 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
                 int block_idx = i / block_buf_count;
                 drv_ctx.ptr_outputbuffer[i].pmem_fd = pmem_fd[block_idx];
                 m_pmem_info[i].pmem_fd = pmem_fd[block_idx];
-#ifdef USE_ION
+#ifdef USE_GBM
+                m_pmem_info[i].pmeta_fd = pmeta_fd[block_idx];
+                drv_ctx.op_buf_gbm_info[i].gbm_device_fd = op_buf_gbm_info_temp[block_idx].gbm_device_fd;
+                drv_ctx.op_buf_gbm_info[i].bo_fd= op_buf_gbm_info_temp[block_idx].bo_fd;
+                drv_ctx.op_buf_gbm_info[i].meta_fd= op_buf_gbm_info_temp[block_idx].meta_fd;
+                drv_ctx.op_buf_gbm_info[i].bo= op_buf_gbm_info_temp[block_idx].bo;
+#elif defined USE_ION
                 drv_ctx.op_buf_ion_info[i].ion_device_fd = op_buf_ion_info_temp[block_idx].ion_device_fd;
                 drv_ctx.op_buf_ion_info[i].ion_alloc_data = op_buf_ion_info_temp[block_idx].ion_alloc_data;
                 drv_ctx.op_buf_ion_info[i].fd_ion_data = op_buf_ion_info_temp[block_idx].fd_ion_data;
@@ -7217,7 +7305,13 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
                 free(drv_ctx.ptr_respbuffer);
                 drv_ctx.ptr_respbuffer = NULL;
             }
-#ifdef USE_ION
+#ifdef USE_GBM
+            if (drv_ctx.op_buf_gbm_info) {
+                DEBUG_PRINT_LOW("Free o/p gbm context");
+                free(drv_ctx.op_buf_gbm_info);
+                drv_ctx.op_buf_gbm_info = NULL;
+            }
+#elif defined USE_ION
             if (drv_ctx.op_buf_ion_info) {
                 DEBUG_PRINT_LOW("Free o/p ion context");
                 free(drv_ctx.op_buf_ion_info);
@@ -7251,9 +7345,12 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
 
             *bufferHdr = (m_out_mem_ptr + i );
             if (secure_mode) {
-#ifdef USE_ION
+#ifdef USE_GBM
                 drv_ctx.ptr_outputbuffer[i].bufferaddr =
-                    (OMX_U8 *)(intptr_t)drv_ctx.op_buf_ion_info[i].fd_ion_data.fd;
+                  (OMX_U8 *)(intptr_t)drv_ctx.op_buf_gbm_info[i].bo_fd;
+#elif defined USE_ION
+                drv_ctx.ptr_outputbuffer[i].bufferaddr =
+                  (OMX_U8 *)(intptr_t)drv_ctx.op_buf_ion_info[i].fd_ion_data.fd;
 #else
                 drv_ctx.ptr_outputbuffer[i].bufferaddr = *bufferHdr;
 #endif
@@ -7266,7 +7363,9 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             plane[0].length = drv_ctx.op_buf.buffer_size;
             plane[0].m.userptr = (unsigned long)drv_ctx.ptr_outputbuffer[i].bufferaddr -
                 (unsigned long)drv_ctx.ptr_outputbuffer[i].offset;
-#ifdef USE_ION
+#ifdef USE_GBM
+            plane[0].reserved[0] = drv_ctx.op_buf_gbm_info[i].bo_fd;
+#elif defined USE_ION
             plane[0].reserved[0] = drv_ctx.op_buf_ion_info[i].fd_ion_data.fd;
 #endif
             plane[0].reserved[1] = drv_ctx.op_buf_map_info[i].offset;
@@ -10156,6 +10255,101 @@ OMX_ERRORTYPE omx_vdec::push_input_vc1(OMX_HANDLETYPE hComp)
     }
     return OMX_ErrorNone;
 }
+#ifdef USE_GBM
+int omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,OMX_U32 buffer_size,
+                 OMX_U32 alignment,struct vdec_gbm *op_buf_gbm_info, int flag)
+{
+
+    int fd = -EINVAL;
+
+    struct gbm_device *gbm = NULL;
+    struct gbm_bo *bo = NULL;
+    int bo_fd = -1, meta_fd = -1;
+    if (!op_buf_gbm_info || buffer_size <= 0 ) {
+        DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_ion_memory");
+        return -EINVAL;
+    }
+
+    fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+       DEBUG_PRINT_ERROR("opening dri device for gbm failed with fd = %d", fd);
+       return fd;
+    }
+    DEBUG_PRINT_LOW("Successfully open dri device for gbm");
+    gbm = gbm_create_device(fd);
+    if (gbm == NULL) {
+       DEBUG_PRINT_ERROR("create gbm device failed");
+       close(fd);
+       return -ENOMEM;
+    } else {
+       DEBUG_PRINT_LOW( "Successfully created gbm device");
+    }
+
+
+    DEBUG_PRINT_LOW("create NV12 gbm_bo with width=%d, height=%d", w, h);
+    bo = gbm_bo_create(gbm, w, h,GBM_FORMAT_NV12,
+              GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+
+
+    if (bo == NULL) {
+      DEBUG_PRINT_ERROR("Create bo failed");
+      gbm_device_destroy(gbm);
+      close(fd);
+      fd = -ENOMEM;
+      return fd;
+    }
+
+    bo_fd = gbm_bo_get_fd(bo);
+    if (bo_fd < 0) {
+      DEBUG_PRINT_ERROR("Get bo fd failed");
+      gbm_bo_destroy(bo);
+      gbm_device_destroy(gbm);
+      close(fd);
+      fd = -ENOMEM;
+      return fd;
+    }
+
+    gbm_perform(GBM_PERFORM_GET_METADATA_ION_FD, bo, &meta_fd);
+    if (meta_fd < 0) {
+      DEBUG_PRINT_ERROR("Get bo meta fd failed");
+      gbm_bo_destroy(bo);
+      gbm_device_destroy(gbm);
+      close(fd);
+      fd = -ENOMEM;
+      return fd;
+    }
+    op_buf_gbm_info->gbm = gbm;
+    op_buf_gbm_info->bo = bo;
+    op_buf_gbm_info->bo_fd = bo_fd;
+    op_buf_gbm_info->meta_fd = meta_fd;
+
+    DEBUG_PRINT_LOW("allocate gbm bo fd meta fd  %p %d %d",bo,bo_fd,meta_fd);
+  return fd;
+}
+
+void omx_vdec::free_gbm_memory(struct vdec_gbm *buf_gbm_info) {
+     if(!buf_gbm_info) {
+       DEBUG_PRINT_ERROR(" GBM: free called with invalid fd/allocdata");
+       return;
+     }
+     DEBUG_PRINT_LOW("free gbm bo fd meta fd  %p %d %d",
+            buf_gbm_info->bo,buf_gbm_info->bo_fd,buf_gbm_info->meta_fd);
+
+     if (buf_gbm_info->bo)
+        gbm_bo_destroy(buf_gbm_info->bo);
+     buf_gbm_info->bo = NULL;
+
+     if (buf_gbm_info->gbm)
+        gbm_device_destroy(buf_gbm_info->gbm);
+     buf_gbm_info->gbm = NULL;
+
+     close(buf_gbm_info->gbm_device_fd);
+     buf_gbm_info->gbm_device_fd = -1;
+
+     buf_gbm_info->bo_fd = -1;
+     buf_gbm_info->meta_fd = -1;
+}
+#endif
 
 #ifndef USE_ION
 bool omx_vdec::align_pmem_buffers(int pmem_fd, OMX_U32 buffer_size,

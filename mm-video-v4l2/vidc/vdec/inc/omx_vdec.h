@@ -72,6 +72,10 @@ static ptrdiff_t x;
 extern "C" {
 #include <utils/Log.h>
 }
+#ifdef USE_GBM
+#include "gbm.h"
+#include "gbm_priv.h"
+#endif
 #include <linux/videodev2.h>
 #include <poll.h>
 #include "hevc_utils.h"
@@ -246,7 +250,15 @@ struct vdec_ion {
     struct ion_allocation_data ion_alloc_data;
 };
 #endif
-
+#ifdef USE_GBM
+struct vdec_gbm {
+    int gbm_device_fd;
+    struct gbm_device *gbm;
+    struct gbm_bo *bo;
+    unsigned long bo_fd;
+    unsigned long meta_fd;
+};
+#endif
 struct vdec_ion_map_info {
     bool free_buffer;
     unsigned char *base_address;
@@ -285,6 +297,9 @@ struct video_driver_context {
     struct vdec_ion h264_mv;
     struct vdec_ion meta_buffer;
     struct vdec_ion meta_buffer_iommu;
+#endif
+#ifdef USE_GBM
+    struct vdec_gbm *op_buf_gbm_info;
 #endif
     struct vdec_ion_map_info *op_buf_map_info;
     struct vdec_framerate frame_rate;
@@ -792,7 +807,11 @@ class omx_vdec: public qc_omx_component
                 struct ion_fd_data *fd_data,int flag);
         void free_ion_memory(struct vdec_ion *buf_ion_info);
 #endif
-
+#ifdef USE_GBM
+        int alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,OMX_U32 buffer_size,
+               OMX_U32 alignment,struct vdec_gbm *op_buf_gbm_info, int flag);
+        void free_gbm_memory(struct vdec_gbm *buf_gbm_info);
+#endif
 
         OMX_ERRORTYPE send_command_proxy(OMX_HANDLETYPE  hComp,
                 OMX_COMMANDTYPE cmd,
@@ -1132,6 +1151,9 @@ class omx_vdec: public qc_omx_component
                 OMX_BUFFERHEADERTYPE  m_out_mem_ptr_client[MAX_COUNT];
 #ifdef USE_ION
                 struct vdec_ion op_buf_ion_info[MAX_COUNT];
+#endif
+#ifdef USE_GBM
+                struct vdec_gbm op_buf_gbm_info[MAX_COUNT];
 #endif
                 unsigned char *pmem_baseaddress[MAX_COUNT];
                 int pmem_fd[MAX_COUNT];
