@@ -46,6 +46,7 @@
 #define ALIGN4K 4096
 #define ALIGN2K 2048
 #define ALIGN128 128
+#define ALIGN64 64
 #define ALIGN32 32
 #define ALIGN16 16
 
@@ -302,6 +303,7 @@ bool C2DColorConverter::isYUVSurface(ColorConvertFormat format)
         case NV12_2K:
         case NV12_128m:
         case NV12_UBWC:
+        case CbYCrY:
             return true;
         case RGB565:
         case RGBA8888:
@@ -428,6 +430,8 @@ uint32_t C2DColorConverter::getC2DFormat(ColorConvertFormat format)
             return C2D_COLOR_FORMAT_420_YV12;
         case NV12_UBWC:
             return C2D_COLOR_FORMAT_420_NV12 | C2D_FORMAT_UBWC_COMPRESSED;
+        case CbYCrY:
+            return C2D_COLOR_FORMAT_422_UYVY;
         default:
             ALOGE("Format not supported , %d\n", format);
             return -1;
@@ -458,6 +462,8 @@ size_t C2DColorConverter::calcStride(ColorConvertFormat format, size_t width)
             return ALIGN(width, ALIGN16);
         case NV12_UBWC:
             return VENUS_Y_STRIDE(COLOR_FMT_NV12_UBWC, width);
+        case CbYCrY:
+            return ALIGN(width*2, ALIGN64);
         default:
             return 0;
     }
@@ -551,6 +557,10 @@ size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size
             break;
         case NV12_UBWC:
             size = VENUS_BUFFER_SIZE(COLOR_FMT_NV12_UBWC, width, height);
+            break;
+        case CbYCrY:
+            size = ALIGN(ALIGN(width * 2, ALIGN64) * height, ALIGN4K);
+            break;
         default:
             break;
     }
