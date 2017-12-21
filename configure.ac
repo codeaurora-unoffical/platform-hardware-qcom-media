@@ -102,8 +102,8 @@ AC_ARG_ENABLE([use-glib],
         [use_glib="${enableval}"])
 
 AC_ARG_ENABLE([build-mm-video],
-        AC_HELP_STRING([--enable-use-glib],
-                [Enable conditional compile for use glib [default=no]]),
+        AC_HELP_STRING([--enable-build-mm-video],
+                [Enable conditional compilation for mm-video [default=no]]),
         [build_mm_video="${enableval}"])
 
 AC_ARG_ENABLE([target-hypervisor],
@@ -211,8 +211,9 @@ AC_SUBST([CFLAGS])
 
 AC_CONFIG_FILES([ \
         Makefile \
-	hypv-intercept/Makefile \
-        mm-core/Makefile
+        hypv-intercept/Makefile \
+        mm-core/Makefile \
+        libc2dcolorconvert/Makefile \
         mm-video-v4l2/Makefile \
         mm-video-v4l2/vidc/Makefile \
         mm-video-v4l2/vidc/venc/Makefile \
