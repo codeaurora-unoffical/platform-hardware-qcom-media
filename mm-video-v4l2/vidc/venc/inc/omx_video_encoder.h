@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2015, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -31,11 +31,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <unistd.h>
 #include "omx_video_base.h"
-#ifdef _MSM8974_
 #include "video_encoder_device_v4l2.h"
-#else
-#include "video_encoder_device.h"
-#endif
 
 extern "C" {
     OMX_API void * get_omx_component_factory_fn(void);
@@ -75,6 +71,7 @@ class omx_venc: public omx_video
         bool dev_fill_buf(void *, void *,unsigned,unsigned);
         bool dev_buffer_ready_to_queue(OMX_BUFFERHEADERTYPE *buffer);
         bool dev_get_buf_req(OMX_U32 *,OMX_U32 *,OMX_U32 *,OMX_U32);
+        bool dev_get_dimensions(OMX_U32 ,OMX_U32 *,OMX_U32 *);
         bool dev_set_buf_req(OMX_U32 *,OMX_U32 *,OMX_U32 *,OMX_U32);
         bool update_profile_level();
         bool dev_get_seq_hdr(void *, unsigned, unsigned *);
@@ -90,11 +87,13 @@ class omx_venc: public omx_video
         bool dev_get_batch_size(OMX_U32 *);
         bool dev_get_temporal_layer_caps(OMX_U32 * /*nMaxLayers*/,
                 OMX_U32 * /*nMaxBLayers*/);
+        bool dev_get_pq_status(OMX_BOOL *);
         bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height);
         bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height);
         bool dev_get_output_log_flag();
-        int dev_output_log_buffers(const char *buffer_addr, int buffer_len);
+        int dev_output_log_buffers(const char *buffer_addr,
+                                   int buffer_len, uint64_t timestamp);
         int dev_extradata_log_buffers(char *buffer);
         class perf_control {
             typedef int (*perf_lock_acquire_t)(int, int, int*, int);
@@ -116,6 +115,9 @@ class omx_venc: public omx_video
 #ifdef _UBWC_
     #define QOMX_DEFAULT_COLOR_FMT    QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed
     #define V4L2_DEFAULT_OUTPUT_COLOR_FMT   V4L2_PIX_FMT_NV12_UBWC
+#elif _NV21_
+    #define QOMX_DEFAULT_COLOR_FMT    QOMX_COLOR_FormatYVU420SemiPlanar
+    #define V4L2_DEFAULT_OUTPUT_COLOR_FMT   V4L2_PIX_FMT_NV21
 #else
     #define QOMX_DEFAULT_COLOR_FMT    QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m
     #define V4L2_DEFAULT_OUTPUT_COLOR_FMT   V4L2_PIX_FMT_NV12

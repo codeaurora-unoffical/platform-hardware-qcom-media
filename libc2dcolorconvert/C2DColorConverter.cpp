@@ -257,8 +257,8 @@ C2DColorConverter::~C2DColorConverter()
 int C2DColorConverter::convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData)
 {
     C2D_STATUS ret;
-    uint8_t *srcMappedGpuAddr = NULL;
-    uint8_t *dstMappedGpuAddr = NULL;
+    uint8_t *srcMappedGpuAddr = nullptr;
+    uint8_t *dstMappedGpuAddr = nullptr;
 
     if (mError) {
         DEBUG_PRINT_ERROR("C2D library initialization failed\n");
@@ -281,7 +281,7 @@ int C2DColorConverter::convertC2D(int srcFd, void *srcBase, void * srcData, int 
     }
 
     if (ret != C2D_STATUS_OK) {
-        DEBUG_PRINT_ERROR("Update src surface def failed\n");
+        ALOGE("Update src surface def failed\n");
         unmapGPUAddr((unsigned long)srcMappedGpuAddr);
         return -ret;
     }
@@ -299,7 +299,7 @@ int C2DColorConverter::convertC2D(int srcFd, void *srcBase, void * srcData, int 
     }
 
     if (ret != C2D_STATUS_OK) {
-        DEBUG_PRINT_ERROR("Update dst surface def failed\n");
+        ALOGE("Update dst surface def failed\n");
         unmapGPUAddr((unsigned long)srcMappedGpuAddr);
         unmapGPUAddr((unsigned long)dstMappedGpuAddr);
         return -ret;
@@ -439,7 +439,7 @@ C2D_STATUS C2DColorConverter::updateRGBSurfaceDef(uint8_t *gpuAddr, void * data,
     } else {
         C2D_RGB_SURFACE_DEF * dstSurfaceDef = (C2D_RGB_SURFACE_DEF *)mDstSurfaceDef;
         dstSurfaceDef->buffer = data;
-        DEBUG_PRINT_INFO("dstSurfaceDef->buffer = %p\n", data);
+        ALOGV("dstSurfaceDef->buffer = %p\n", data);
         dstSurfaceDef->phys = gpuAddr;
         return mC2DUpdateSurface(mDstSurface, C2D_TARGET,
                         (C2D_SURFACE_TYPE)(C2D_SURFACE_RGB_HOST | C2D_SURFACE_WITH_PHYS),

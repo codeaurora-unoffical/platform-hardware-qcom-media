@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2009-2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2009-2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -45,6 +45,7 @@ extern "C" {
 ///////////////////////////////////////////////////////////////////////////////
 #include "OMX_Core.h"
 #include "OMX_Video.h"
+#include "string.h"
 
 #define OMX_VIDEO_MAX_HP_LAYERS 6
 
@@ -330,6 +331,7 @@ enum OMX_QCOM_COLOR_FORMATTYPE
     QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed,
     QOMX_COLOR_Format32bitRGBA8888,
     QOMX_COLOR_Format32bitRGBA8888Compressed,
+    QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m10bitCompressed,
     QOMX_COLOR_FormatAndroidOpaque = (OMX_COLOR_FORMATTYPE) OMX_COLOR_FormatVendorStartUnused  + 0x789,
 };
 
@@ -347,6 +349,7 @@ enum OMX_QCOM_VIDEO_CODINGTYPE
     QOMX_VIDEO_CodingHevc = OMX_VIDEO_CodingHEVC, /**< keeping old enum for backwards compatibility*/
     QOMX_VIDEO_CodingMVC = 0x7FA30C07,
     QOMX_VIDEO_CodingVp9 = OMX_VIDEO_CodingVP9,   /**< keeping old enum for backwards compatibility*/
+    QOMX_VIDEO_CodingTME = 0x7FA30C09,
 };
 
 enum OMX_QCOM_EXTN_INDEXTYPE
@@ -469,7 +472,7 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     /* OMX.google.android.index.prependSPSPPSToIDRFrames */
     OMX_QcomIndexParamSequenceHeaderWithIDR = 0x7F00002A,
 
-    OMX_QcomIndexParamH264AUDelimiter = 0x7F00002B,
+    OMX_QcomIndexParamAUDelimiter = 0x7F00002B,
 
     OMX_QcomIndexParamVideoDownScalar = 0x7F00002C,
 
@@ -630,7 +633,46 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     OMX_QTIIndexParamVPXColorSpaceExtraData = 0x7F000066,
 
-    OMX_QcomIndexParamAUDelimiter = 0x7F000067,
+    /*"OMX.google.android.index.describeHDRStaticInfo"*/
+    OMX_QTIIndexConfigDescribeHDRColorInfo = 0x7F000067,
+
+    /* Configure to disable PQ*/
+    OMX_QTIIndexParamDisablePQ = 0x7F000068,
+
+    /* Dither control for 10bit */
+    OMX_QTIIndexParamDitherControl = 0x7F000069,
+
+    /* Suggest how big Iframe sizes should be */
+    OMX_QTIIndexParamIframeSizeType = 0x7F000070,
+
+    /* use av-timer ticks as timestamp (used by VT-client) */
+    OMX_QTIIndexParamEnableAVTimerTimestamps = 0x7F000071,
+
+    /* OMX.QTI.index.config.video.getdsmode */
+    OMX_QTIIndexConfigGetDSMode = 0x7F000072,
+
+    /* Controlled Input queue mode for frame accurate configuration */
+    OMX_QcomIndexParamVencControlInputQueue = 0x7F000073,
+
+    /**
+    *  Configure Slice Header Spacing
+    *  This index will be used to configure both byte based
+    *  and MB based slice header spacing. This is the preferred
+    *  alternative to OMX_IndexParamVideoAvc (for MB based)
+    *  and OMX_IndexParamVideoErrorCorrection (for byte based)
+    */
+    OMX_QcomIndexParamVideoSliceSpacing = 0x7F000074,
+
+    /* Capabilities */
+    OMX_QTIIndexParamCapabilitiesVTDriverVersion = 0x7F100000,
+
+    OMX_QTIIndexParamCapabilitiesMaxTemporalLayers = 0x7F100001,
+
+    OMX_QTIIndexParamCapabilitiesMaxLTR = 0x7F100002,
+
+    OMX_QTIIndexParamCapabilitiesMaxDownScaleRatio= 0x7F100003,
+
+    OMX_QTIIndexParamCapabilitiesRotationSupport= 0x7F100004,
 
 };
 
@@ -1102,15 +1144,15 @@ typedef struct OMX_QCOM_VIDEO_CONFIG_QPRANGE
 
 /**
  * This structure describes the parameters for the
- * OMX_QcomIndexParamH264AUDelimiter extension.  It enables/disables
- * the AU delimiters in the H264 stream, which is used by WFD.
+ * OMX_QcomIndexParamAUDelimiter extension.  It enables/disables
+ * the AU delimiters in the stream.
  */
-typedef struct OMX_QCOM_VIDEO_CONFIG_H264_AUD
+typedef struct OMX_QCOM_VIDEO_CONFIG_AUD
 {
    OMX_U32 nSize;           /** Size of the structure in bytes */
    OMX_VERSIONTYPE nVersion;/** OMX specification version information */
    OMX_BOOL bEnable;        /** Enable/disable the setting */
-} OMX_QCOM_VIDEO_CONFIG_H264_AUD;
+} OMX_QCOM_VIDEO_CONFIG_AUD;
 
 /**
  * This structure describes the parameters for the
@@ -1367,6 +1409,7 @@ typedef struct OMX_QCOM_EXTRADATA_FRAMEINFO
    OMX_QCOM_ASPECT_RATIO  aspectRatio;
    OMX_QCOM_DISPLAY_ASPECT_RATIO displayAspectRatio;
    OMX_U32                nConcealedMacroblocks;
+   OMX_U32                nRecoverySeiFlag;
    OMX_U32                nFrameRate;
    OMX_TICKS              nTimeStamp;
 } OMX_QCOM_EXTRADATA_FRAMEINFO;
@@ -1465,8 +1508,36 @@ typedef enum OMX_QCOM_EXTRADATATYPE
     OMX_ExtraDataDisplayColourSEI =        0x7F000011,
     OMX_ExtraDataLightLevelSEI =           0x7F000012,
     OMX_ExtraDataEncoderOverrideQPInfo =   0x7F000013,
-    OMX_ExtraDataVideoMultiSliceInfo =     0x7F000014,
+    OMX_ExtraDataOutputCropInfo =          0x7F000014,
 } OMX_QCOM_EXTRADATATYPE;
+
+struct ExtraDataMap {
+        const char *type;
+        OMX_QCOM_EXTRADATATYPE index;
+};
+static const struct ExtraDataMap kExtradataMap[] = {
+        { "ltrinfo", OMX_ExtraDataVideoLTRInfo },
+        { "mbinfo", OMX_ExtraDataVideoEncoderMBInfo },
+};
+
+static inline OMX_S32 getIndexForExtradataType(char * type) {
+    if(type == NULL) return -1;
+    for(int i = 0; i< (int)(sizeof(kExtradataMap)/ sizeof(struct ExtraDataMap)); i++){
+        if(!strcmp(kExtradataMap[i].type,type)){
+            return kExtradataMap[i].index;
+        }
+    }
+    return -1;
+}
+
+static inline const char * getStringForExtradataType(int64_t index) {
+    for(int i = 0; i< (int)(sizeof(kExtradataMap)/sizeof(struct ExtraDataMap)); i++){
+        if(kExtradataMap[i].index == index){
+            return kExtradataMap[i].type;
+        }
+    }
+    return NULL;
+}
 
 typedef struct  OMX_STREAMINTERLACEFORMATTYPE {
     OMX_U32 nSize;
@@ -1485,6 +1556,26 @@ typedef enum OMX_INTERLACETYPE
    OMX_InterlaceFrameBottomFieldFirst
 } OMX_INTERLACES;
 
+typedef enum QOMX_VIDEO_RECOVERYSEITYPE {
+/*
+ * 0: Frame reconstruction is incorrect
+ *   a) Open Gop, frames before recovery point SEI
+ * 1: Frame reconstruction is correct.
+ *   a) Closed Gop, When decoding starts from the top of closed GOP at IDR
+ *   b) Open Gop, Output at and subsequent to recovery point SEI with
+ *      exact_match_flag = true
+ * 2: Frame reconstruction is approximately correct:
+ *   a) Closed Gop, When decoding starts from a P/B/I frames wihtout
+ *      any recovery point SEI information
+ *   b) Open Gop, Output at and subsequent to recovery point SEI with
+ *      exact_match_flag = false
+ * In case flag is set to 0 or 2, DATACORRUPT shall be enabled
+ * for buffer (nFlags) in FILL_BUFFER_DONE
+ */
+    OMX_FRAME_RECONSTRUCTION_INCORRECT = 0,
+    OMX_FRAME_RECONSTRUCTION_CORRECT = 1,
+    OMX_FRAME_RECONSTRUCTION_APPROXIMATELY_CORRECT = 2
+} QOMX_VIDEO_RECOVERYSEI;
 
 #define OMX_EXTRADATA_HEADER_SIZE 20
 
@@ -1682,6 +1773,12 @@ typedef struct QOMX_ENABLETYPE {
     OMX_BOOL bEnable;
 } QOMX_ENABLETYPE;
 
+typedef struct QOMX_DISABLETYPE {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_BOOL bDisable;
+} QOMX_DISABLETYPE;
+
 typedef enum QOMX_VIDEO_EVENTS {
     OMX_EventIndexsettingChanged = OMX_EventVendorStartUnused
 } QOMX_VIDEO_EVENTS;
@@ -1758,6 +1855,7 @@ typedef struct QOMX_VIDEO_CUSTOM_BUFFERSIZE {
 #define OMX_QTI_INDEX_CONFIG_VIDEO_BLURINFO "OMX.QTI.index.config.BlurInfo"
 #define OMX_QTI_INDEX_PARAM_VIDEO_CLIENT_EXTRADATA "OMX.QTI.index.param.client.extradata"
 #define OMX_QTI_INDEX_CONFIG_COLOR_ASPECTS "OMX.google.android.index.describeColorAspects"
+#define OMX_QTI_INDEX_CONFIG_VIDEO_GETDSMODE "OMX.QTI.index.config.video.getdsmode"
 
 typedef enum {
     QOMX_VIDEO_FRAME_PACKING_CHECKERBOARD = 0,
@@ -1904,6 +2002,18 @@ typedef struct QOMX_VIDEO_H264ENTROPYCODINGTYPE {
    OMX_U32 nCabacInitIdc;
 } QOMX_VIDEO_H264ENTROPYCODINGTYPE;
 
+typedef enum QOMX_VIDEO_IFRAMESIZE_TYPE {
+    QOMX_IFRAMESIZE_DEFAULT,
+    QOMX_IFRAMESIZE_MEDIUM,
+    QOMX_IFRAMESIZE_HUGE,
+    QOMX_IFRAMESIZE_UNLIMITED,
+} QOMX_VIDEO_IFRAMESIZE_TYPE;
+
+typedef struct QOMX_VIDEO_IFRAMESIZE {
+   OMX_U32 nSize;
+   OMX_VERSIONTYPE nVersion;
+   QOMX_VIDEO_IFRAMESIZE_TYPE eType;
+} QOMX_VIDEO_IFRAMESIZE;
 
 /* VIDEO POSTPROCESSING CTRLS AND ENUMS */
 /* MUST KEEP SAME AS IN vpp.h */
@@ -2021,6 +2131,13 @@ typedef struct QOMX_VPP_ENABLE {
     OMX_BOOL enable_vpp;
 } QOMX_VPP_ENABLE;
 
+typedef struct QOMX_EXTRADATA_ENABLE {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_U32 nPortIndex;
+    OMX_BOOL bEnable;
+} QOMX_EXTRADATA_ENABLE;
+
 typedef enum OMX_QOMX_VIDEO_MBISTATISTICSTYPE {
     QOMX_MBI_STATISTICS_MODE_DEFAULT = 0,
     QOMX_MBI_STATISTICS_MODE_1 = 0x01,
@@ -2049,6 +2166,98 @@ typedef struct QOMX_VIDEO_CLIENT_EXTRADATA {
     OMX_U32 nExtradataAllocSize;
     OMX_U32 nExtradataSize;
 } QOMX_VIDEO_CLIENT_EXTRADATATYPE;
+
+#if defined(__cplusplus) && defined(USE_CAMERA_METABUFFER_UTILS)
+
+#define CAM_META_BUFFER_EVENT_PERF 0x01
+
+/**
+ * Camera1 meta-buffer payload create/access/modify utility
+ */
+struct MetaBufferUtil {
+
+    enum {
+        INT_OFFSET      = 1,
+        INT_SIZE        = 2,
+        INT_USAGE       = 3,
+        INT_TIMESTAMP   = 4,
+        INT_COLORFORMAT = 5,
+        INT_BUFINDEX    = 6,
+        INT_BUFEVENT    = 7,
+        INT_TOTAL       = INT_BUFEVENT,
+    };
+
+    static int getNumFdsForBatch(int batchSize) {
+        return batchSize;
+    }
+    static int getNumIntsForBatch(int batchSize) {
+        return batchSize * INT_TOTAL;
+    }
+    static int getBatchSize(const native_handle_t *hnd) {
+        return MetaBufferUtil::isHandleSane(hnd) ? hnd->numFds : -1;
+    }
+
+    /* getters */
+    /* return a fd at index or -1 if index is invalid */
+    static int getFdAt(const native_handle_t *hnd, int index) {
+        return (MetaBufferUtil::isHandleSane(hnd) && (index < hnd->numFds)) ? hnd->data[index] : -1;
+    }
+    /* return a int of type at index or -1 if index or type is invalid */
+    static int getIntAt(const native_handle_t *hnd, int index, int type) {
+        int idx = MetaBufferUtil::getIntIndex(hnd, index, type);
+        return idx < 0 ? -1 : hnd->data[idx];
+    }
+
+    /* setters */
+    /* replace the fd at index and return 0. Return -1 if index is invalid */
+    static int setFdAt(native_handle_t *hnd, int index, int fd) {
+        return (MetaBufferUtil::isHandleSane(hnd) && (index < hnd->numFds)) ? hnd->data[index] = fd, 0 : -1;
+    }
+    /* replace an int of type at index and return 0. Return -1 if index or type is invalid */
+    static int setIntAt(native_handle_t *hnd, int index, int type, int value) {
+        int idx = MetaBufferUtil::getIntIndex(hnd, index, type);
+        return idx < 0 ? -1 : hnd->data[idx] = value, 0;
+    }
+
+private:
+    static bool isHandleSane(const native_handle_t *hnd) {
+        return hnd && hnd->version == sizeof(native_handle_t);
+    }
+
+    static int getIntIndex(const native_handle_t *hnd, int index, int type) {
+        int idx = index + type * MetaBufferUtil::getBatchSize(hnd);
+        return (MetaBufferUtil::isHandleSane(hnd) && (idx < (hnd->numInts + hnd->numFds))) ? idx : -1;
+    }
+};
+
+#endif // __cplusplus
+
+typedef enum QOMX_VIDEO_DITHERTYPE {
+    QOMX_DITHER_DISABLE = 0,
+    QOMX_DITHER_COLORSPACE_EXCEPT_BT2020 = 0x01,
+    QOMX_DITHER_ALL_COLORSPACE = 0x02,
+} QOMX_VIDEO_DITHERTYPE;
+
+typedef struct QOMX_VIDEO_DITHER_CONTROL {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_U32 nPortIndex;
+    QOMX_VIDEO_DITHERTYPE eDitherType;
+} QOMX_VIDEO_DITHER_CONTROL;
+
+typedef enum QOMX_VIDEO_SLICEMODETYPE {
+    QOMX_SLICEMODE_DISABLE = 0,
+    QOMX_SLICEMODE_MB_COUNT = 0x01,
+    QOMX_SLICEMODE_BYTE_COUNT = 0x02,
+} QOMX_VIDEO_SLICEMODETYPE;
+
+typedef struct QOMX_VIDEO_PARAM_SLICE_SPACING_TYPE {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_U32 nPortIndex;
+    QOMX_VIDEO_SLICEMODETYPE eSliceMode;
+    OMX_U32 nSliceSize;
+} QOMX_VIDEO_PARAM_SLICE_SPACING_TYPE;
 
 #ifdef __cplusplus
 }

@@ -2,4 +2,10 @@
 #
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = mm-core hypv-intercept mm-video-v4l2 libc2dcolorconvert
+BUILD_COMPONENTS := mm-core hypv-intercept
+
+if BUILD_MM_VIDEO
+BUILD_COMPONENTS += mm-video-v4l2
+endif
+
+SUBDIRS := $(BUILD_COMPONENTS)

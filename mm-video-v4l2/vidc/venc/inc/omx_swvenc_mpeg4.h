@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2014, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -74,11 +74,12 @@ class omx_venc: public omx_video
         swvenc_video_capability m_capability;
         bool m_max_allowed_bitrate_check;
         bool m_stopped;
-        bool format_set;
+        bool set_format;
 
         int dev_handle_output_extradata(void *, int);
         int dev_handle_input_extradata(void *, int, int);
         bool dev_buffer_ready_to_queue(OMX_BUFFERHEADERTYPE *buffer);
+        bool dev_get_dimensions(OMX_U32 ,OMX_U32 *,OMX_U32 *);
         void dev_set_extradata_cookie(void *);
         int dev_set_format(int);
 
@@ -137,12 +138,17 @@ class omx_venc: public omx_video
                     OMX_U32 * /*nMaxBLayers*/) {
             return false;
         }
+        bool dev_get_pq_status(OMX_BOOL *) {
+            return false;
+        }
         bool dev_is_video_session_supported(OMX_U32 width, OMX_U32 height);
         bool dev_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
                         OMX_U32 height);
         bool dev_get_output_log_flag();
-        int dev_output_log_buffers(const char *buffer_addr, int buffer_len);
+        int dev_output_log_buffers(const char *buffer_addr, int buffer_len, uint64_t timestamp);
         int dev_extradata_log_buffers(char *buffer);
+        bool swvenc_color_align(OMX_BUFFERHEADERTYPE *buffer, OMX_U32 width,
+                                OMX_U32 height);
 
         SWVENC_STATUS swvenc_set_rc_mode(OMX_VIDEO_CONTROLRATETYPE eControlRate);
         SWVENC_STATUS swvenc_set_profile_level(OMX_U32 eProfile,OMX_U32 eLevel);
@@ -150,6 +156,7 @@ class omx_venc: public omx_video
         SWVENC_STATUS swvenc_set_frame_rate(OMX_U32 nFrameRate);
         SWVENC_STATUS swvenc_set_bit_rate(OMX_U32 nTargetBitrate);
         SWVENC_STATUS swvenc_set_intra_period(OMX_U32 nPFrame,OMX_U32 nBFrame);
+        SWVENC_STATUS swvenc_set_color_format(OMX_COLOR_FORMATTYPE);
         SWVENC_STATUS swvenc_get_buffer_req
         (
            OMX_U32 *min_buff_count,

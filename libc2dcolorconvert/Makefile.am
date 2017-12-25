@@ -1,19 +1,18 @@
-# sources and intermediate files are separated
+AM_CFLAGS = -Wall
+AM_CFLAGS += -Wundef
+AM_CFLAGS += -Wstrict-prototypes
+AM_CFLAGS += -Wno-trigraphs
+AM_CFLAGS += -g -O3
+AM_CFLAGS += "-include stdint.h"
+AM_CFLAGS += "-std=c++11"
 
-AM_CPPFLAGS = -Wall
-AM_CPPFLAGS += -Wundef
-AM_CPPFLAGS += -Wno-trigraphs
-AM_CPPFLAGS += -g -O3
-AM_CPPFLAGS += -O0 -fno-inline -fno-short-enums
-AM_CPPFLAGS += -fPIC
-AM_CPPFLAGS += -D_LINUX_
-AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc
 
-h_sources = C2DColorConverter.h
-h_sources += $(top_srcdir)/mm-video-v4l2/vidc/common/inc/vidc_debug.h
+AM_CPPFLAGS = $(CPPFLAGS)
+
 c_sources = C2DColorConverter.cpp
+h_sources = C2DColorConverter.h
 
-include_HEADERS = $(h_sources)
 lib_LTLIBRARIES = libc2dcolorconvert.la
-libc2dcolorconvert_la_SOURCES = $(c_sources)
-libc2dcolorconvert_la_LDFLAGS = -ldl -llog -shared
+libc2dcolorconvert_la_SOURCES = $(c_sources) $(h_sources)
+libc2dcolorconvert_la_CPPFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
+libc2dcolorconvert_la_LIBADD = -ldl -lpthread -llog
