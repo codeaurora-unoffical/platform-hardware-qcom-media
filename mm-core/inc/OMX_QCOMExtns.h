@@ -1478,6 +1478,7 @@ typedef enum OMX_QCOM_EXTRADATATYPE
     OMX_ExtraDataLightLevelSEI =           0x7F000012,
     OMX_ExtraDataEncoderOverrideQPInfo =   0x7F000013,
     OMX_ExtraDataOutputCropInfo =          0x7F000014,
+    OMX_ExtraDataVideoMultiSliceInfo =     0x7F000015,
 } OMX_QCOM_EXTRADATATYPE;
 
 struct ExtraDataMap {
