@@ -37,12 +37,7 @@
 #include <string.h>
 #include <errno.h>
 #include <media/msm_media_info.h>
-#ifndef _LINUX_
 #include <gralloc_priv.h>
-#endif
-#ifdef _LINUX_
-#include <sys/types.h>
-#endif
 
 #undef LOG_TAG
 #define LOG_TAG "C2DColorConvert"
@@ -55,12 +50,8 @@
 #define ALIGN32 32
 #define ALIGN16 16
 
-int debug_level;
-
 //-----------------------------------------------------
-#ifndef _LINUX_
 namespace android {
-#endif
 
 class C2DColorConverter : public C2DColorConverterBase {
 
@@ -68,7 +59,6 @@ public:
     C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags,size_t srcStride);
     int32_t getBuffReq(int32_t port, C2DBuffReq *req);
     int32_t dumpOutput(char * filename, char mode);
-    int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight);
 protected:
     virtual ~C2DColorConverter();
     virtual int convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData);
@@ -129,19 +119,14 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
       mAdrenoUtilsHandle(NULL)
 {
      mError = 0;
-#ifdef _LINUX_
-     char *env_ptr = getenv("OMX_DEBUG_LEVEL");
-     debug_level = env_ptr ? atoi(env_ptr) : 0;
-#endif
-
      if (NV12_UBWC == dstFormat) {
-         DEBUG_PRINT_ERROR("%s: FATAL ERROR: could not support UBWC output formats ", __FUNCTION__);
+         ALOGE("%s: FATAL ERROR: could not support UBWC output formats ", __FUNCTION__);
          mError = -1;
          return;
      }
      mC2DLibHandle = dlopen("libC2D2.so", RTLD_NOW);
      if (!mC2DLibHandle) {
-         DEBUG_PRINT_ERROR("FATAL ERROR: could not dlopen libc2d2.so: %s", dlerror());
+         ALOGE("FATAL ERROR: could not dlopen libc2d2.so: %s", dlerror());
          mError = -1;
          return;
      }
@@ -159,21 +144,21 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
      if (!mC2DCreateSurface || !mC2DUpdateSurface || !mC2DReadSurface
         || !mC2DDraw || !mC2DFlush || !mC2DFinish || !mC2DWaitTimestamp
         || !mC2DDestroySurface || !mC2DMapAddr || !mC2DUnMapAddr) {
-         DEBUG_PRINT_ERROR("%s: dlsym ERROR", __FUNCTION__);
+         ALOGE("%s: dlsym ERROR", __FUNCTION__);
          mError = -1;
          return;
      }
 
      mAdrenoUtilsHandle = dlopen("libadreno_utils.so", RTLD_NOW);
      if (!mAdrenoUtilsHandle) {
-         DEBUG_PRINT_ERROR("FATAL ERROR: could not dlopen libadreno_utils.so: %s", dlerror());
+         ALOGE("FATAL ERROR: could not dlopen libadreno_utils.so: %s", dlerror());
          mError = -1;
          return;
      }
 
      mAdrenoComputeAlignedWidthAndHeight = (LINK_AdrenoComputeAlignedWidthAndHeight)dlsym(mAdrenoUtilsHandle, "compute_aligned_width_and_height");
      if (!mAdrenoComputeAlignedWidthAndHeight) {
-         DEBUG_PRINT_ERROR("%s: dlsym ERROR", __FUNCTION__);
+         ALOGE("%s: dlsym ERROR", __FUNCTION__);
          mError = -1;
          return;
      }
@@ -189,8 +174,6 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mDstSize = calcSize(dstFormat, dstWidth, dstHeight);
     mSrcYSize = calcYSize(srcFormat, srcWidth, srcHeight);
     mDstYSize = calcYSize(dstFormat, dstWidth, dstHeight);
-    mSrcSurfaceDef = NULL;
-    mDstSurfaceDef = NULL;
 
     mFlags = flags; // can be used for rotation
 
@@ -206,23 +189,8 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mBlit.target_rect.y = 0 << 16;
     mBlit.target_rect.width = dstWidth << 16;
     mBlit.target_rect.height = dstHeight << 16;
-    mBlit.config_mask = C2D_ALPHA_BLEND_NONE | C2D_NO_BILINEAR_BIT | C2D_NO_ANTIALIASING_BIT | C2D_TARGET_RECT_BIT | mFlags;
+    mBlit.config_mask = C2D_ALPHA_BLEND_NONE | C2D_NO_BILINEAR_BIT | C2D_NO_ANTIALIASING_BIT | C2D_TARGET_RECT_BIT;
     mBlit.surface_id = mSrcSurface;
-}
-
-int C2DColorConverter::SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight)
-{
-    mBlit.source_rect.x = x << 16;
-    mBlit.source_rect.y = y << 16;
-    mBlit.source_rect.width = srcWidth << 16;
-    mBlit.source_rect.height = srcHeight << 16;
-    mBlit.config_mask |= C2D_SOURCE_RECT_BIT;
-    DEBUG_PRINT_INFO("C2D library: source rect x = %d, y = %d, width = %d, height = %d",
-         mBlit.source_rect.x >> 16,
-         mBlit.source_rect.y >> 16,
-         mBlit.source_rect.width >> 16,
-         mBlit.source_rect.height >> 16);
-    return 0;
 }
 
 C2DColorConverter::~C2DColorConverter()
@@ -242,8 +210,6 @@ C2DColorConverter::~C2DColorConverter()
         } else {
             delete ((C2D_RGB_SURFACE_DEF *)mDstSurfaceDef);
         }
-        mSrcSurfaceDef = NULL;
-        mDstSurfaceDef = NULL;
     }
 
     if (mC2DLibHandle) {
@@ -261,12 +227,12 @@ int C2DColorConverter::convertC2D(int srcFd, void *srcBase, void * srcData, int 
     uint8_t *dstMappedGpuAddr = nullptr;
 
     if (mError) {
-        DEBUG_PRINT_ERROR("C2D library initialization failed\n");
+        ALOGE("C2D library initialization failed\n");
         return mError;
     }
 
     if ((srcFd < 0) || (dstFd < 0) || (srcData == NULL) || (dstData == NULL)) {
-        DEBUG_PRINT_ERROR("Incorrect input parameters\n");
+        ALOGE("Incorrect input parameters\n");
         return -1;
     }
 
@@ -316,11 +282,11 @@ int C2DColorConverter::convertC2D(int srcFd, void *srcBase, void * srcData, int 
     unmappedDstSuccess = unmapGPUAddr((unsigned long)dstMappedGpuAddr);
 
     if (ret != C2D_STATUS_OK) {
-        DEBUG_PRINT_ERROR("C2D Draw failed\n");
+        ALOGE("C2D Draw failed\n");
         return -ret; //c2d err values are positive
     } else {
         if (!unmappedSrcSuccess || !unmappedDstSuccess) {
-            DEBUG_PRINT_ERROR("unmapping GPU address failed\n");
+            ALOGE("unmapping GPU address failed\n");
             return -1;
         }
         return ret;
@@ -365,7 +331,7 @@ void* C2DColorConverter::getDummySurfaceDef(ColorConvertFormat format, size_t wi
 
         if (format == YCbCr420P ||
             format == YCrCb420P) {
-          DEBUG_PRINT_INFO("half stride for Cb Cr planes \n");
+          printf("half stride for Cb Cr planes \n");
           surfaceDef->stride1 = calcStride(format, width) / 2;
           surfaceDef->phys2 = (void *)0xaaaaaaaa;
           surfaceDef->stride2 = calcStride(format, width) / 2;
@@ -377,10 +343,8 @@ void* C2DColorConverter::getDummySurfaceDef(ColorConvertFormat format, size_t wi
     } else {
         C2D_RGB_SURFACE_DEF * surfaceDef = new C2D_RGB_SURFACE_DEF;
         surfaceDef->format = getC2DFormat(format);
-#ifndef _LINUX_
         if (mFlags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED)
             surfaceDef->format |= C2D_FORMAT_UBWC_COMPRESSED;
-#endif
         surfaceDef->width = width;
         surfaceDef->height = height;
         surfaceDef->buffer = (void *)0xaaaaaaaa;
@@ -469,7 +433,7 @@ uint32_t C2DColorConverter::getC2DFormat(ColorConvertFormat format)
         case CbYCrY:
             return C2D_COLOR_FORMAT_422_UYVY;
         default:
-            DEBUG_PRINT_ERROR("Format not supported , %d\n", format);
+            ALOGE("Format not supported , %d\n", format);
             return -1;
     }
 }
@@ -480,10 +444,10 @@ size_t C2DColorConverter::calcStride(ColorConvertFormat format, size_t width)
         case RGB565:
             return ALIGN(width, ALIGN32) * 2; // RGB565 has width as twice
         case RGBA8888:
-            if (mSrcStride)
-                return mSrcStride * 4;
-            else
-                return ALIGN(width, ALIGN32) * 4;
+	if (mSrcStride)
+		return mSrcStride * 4;
+	else
+		return ALIGN(width, ALIGN32) * 4;
         case YCbCr420Tile:
             return ALIGN(width, ALIGN128);
         case YCbCr420SP:
@@ -583,7 +547,7 @@ size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size
             size_t lumaSize = ALIGN(alignedw * height, ALIGN2K);
             size_t chromaSize = ALIGN((alignedw * height)/2, ALIGN2K);
             size = ALIGN(lumaSize + chromaSize, ALIGN4K);
-            DEBUG_PRINT_INFO("NV12_2k, width = %zu, height = %zu, size = %d", width, height, size);
+            ALOGV("NV12_2k, width = %zu, height = %zu, size = %d", width, height, size);
             }
             break;
         case NV12_128m:
@@ -613,12 +577,11 @@ void * C2DColorConverter::getMappedGPUAddr(int bufFD, void *bufPtr, size_t bufLe
     status = mC2DMapAddr(bufFD, bufPtr, bufLen, 0, KGSL_USER_MEM_TYPE_ION,
             &gpuaddr);
     if (status != C2D_STATUS_OK) {
-        DEBUG_PRINT_ERROR("c2dMapAddr failed: status %d fd %d ptr %p len %zu flags %d\n",
+        ALOGE("c2dMapAddr failed: status %d fd %d ptr %p len %zu flags %d\n",
                 status, bufFD, bufPtr, bufLen, KGSL_USER_MEM_TYPE_ION);
-
         return NULL;
     }
-    DEBUG_PRINT_INFO("c2d mapping created: gpuaddr %p fd %d ptr %p len %zu\n",
+    ALOGV("c2d mapping created: gpuaddr %p fd %d ptr %p len %zu\n",
             gpuaddr, bufFD, bufPtr, bufLen);
 
     return gpuaddr;
@@ -630,7 +593,7 @@ bool C2DColorConverter::unmapGPUAddr(unsigned long gAddr)
     C2D_STATUS status = mC2DUnMapAddr((void*)gAddr);
 
     if (status != C2D_STATUS_OK)
-        DEBUG_PRINT_ERROR("c2dUnMapAddr failed: status %d gpuaddr %08lx\n", status, gAddr);
+        ALOGE("c2dUnMapAddr failed: status %d gpuaddr %08lx\n", status, gAddr);
 
     return (status == C2D_STATUS_OK);
 }
@@ -650,7 +613,7 @@ int32_t C2DColorConverter::getBuffReq(int32_t port, C2DBuffReq *req) {
         req->sizeAlign = calcSizeAlign(mSrcFormat);
         req->size = calcSize(mSrcFormat, mSrcWidth, mSrcHeight);
         req->bpp = calcBytesPerPixel(mSrcFormat);
-        DEBUG_PRINT_INFO("input req->size = %d\n", req->size);
+        ALOGV("input req->size = %d\n", req->size);
     } else if (port == C2D_OUTPUT) {
         req->width = mDstWidth;
         req->height = mDstHeight;
@@ -660,7 +623,7 @@ int32_t C2DColorConverter::getBuffReq(int32_t port, C2DBuffReq *req) {
         req->sizeAlign = calcSizeAlign(mDstFormat);
         req->size = calcSize(mDstFormat, mDstWidth, mDstHeight);
         req->bpp = calcBytesPerPixel(mDstFormat);
-        DEBUG_PRINT_INFO("output req->size = %d\n", req->size);
+        ALOGV("output req->size = %d\n", req->size);
     }
     return 0;
 }
@@ -676,8 +639,7 @@ size_t C2DColorConverter::calcLumaAlign(ColorConvertFormat format) {
         case NV12_UBWC:
           return ALIGN4K;
         default:
-          DEBUG_PRINT_ERROR("unknown format passed for luma alignment number");
-
+          ALOGE("unknown format passed for luma alignment number");
           return 1;
     }
 }
@@ -693,7 +655,7 @@ size_t C2DColorConverter::calcSizeAlign(ColorConvertFormat format) {
         case NV12_UBWC:
           return ALIGN4K;
         default:
-          DEBUG_PRINT_ERROR("unknown format passed for size alignment number");
+          ALOGE("unknown format passed for size alignment number");
           return 1;
     }
 }
@@ -736,8 +698,8 @@ int32_t C2DColorConverter::dumpOutput(char * filename, char mode) {
       flags |= O_APPEND;
     }
 
-    if ((fd = open(filename, flags, S_IRWXU | S_IRWXG | S_IRWXO)) < 0) {
-        DEBUG_PRINT_ERROR("open dump file failed w/ errno %s", strerror(errno));
+    if ((fd = open(filename, flags)) < 0) {
+        ALOGE("open dump file failed w/ errno %s", strerror(errno));
         return -1;
     }
 
@@ -756,7 +718,7 @@ int32_t C2DColorConverter::dumpOutput(char * filename, char mode) {
 
       if (mDstFormat == YCbCr420P ||
           mDstFormat == YCrCb420P) {
-          DEBUG_PRINT_INFO("Dump Cb and Cr separately for Planar\n");
+          printf("Dump Cb and Cr separately for Planar\n");
           //dump Cb/Cr
           base = (uint8_t *)dstSurfaceDef->plane1;
           stride = dstSurfaceDef->stride1;
@@ -792,9 +754,9 @@ int32_t C2DColorConverter::dumpOutput(char * filename, char mode) {
       stride = dstSurfaceDef->stride;
       sliceHeight = dstSurfaceDef->height;
 
-      DEBUG_PRINT_INFO("rgb surface base is %p", base);
-      DEBUG_PRINT_INFO("rgb surface dumpsslice height is %lu\n", (unsigned long)sliceHeight);
-      DEBUG_PRINT_INFO("rgb surface dump stride is %lu\n", (unsigned long)stride);
+      printf("rgb surface base is %p", base);
+      printf("rgb surface dumpsslice height is %lu\n", (unsigned long)sliceHeight);
+      printf("rgb surface dump stride is %lu\n", (unsigned long)stride);
 
       int bpp = 1; //bytes per pixel
       if (mDstFormat == RGB565) {
@@ -816,7 +778,7 @@ int32_t C2DColorConverter::dumpOutput(char * filename, char mode) {
     }
  cleanup:
     if (ret < 0) {
-      DEBUG_PRINT_ERROR("file write failed w/ errno %s", strerror(errno));
+      ALOGE("file write failed w/ errno %s", strerror(errno));
     }
     close(fd);
     return ret < 0 ? ret : 0;
@@ -832,6 +794,4 @@ extern "C" void destroyC2DColorConverter(C2DColorConverterBase* C2DCC)
     delete C2DCC;
 }
 
-#ifndef _LINUX_
 }
-#endif

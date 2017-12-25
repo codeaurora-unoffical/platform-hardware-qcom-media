@@ -147,7 +147,8 @@ int frame_parse::parse_sc_frame ( OMX_BUFFERHEADERTYPE *source,
 {
     OMX_U8 *pdest = NULL,*psource = NULL, match_found = FALSE, is_byte_match = 0;
     OMX_U32 dest_len =0, source_len = 0, temp_len = 0;
-    OMX_U32 parsed_length = 0;
+    OMX_U32 parsed_length = 0,i=0;
+    int residue_byte = 0;
 
     if (source == NULL || dest == NULL || partialframe == NULL) {
         return -1;

@@ -84,6 +84,10 @@ uint32 MP4_Utils::read_bit_field(posInfoType * posPtr, uint32 size)
 }
 bool MP4_Utils::parseHeader(mp4StreamType * psBits)
 {
+    uint32 profile_and_level_indication = 0;
+    uint8 VerID = 1; /* default value */
+    long hxw = 0;
+
     m_posInfo.bitPos = 0;
     m_posInfo.bytePtr = psBits->data;
     m_dataBeginPtr = psBits->data;
@@ -117,6 +121,8 @@ bool MP4_Utils::parseHeader(mp4StreamType * psBits)
     if ( m_posInfo.bytePtr == NULL ) {
         m_posInfo.bitPos  = 0;
         m_posInfo.bytePtr = psBits->data;
+    } else {
+        uint32 profile_and_level_indication = read_bit_field (&m_posInfo, 8);
     }
 
     /* parsing Visual Object(VO) header*/
@@ -180,6 +186,15 @@ bool MP4_Utils::parseHeader(mp4StreamType * psBits)
         return false;
     }
 
+    /* is_object_layer_identifier*/
+    uint32 is_object_layer_identifier = read_bit_field (&m_posInfo, 1);
+
+    if (is_object_layer_identifier) {
+        uint32 video_object_layer_verid = read_bit_field (&m_posInfo, 4);
+        uint32 video_object_layer_priority = read_bit_field (&m_posInfo, 3);
+        VerID = (unsigned char)video_object_layer_verid;
+    }
+
     /* aspect_ratio_info*/
     uint32 aspect_ratio_info = read_bit_field (&m_posInfo, 4);
 
@@ -201,34 +216,50 @@ bool MP4_Utils::parseHeader(mp4StreamType * psBits)
             return false;
         }
 
+        /* low_delay*/
+        uint32 low_delay = read_bit_field (&m_posInfo, 1);
         /* vbv_parameters (annex D)*/
         uint32 vbv_parameters = read_bit_field (&m_posInfo, 1);
 
         if ( vbv_parameters ) {
+            /* first_half_bitrate*/
+            uint32 first_half_bitrate = read_bit_field (&m_posInfo, 15);
             uint32 marker_bit = read_bit_field (&m_posInfo, 1);
 
             if ( marker_bit != 1) {
                 return false;
             }
 
+            /* latter_half_bitrate*/
+            uint32 latter_half_bitrate = read_bit_field (&m_posInfo, 15);
             marker_bit = read_bit_field (&m_posInfo, 1);
 
             if ( marker_bit != 1) {
                 return false;
             }
 
+            uint32 VBVPeakBitRate = (first_half_bitrate << 15) + latter_half_bitrate;
+            /* first_half_vbv_buffer_size*/
+            uint32 first_half_vbv_buffer_size = read_bit_field (&m_posInfo, 15);
             marker_bit = read_bit_field (&m_posInfo, 1);
 
             if ( marker_bit != 1) {
                 return false;
             }
 
+            /* latter_half_vbv_buffer_size*/
+            uint32 latter_half_vbv_buffer_size = read_bit_field (&m_posInfo, 3);
+            uint32 VBVBufferSize = (first_half_vbv_buffer_size << 3) + latter_half_vbv_buffer_size;
+            /* first_half_vbv_occupancy*/
+            uint32 first_half_vbv_occupancy = read_bit_field (&m_posInfo, 11);
             marker_bit = read_bit_field (&m_posInfo, 1);
 
             if ( marker_bit != 1) {
                 return false;
             }
 
+            /* latter_half_vbv_occupancy*/
+            uint32 latter_half_vbv_occupancy = read_bit_field (&m_posInfo, 15);
             marker_bit = read_bit_field (&m_posInfo, 1);
 
             if ( marker_bit != 1) {
@@ -263,7 +294,7 @@ bool MP4_Utils::is_notcodec_vop(unsigned char *pbuffer, unsigned int len)
 {
     unsigned int index = 4,vop_bits=0;
     unsigned int temp = vop_time_resolution - 1;
-    unsigned char modulo_bit = 0, not_coded = 0;
+    unsigned char vop_type=0,modulo_bit=0,not_coded=0;
 
     if (!vop_time_found || !pbuffer || len < 5) {
         return false;
@@ -275,6 +306,7 @@ bool MP4_Utils::is_notcodec_vop(unsigned char *pbuffer, unsigned int len)
             temp >>= 1;
         }
 
+        vop_type = (pbuffer[index] & 0xc0) >> 6;
         unsigned bits_parsed = 2;
 
         do {

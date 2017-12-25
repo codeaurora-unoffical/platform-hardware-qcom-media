@@ -97,12 +97,10 @@ bool omx_venc::perf_control::load_lib()
     if (m_perf_lib)
         return true;
 
-#ifndef _LINUX_
     if ((property_get("ro.vendor.extension_library", perf_lib_path, NULL) <= 0)) {
         DEBUG_PRINT_ERROR("vendor library not set in ro.vendor.extension_library");
         goto handle_err;
     }
-#endif
     if ((m_perf_lib = dlopen(perf_lib_path, RTLD_NOW)) == NULL) {
         DEBUG_PRINT_ERROR("Failed to open %s : %s",perf_lib_path, dlerror());
         goto handle_err;
@@ -139,14 +137,7 @@ omx_venc::omx_venc()
     mUseProxyColorFormat = false;
     get_syntaxhdr_enable = false;
 #endif
-    bframes = 0;
-    entropy = 1;
-    handle = NULL;
-#ifdef _LINUX_
-    char *env_ptr = getenv("OMX_DEBUG_LEVEL");
-    debug_level = env_ptr ? atoi(env_ptr) : 0;
-    meta_mode_enable = false;
-#else
+    bframes = entropy = 0;
     char property_value[PROPERTY_VALUE_MAX] = {0};
     property_get("vendor.vidc.debug.level", property_value, "1");
     debug_level = strtoul(property_value, NULL, 16);
@@ -164,8 +155,6 @@ omx_venc::omx_venc()
     property_get("vendor.vidc.debug.lowlatency", property_value, "0");
     lowlatency = atoi(property_value);
     property_value[0] = '\0';
-#endif
-
     m_perf_control.send_hint_to_mpctl(true);
 }
 
@@ -368,14 +357,12 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     m_sConfigIntraRefresh.nRefreshPeriod = 0;
 #endif
 
-#ifndef _LINUX_
     OMX_INIT_STRUCT(&m_sConfigColorAspects, DescribeColorAspectsParams);
     m_sConfigColorAspects.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
     m_sConfigColorAspects.sAspects.mRange =  ColorAspects::RangeUnspecified;
     m_sConfigColorAspects.sAspects.mPrimaries = ColorAspects::PrimariesUnspecified;
     m_sConfigColorAspects.sAspects.mMatrixCoeffs = ColorAspects::MatrixUnspecified;
     m_sConfigColorAspects.sAspects.mTransfer = ColorAspects::TransferUnspecified;
-#endif
 
     if (codec_type == OMX_VIDEO_CodingMPEG4) {
         m_sParamProfileLevel.eProfile = (OMX_U32) OMX_VIDEO_MPEG4ProfileSimple;
@@ -899,6 +886,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
         case OMX_IndexParamVideoInit:
             { //TODO, do we need this index set param
                 VALIDATE_OMX_PARAM_DATA(paramData, OMX_PORT_PARAM_TYPE);
+                OMX_PORT_PARAM_TYPE* pParam = (OMX_PORT_PARAM_TYPE*)(paramData);
                 DEBUG_PRINT_LOW("Set OMX_IndexParamVideoInit called");
                 break;
             }
@@ -2178,7 +2166,6 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                     return OMX_ErrorUnsupportedSetting;
                 }
                 memcpy(&m_sConfigAVCIDRPeriod, pParam, sizeof(m_sConfigAVCIDRPeriod));
-                m_sParamAVC.nPFrames = pParam->nPFrames;
                 break;
             }
         case OMX_IndexConfigCommonDeinterlace:
@@ -2328,7 +2315,6 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 }
                 break;
             }
-#ifndef _LINUX_
         case OMX_QTIIndexConfigDescribeColorAspects:
            {
                VALIDATE_OMX_PARAM_DATA(configData, DescribeColorAspectsParams);
@@ -2341,7 +2327,6 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                memcpy(&m_sConfigColorAspects, configData, sizeof(m_sConfigColorAspects));
                break;
            }
-#endif
         case OMX_IndexConfigAndroidVideoTemporalLayering:
             {
                 VALIDATE_OMX_PARAM_DATA(configData, OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE);
@@ -2445,8 +2430,6 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
         for (i=0; i<m_sInPortDef.nBufferCountActual; i++ ) {
             if (BITMASK_PRESENT(&m_inp_bm_count, i)) {
                 BITMASK_CLEAR(&m_inp_bm_count, i);
-                if (BITMASK_PRESENT(&m_client_in_bm_count, i))
-                    BITMASK_CLEAR(&m_client_in_bm_count, i);
                 free_input_buffer (&m_inp_mem_ptr[i]);
             }
 
@@ -2707,9 +2690,8 @@ int omx_venc::async_message_process (void *context, void* message)
     omx_video* omx = NULL;
     struct venc_msg *m_sVenc_msg = NULL;
     OMX_BUFFERHEADERTYPE* omxhdr = NULL;
-#ifndef _LINUX_
+    struct venc_buffer *temp_buff = NULL;
     native_handle_t *nh = NULL;
-#endif
 
     if (context == NULL || message == NULL) {
         DEBUG_PRINT_ERROR("ERROR: omx_venc::async_message_process invalid i/p params");
@@ -2803,7 +2785,6 @@ int omx_venc::async_message_process (void *context, void* message)
                                 (m_sVenc_msg->buf.ptrbuffer),
                                 m_sVenc_msg->buf.len);
                     }
-#ifndef _LINUX_
                 } else if (omx->is_secure_session()) {
                     if (omx->allocate_native_handle) {
                         native_handle_t *nh = (native_handle_t *)(omxhdr->pBuffer);
@@ -2853,12 +2834,10 @@ int omx_venc::async_message_process (void *context, void* message)
 bool omx_venc::dev_color_align(OMX_BUFFERHEADERTYPE *buffer,
                 OMX_U32 width, OMX_U32 height)
 {
-#ifndef _LINUX_
     if(secure_session) {
         DEBUG_PRINT_ERROR("Cannot align colors in secure session.");
         return OMX_FALSE;
     }
-#endif
     return handle->venc_color_align(buffer, width,height);
 }
 

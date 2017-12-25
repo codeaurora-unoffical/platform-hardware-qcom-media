@@ -262,11 +262,7 @@ struct OMX_QCOM_PLATFORMPRIVATE_EXTN
 typedef struct OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO
 {
     /** pmem file descriptor */
-#ifdef _ANDORID_
     unsigned long pmem_fd;
-#else
-    OMX_S32 pmem_fd;
-#endif
     /** Offset from pmem device base address */
     OMX_U32 offset;
     OMX_U32 size;
@@ -675,21 +671,6 @@ enum OMX_QCOM_EXTN_INDEXTYPE
     OMX_QTIIndexParamCapabilitiesRotationSupport= 0x7F100004,
 
 };
-
-#ifndef _ANDROID_
-/**
-* A pointer to this struct is passed to OMX_SetParameter when the extension
-* index for the 'OMX.google.android.index.prependSPSPPSToIDRFrames' extension
-* is given.
-* A successful result indicates that future IDR frames will be prefixed by
-* SPS/PPS.
-*/
-typedef struct PrependSPSPPSToIDRFramesParams {
-   OMX_U32 nSize;
-   OMX_VERSIONTYPE nVersion;
-   OMX_BOOL bEnable;
-} PrependSPSPPSToIDRFramesParams;
-#endif
 
 /**
 * This is custom extension to configure Low Latency Mode.
@@ -1141,18 +1122,6 @@ typedef struct OMX_QCOM_VIDEO_CONFIG_QPRANGE
    OMX_U32 nMinQP;          /** The number for minimum quantization parameter */
    OMX_U32 nMaxQP;          /** The number for maximum quantization parameter */
 } OMX_QCOM_VIDEO_CONFIG_QPRANGE;
-
-/**
- * This structure describes the parameters for the
- * OMX_QcomIndexParamAUDelimiter extension.  It enables/disables
- * the AU delimiters in the stream.
- */
-typedef struct OMX_QCOM_VIDEO_CONFIG_AUD
-{
-   OMX_U32 nSize;           /** Size of the structure in bytes */
-   OMX_VERSIONTYPE nVersion;/** OMX specification version information */
-   OMX_BOOL bEnable;        /** Enable/disable the setting */
-} OMX_QCOM_VIDEO_CONFIG_AUD;
 
 /**
  * This structure describes the parameters for the

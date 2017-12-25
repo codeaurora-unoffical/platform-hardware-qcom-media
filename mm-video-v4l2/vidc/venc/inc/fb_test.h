@@ -36,9 +36,9 @@ extern "C" {
     int FBTest_Initialize(int nFrameWidth,
             int nFrameHeight);
     int FBTest_DisplayImage(int nPmemFd, int nOffset);
-    int FBTest_Exit(void);
+    int FBTest_Exit();
 
-    int FBTest_RunTest(void);
+    int FBTest_RunTest();
 
 #ifdef __cplusplus
 }

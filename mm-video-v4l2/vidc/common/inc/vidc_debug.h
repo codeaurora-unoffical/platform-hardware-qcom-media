@@ -29,6 +29,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef __VIDC_DEBUG_H__
 #define __VIDC_DEBUG_H__
 
+#ifdef _ANDROID_
+#include <cstdio>
 #include <pthread.h>
 #include <sys/mman.h>
 #include <media/msm_media_info.h>
@@ -43,10 +45,6 @@ enum {
 };
 
 extern int debug_level;
-
-#ifdef _ANDROID_
-#include <cstdio>
-#include <sys/mman.h>
 
 #undef DEBUG_PRINT_ERROR
 #define DEBUG_PRINT_ERROR(fmt, args...) ({ \
@@ -69,29 +67,12 @@ extern int debug_level;
           ALOGD(fmt,##args); \
       })
 #else
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/mman.h>
-#define gettid() syscall(SYS_gettid)
-#define getpid() syscall(SYS_getpid)
-#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-#define DEBUG_PRINT_CTL(level, fmt, args...) \
-    do {                                       \
-        if ( level & debug_level )     \
-        printf("[%ld:%ld]:[%s:%d] " fmt" \n", getpid(), \
-                gettid(), __FILENAME__, __LINE__, ##args); \
-    } while (0)
-
-#define DEBUG_PRINT_ERROR(fmt, args...) DEBUG_PRINT_CTL(PRIO_ERROR, fmt, ##args)
-#define DEBUG_PRINT_INFO(fmt, args...)  DEBUG_PRINT_CTL(PRIO_INFO, fmt, ##args)
-#define DEBUG_PRINT_LOW(fmt, args...)  DEBUG_PRINT_CTL(PRIO_LOW, fmt, ##args)
-#define DEBUG_PRINT_HIGH(fmt, args...) DEBUG_PRINT_CTL(PRIO_HIGH, fmt, ##args)
+#define DEBUG_PRINT_ERROR printf
+#define DEBUG_PRINT_INFO printf
+#define DEBUG_PRINT_LOW printf
+#define DEBUG_PRINT_HIGH printf
 #endif
 
-#ifndef _LINUX_
 #define VALIDATE_OMX_PARAM_DATA(ptr, paramType)                                \
     {                                                                          \
         if (ptr == NULL) { return OMX_ErrorBadParameter; }                     \
@@ -101,10 +82,7 @@ extern int debug_level;
                     (unsigned int)p->nSize, sizeof(paramType), #paramType);    \
             return OMX_ErrorBadParameter;                                      \
         }                                                                      \
-    }
-#else
-#define VALIDATE_OMX_PARAM_DATA(ptr, paramType) {}
-#endif
+    }                                                                          \
 
 /*
  * Validate OMX_CONFIG_ANDROID_VENDOR_EXTENSIONTYPE type param

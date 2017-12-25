@@ -55,7 +55,6 @@ omx_core_cb_type core[] =
       "video_decoder.avc"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.video.decoder.avc.secure",
     NULL, // Create instance function
@@ -136,7 +135,6 @@ omx_core_cb_type core[] =
       "video_decoder.mpeg4"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.video.decoder.mpeg2",
     NULL, // Create instance function
@@ -153,7 +151,6 @@ omx_core_cb_type core[] =
       "video_decoder.mpeg2"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.video.decoder.mpeg2.secure",
     NULL, // Create instance function
@@ -170,7 +167,6 @@ omx_core_cb_type core[] =
       "video_decoder.mpeg2"
     }
   },
-#endif
   {
     "OMX.qcom.video.decoder.vc1",
     NULL, // Create instance function
@@ -187,7 +183,6 @@ omx_core_cb_type core[] =
       "video_decoder.vc1"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.video.decoder.vc1.secure",
     NULL, // Create instance function
@@ -204,7 +199,6 @@ omx_core_cb_type core[] =
       "video_decoder.vc1"
     }
   },
-#endif
   {
     "OMX.qcom.video.decoder.h263",
     NULL, // Create instance function
@@ -237,7 +231,6 @@ omx_core_cb_type core[] =
       "video_decoder.hevc"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.video.decoder.hevc.secure",
     NULL,   // Create instance function
@@ -254,7 +247,6 @@ omx_core_cb_type core[] =
       "video_decoder.hevc"
     }
   },
-#endif
   {
     "OMX.qcom.video.decoder.vp8",
     NULL, // Create instance function
@@ -287,7 +279,6 @@ omx_core_cb_type core[] =
       "video_decoder.vp9"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.video.decoder.vp9.secure",
     NULL, // Create instance function
@@ -304,7 +295,6 @@ omx_core_cb_type core[] =
       "video_decoder.vp9"
     }
   },
-#endif
   {
     "OMX.qcom.video.encoder.mpeg4",
     NULL, // Create instance function
@@ -353,7 +343,6 @@ omx_core_cb_type core[] =
       "video_encoder.avc"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.video.encoder.avc.secure",
     NULL, // Create instance function
@@ -370,7 +359,6 @@ omx_core_cb_type core[] =
       "video_encoder.avc"
     }
   },
-#endif
   {
     "OMX.qcom.video.encoder.vp8",
     NULL, // Create instance function
@@ -403,7 +391,6 @@ omx_core_cb_type core[] =
       "video_encoder.hevc"
     }
   },
-#ifndef _LINUX_
   {
     "OMX.qcom.audio.decoder.Qcelp13",
     NULL, // Create instance function

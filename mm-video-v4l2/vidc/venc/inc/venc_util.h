@@ -43,7 +43,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-    long long GetTimeStamp(void);
+    long long GetTimeStamp();
 
 
 #ifdef __cplusplus

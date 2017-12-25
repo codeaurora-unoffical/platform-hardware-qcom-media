@@ -56,13 +56,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #include<utils/Log.h>
 }
-#else
-#include "vidc_debug.h"
 
-#define ALOGD DEBUG_PRINT_HIGH
-#define ALOGI DEBUG_PRINT_INFO
-#define ALOGV DEBUG_PRINT_LOW
-#define ALOGE DEBUG_PRINT_ERROR
 #endif
 
 /* =======================================================================
@@ -538,6 +532,7 @@ void h264_stream_parser::init_bitstream(OMX_U8* data, OMX_U32 size)
 
 void h264_stream_parser::parse_vui(bool vui_in_extradata)
 {
+    OMX_U32 value = 0;
     ALOGV("parse_vui: IN");
     if (vui_in_extradata)
         while (!extract_bits(1) && more_bits()); // Discard VUI enable flag
@@ -733,7 +728,7 @@ void h264_stream_parser::parse_sei()
     while ((processed_bytes + 2) < sei_unit_size && more_bits()) {
         init_bitstream(sei_msg_start + processed_bytes, sei_unit_size - processed_bytes);
         ALOGV("-->NALU_TYPE_SEI");
-        OMX_U32 payload_type = 0, payload_size = 0;
+        OMX_U32 payload_type = 0, payload_size = 0, aux = 0;
         do {
             value = extract_bits(8);
             payload_type += value;
@@ -819,15 +814,18 @@ void h264_stream_parser::sei_picture_timing()
 {
     ALOGV("@@sei_picture_timing: IN");
     OMX_U32 time_offset_len = 0, cpb_removal_len = 24, dpb_output_len  = 24;
+    OMX_U8 cbr_flag = 0;
     sei_pic_timing.is_valid = true;
     if (vui_param.nal_hrd_parameters_present_flag) {
         cpb_removal_len = vui_param.nal_hrd_parameters.cpb_removal_delay_length;
         dpb_output_len = vui_param.nal_hrd_parameters.dpb_output_delay_length;
         time_offset_len = vui_param.nal_hrd_parameters.time_offset_length;
+        cbr_flag = vui_param.nal_hrd_parameters.cbr_flag[0];
     } else if (vui_param.vcl_hrd_parameters_present_flag) {
         cpb_removal_len = vui_param.vcl_hrd_parameters.cpb_removal_delay_length;
         dpb_output_len = vui_param.vcl_hrd_parameters.dpb_output_delay_length;
         time_offset_len = vui_param.vcl_hrd_parameters.time_offset_length;
+        cbr_flag = vui_param.vcl_hrd_parameters.cbr_flag[0];
     }
     sei_pic_timing.cpb_removal_delay = extract_bits(cpb_removal_len);
     sei_pic_timing.dpb_output_delay = extract_bits(dpb_output_len);

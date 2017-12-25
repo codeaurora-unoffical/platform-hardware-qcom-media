@@ -54,6 +54,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pthread.h>
 #include <semaphore.h>
 #include <linux/msm_vidc_enc.h>
+#include <media/hardware/HardwareAPI.h>
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
 #include "OMX_Skype_VideoExtensions.h"
@@ -86,11 +87,11 @@ static const char* MEM_DEVICE = "/dev/ion";
 #define MEM_HEAP_ID ION_CP_MM_HEAP_ID
 #endif
 #endif
-#elif defined MAX_RES_720P
+#elif MAX_RES_720P
 static const char* MEM_DEVICE = "/dev/pmem_adsp";
-#elif defined MAX_RES_1080P_EBI
+#elif MAX_RES_1080P_EBI
 static const char* MEM_DEVICE  = "/dev/pmem_adsp";
-#elif defined MAX_RES_1080P
+#elif MAX_RES_1080P
 static const char* MEM_DEVICE = "/dev/pmem_smipool";
 #else
 #error MEM_DEVICE cannot be determined.
@@ -154,12 +155,10 @@ enum omx_venc_extradata_types {
     VENC_EXTRADATA_ROI = 0x04000000,
 };
 
-#ifndef _LINUX_
 struct output_metabuffer {
     OMX_U32 type;
     native_handle_t *nh;
 };
-#endif
 
 typedef struct encoder_meta_buffer_payload_type {
     char data[sizeof(LEGACY_CAM_METADATA_TYPE) + sizeof(int)];
@@ -169,7 +168,7 @@ typedef struct encoder_meta_buffer_payload_type {
 class omx_video: public qc_omx_component
 {
     protected:
-#if defined (_ANDROID_ICS_) || defined (_LINUX_)
+#ifdef _ANDROID_ICS_
         bool meta_mode_enable;
         bool c2d_opened;
         encoder_meta_buffer_payload_type meta_buffers[MAX_NUM_INPUT_BUFFERS];
@@ -182,7 +181,6 @@ class omx_video: public qc_omx_component
         //intermediate conversion buffer queued to encoder in case of invalid EOS input
         OMX_BUFFERHEADERTYPE  *mEmptyEosBuffer;
 
-#ifndef _LINUX_
         class omx_c2d_conv
         {
             public:
@@ -206,7 +204,6 @@ class omx_video: public qc_omx_component
                 destroyC2DColorConverter_t *mConvertClose;
         };
         omx_c2d_conv c2d_conv;
-#endif
 #endif
     public:
 
@@ -580,9 +577,7 @@ class omx_video: public qc_omx_component
 
         void complete_pending_buffer_done_cbs();
         bool is_conv_needed(int, int);
-#ifndef _LINUX_
         void print_debug_color_aspects(ColorAspects *aspects, const char *prefix);
-#endif
 
         OMX_ERRORTYPE get_vendor_extension_config(
                 OMX_CONFIG_ANDROID_VENDOR_EXTENSIONTYPE *ext);
@@ -679,9 +674,7 @@ class omx_video: public qc_omx_component
         OMX_VIDEO_CONFIG_ANDROID_INTRAREFRESHTYPE m_sConfigIntraRefresh;
 #endif
         OMX_QTI_VIDEO_CONFIG_BLURINFO       m_blurInfo;
-#ifndef _LINUX_
         DescribeColorAspectsParams m_sConfigColorAspects;
-#endif
         OMX_VIDEO_PARAM_ANDROID_TEMPORALLAYERINGTYPE m_sParamTemporalLayers;
         OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE m_sConfigTemporalLayers;
         QOMX_ENABLETYPE m_sParamAVTimerTimestampMode;   // use VT-timestamps in gralloc-handle
@@ -725,7 +718,6 @@ class omx_video: public qc_omx_component
         bool hw_overload;
         size_t m_graphicbuffer_size;
         char m_platform[OMX_MAX_STRINGNAME_SIZE];
-        bool m_buffer_freed;
 };
 
 #endif // __OMX_VIDEO_BASE_H__

@@ -150,7 +150,6 @@ LOCAL_STATIC_LIBRARIES    := libOmxVidcCommon
 LOCAL_SRC_FILES   := src/omx_video_base.cpp
 LOCAL_SRC_FILES   += src/omx_video_encoder.cpp
 LOCAL_SRC_FILES   += src/video_encoder_device_v4l2.cpp
-LOCAL_SRC_FILES   += ../common/src/hypv_intercept.cpp
 
 include $(BUILD_SHARED_LIBRARY)
 

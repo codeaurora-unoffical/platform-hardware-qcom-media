@@ -56,9 +56,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <glib.h>
 #define strlcpy g_strlcpy
 #endif
-#ifdef _LINUX_
-#include <sys/ioctl.h>
-#endif
 #define H264_SUPPORTED_WIDTH (480)
 #define H264_SUPPORTED_HEIGHT (368)
 
@@ -262,9 +259,7 @@ unsigned omx_video::omx_cmd_queue::get_q_msg_type()
    None.
    ========================================================================== */
 omx_video::omx_video():
-#ifndef _LINUX_
     c2d_opened(false),
-#endif
     psource_frame(NULL),
     pdest_frame(NULL),
     secure_session(false),
@@ -301,8 +296,7 @@ omx_video::omx_video():
     m_fbd_count(0),
     m_event_port_settings_sent(false),
     hw_overload(false),
-    m_graphicbuffer_size(0),
-    m_buffer_freed(0)
+    m_graphicbuffer_size(0)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -312,9 +306,8 @@ omx_video::omx_video():
     msg_thread_stop = false;
 
     OMX_INIT_STRUCT(&m_blurInfo, OMX_QTI_VIDEO_CONFIG_BLURINFO);
-    m_blurInfo.nPortIndex = (OMX_U32)PORT_INDEX_IN;
+    m_blurInfo.nPortIndex == (OMX_U32)PORT_INDEX_IN;
 
-    mUseProxyColorFormat = false;
     mUsesColorConversion = false;
     pthread_mutex_init(&m_lock, NULL);
     pthread_mutex_init(&m_TimeStampInfo.m_lock, NULL);
@@ -446,9 +439,6 @@ void omx_video::process_event_cb(void *ctxt, unsigned char id)
                             case OMX_CommandStateSet:
                                 pThis->m_state = (OMX_STATETYPE) p2;
                                 DEBUG_PRINT_LOW("Process -> state set to %d", pThis->m_state);
-                                if (pThis->m_state == OMX_StateLoaded) {
-                                    m_buffer_freed = false;
-                                }
                                 pThis->m_pCallbacks.EventHandler(&pThis->m_cmp, pThis->m_app_data,
                                         OMX_EventCmdComplete, p1, p2, NULL);
                                 break;
@@ -1539,6 +1529,7 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 {
     (void)hComp;
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
+    unsigned int height=0,width = 0;
 
     DEBUG_PRINT_LOW("get_parameter:");
     if (m_state == OMX_StateInvalid) {
@@ -2336,7 +2327,6 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                memcpy(pParam, &m_blurInfo, sizeof(m_blurInfo));
                break;
            }
-#ifndef _LINUX_
        case OMX_QTIIndexConfigDescribeColorAspects:
             {
                 VALIDATE_OMX_PARAM_DATA(configData, DescribeColorAspectsParams);
@@ -2374,6 +2364,8 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
         case OMX_IndexParamAndroidVideoTemporalLayering:
             {
                 VALIDATE_OMX_PARAM_DATA(configData, OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE);
+                OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE *layerConfig =
+                        (OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE *)configData;
                 DEBUG_PRINT_LOW("get_config: OMX_IndexConfigAndroidVideoTemporalLayering");
                 memcpy(configData, &m_sConfigTemporalLayers, sizeof(m_sConfigTemporalLayers));
                 break;
@@ -2599,6 +2591,7 @@ OMX_ERRORTYPE  omx_video::use_input_buffer(
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
 
     unsigned   i = 0;
+    unsigned char *buf_addr = NULL;
 
     DEBUG_PRINT_HIGH("use_input_buffer: port = %u appData = %p bytes = %u buffer = %p",(unsigned int)port,appData,(unsigned int)bytes,buffer);
     if (bytes < m_sInPortDef.nBufferSize) {
@@ -2652,7 +2645,6 @@ OMX_ERRORTYPE  omx_video::use_input_buffer(
 
         *bufferHdr = (m_inp_mem_ptr + i);
         BITMASK_SET(&m_inp_bm_count,i);
-        BITMASK_SET(&m_client_in_bm_count,i);
 
         (*bufferHdr)->pBuffer           = (OMX_U8 *)buffer;
         (*bufferHdr)->nSize             = sizeof(OMX_BUFFERHEADERTYPE);
@@ -2711,7 +2703,7 @@ OMX_ERRORTYPE  omx_video::use_input_buffer(
 
         } else {
             OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *pParam = reinterpret_cast<OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO *>((*bufferHdr)->pAppPrivate);
-            DEBUG_PRINT_LOW("Inside qcom_ext with luma:(fd:%d,offset:0x%x)", pParam->pmem_fd, (unsigned)pParam->offset);
+            DEBUG_PRINT_LOW("Inside qcom_ext with luma:(fd:%lu,offset:0x%x)", pParam->pmem_fd, (unsigned)pParam->offset);
 
             if (pParam) {
                 m_pInput_pmem[i].fd = pParam->pmem_fd;
@@ -2769,6 +2761,7 @@ OMX_ERRORTYPE  omx_video::use_output_buffer(
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
     OMX_BUFFERHEADERTYPE       *bufHdr= NULL; // buffer header
     unsigned                         i= 0; // Temporary counter
+    unsigned char *buf_addr = NULL;
 #ifdef _MSM8974_
     int align_size;
 #endif
@@ -2910,7 +2903,7 @@ OMX_ERRORTYPE  omx_video::use_output_buffer(
                 DEBUG_PRINT_LOW("Inside qcom_ext pParam: %p", pParam);
 
                 if (pParam) {
-                    DEBUG_PRINT_LOW("Inside qcom_ext with luma:(fd:%d,offset:0x%x)", pParam->pmem_fd, (int)pParam->offset);
+                    DEBUG_PRINT_LOW("Inside qcom_ext with luma:(fd:%lu,offset:0x%x)", pParam->pmem_fd, (int)pParam->offset);
                     m_pOutput_pmem[i].fd = pParam->pmem_fd;
                     m_pOutput_pmem[i].offset = pParam->offset;
                     m_pOutput_pmem[i].size = m_sOutPortDef.nBufferSize;
@@ -2919,6 +2912,7 @@ OMX_ERRORTYPE  omx_video::use_output_buffer(
                     DEBUG_PRINT_ERROR("ERROR: Invalid AppData given for PMEM o/p UseBuffer case");
                     return OMX_ErrorBadParameter;
                 }
+                buf_addr = (unsigned char *)buffer;
             }
 
             DEBUG_PRINT_LOW("use_out:: bufhdr = %p, pBuffer = %p, m_pOutput_pmem[i].buffer = %p",
@@ -3010,6 +3004,7 @@ OMX_ERRORTYPE  omx_video::use_buffer(
 OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 {
     unsigned int index = 0;
+    OMX_U8 *temp_buff ;
 
     if (bufferHdr == NULL || m_inp_mem_ptr == NULL) {
         DEBUG_PRINT_ERROR("ERROR: free_input: Invalid bufferHdr[%p] or m_inp_mem_ptr[%p]",
@@ -3085,6 +3080,7 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 OMX_ERRORTYPE omx_video::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 {
     unsigned int index = 0;
+    OMX_U8 *temp_buff ;
 
     if (bufferHdr == NULL || m_out_mem_ptr == NULL) {
         DEBUG_PRINT_ERROR("ERROR: free_output: Invalid bufferHdr[%p] or m_out_mem_ptr[%p]",
@@ -3287,12 +3283,7 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
         m_pInput_ion[i].ion_device_fd = alloc_map_ion_memory(m_sInPortDef.nBufferSize,
                 &m_pInput_ion[i].ion_alloc_data,
                 &m_pInput_ion[i].fd_ion_data,
-#ifdef _LINUX_
-                0);
-#else
                 secure_session ? SECURE_FLAGS_INPUT_BUFFER : 0);
-#endif
-
 #else
         m_pInput_ion[i].ion_device_fd = alloc_map_ion_memory(m_sInPortDef.nBufferSize,
                 &m_pInput_ion[i].ion_alloc_data,
@@ -3334,7 +3325,6 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
                 return OMX_ErrorInsufficientResources;
             }
         } else {
-#ifndef _LINUX_
             //This should only be used for passing reference to source type and
             //secure handle fd struct native_handle_t*
             m_pInput_pmem[i].buffer = malloc(sizeof(OMX_U32) + sizeof(native_handle_t*));
@@ -3343,7 +3333,6 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
                 return OMX_ErrorInsufficientResources;
             }
             (*bufferHdr)->nAllocLen = sizeof(OMX_U32) + sizeof(native_handle_t*);
-#endif
         }
 
         (*bufferHdr)->pBuffer           = (OMX_U8 *)m_pInput_pmem[i].buffer;
@@ -3463,12 +3452,7 @@ OMX_ERRORTYPE  omx_video::allocate_output_buffer(
             m_pOutput_ion[i].ion_device_fd = alloc_map_ion_memory(align_size,
                     &m_pOutput_ion[i].ion_alloc_data,
                     &m_pOutput_ion[i].fd_ion_data,
-#ifdef _LINUX_
-                    ION_FLAG_CACHED);
-#else
                     secure_session ? SECURE_FLAGS_OUTPUT_BUFFER : ION_FLAG_CACHED);
-#endif
-
 #else
             m_pOutput_ion[i].ion_device_fd = alloc_map_ion_memory(m_sOutPortDef.nBufferSize,
                     &m_pOutput_ion[i].ion_alloc_data,
@@ -3517,7 +3501,6 @@ OMX_ERRORTYPE  omx_video::allocate_output_buffer(
                     return OMX_ErrorInsufficientResources;
                 }
             }
-#ifndef _LINUX_
             else {
                 //This should only be used for passing reference to source type and
                 //secure handle fd struct native_handle_t*
@@ -3553,7 +3536,6 @@ OMX_ERRORTYPE  omx_video::allocate_output_buffer(
                     buffer->nh = handle;
                 }
             }
-#endif
 
             (*bufferHdr)->pBuffer = (OMX_U8 *)m_pOutput_pmem[i].buffer;
             (*bufferHdr)->pAppPrivate = appData;
@@ -3688,14 +3670,12 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         DEBUG_PRINT_LOW("Free Buffer while port %u disabled", (unsigned int)port);
     } else if (m_state == OMX_StateExecuting || m_state == OMX_StatePause) {
         DEBUG_PRINT_ERROR("ERROR: Invalid state to free buffer,ports need to be disabled");
-        m_buffer_freed = true;
         post_event(OMX_EventError,
                 OMX_ErrorPortUnpopulated,
                 OMX_COMPONENT_GENERATE_EVENT);
         return eRet;
     } else {
         DEBUG_PRINT_ERROR("ERROR: Invalid state to free buffer,port lost Buffers");
-        m_buffer_freed = true;
         post_event(OMX_EventError,
                 OMX_ErrorPortUnpopulated,
                 OMX_COMPONENT_GENERATE_EVENT);
@@ -3703,11 +3683,7 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 
     if (port == PORT_INDEX_IN) {
         // check if the buffer is valid
-#ifdef _LINUX_
-        nPortIndex = buffer - m_inp_mem_ptr;
-#else
         nPortIndex = buffer - ((!meta_mode_enable)?m_inp_mem_ptr:meta_buffer_hdr);
-#endif
 
         DEBUG_PRINT_LOW("free_buffer on i/p port - Port idx %u, actual cnt %u",
                 nPortIndex, (unsigned int)m_sInPortDef.nBufferCountActual);
@@ -3821,9 +3797,6 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
                     m_out_bm_count, m_inp_bm_count);
         }
     }
-    if (eRet != OMX_ErrorNone) {
-        m_buffer_freed = true;
-    }
 
     return eRet;
 }
@@ -3847,6 +3820,7 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
 OMX_ERRORTYPE  omx_video::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* buffer)
 {
+    OMX_ERRORTYPE ret1 = OMX_ErrorNone;
     unsigned int nBufferIndex ;
 
     DEBUG_PRINT_LOW("ETB: buffer = %p, buffer->pBuffer[%p]", buffer, buffer->pBuffer);
@@ -3876,11 +3850,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         return OMX_ErrorIncorrectStateOperation;
     }
 
-#ifdef _LINUX_
-    nBufferIndex = buffer - m_inp_mem_ptr;
-#else
     nBufferIndex = buffer - ((!meta_mode_enable)?m_inp_mem_ptr:meta_buffer_hdr);
-#endif
 
     if (nBufferIndex > m_sInPortDef.nBufferCountActual ) {
         DEBUG_PRINT_ERROR("ERROR: ETB: Invalid buffer index[%d]", nBufferIndex);
@@ -3914,11 +3884,10 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     VIDC_TRACE_NAME_HIGH("ETB");
     (void)hComp;
     OMX_U8 *pmem_data_buf = NULL;
+    int push_cnt = 0;
     unsigned nBufIndex = 0;
     OMX_ERRORTYPE ret = OMX_ErrorNone;
-#ifndef _LINUX_
     LEGACY_CAM_METADATA_TYPE *media_buffer = NULL;
-#endif
 
 #ifdef _MSM8974_
     int fd = 0;
@@ -3929,13 +3898,6 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         return OMX_ErrorBadParameter;
     }
 
-#ifdef _LINUX_
-    nBufIndex = buffer - ((OMX_BUFFERHEADERTYPE *)m_inp_mem_ptr);
-    if (nBufIndex >= m_sInPortDef.nBufferCountActual) {
-        DEBUG_PRINT_ERROR("ERROR: ETBProxy: Invalid bufIndex = %u", nBufIndex);
-        return OMX_ErrorBadParameter;
-    }
-#else
     // Buffer sanity checks
     if (meta_mode_enable && !mUsesColorConversion) {
         //For color-conversion case, we have an internal buffer and not a meta buffer
@@ -3990,7 +3952,6 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
             return OMX_ErrorBadParameter;
         }
     }
-#endif
 
     pending_input_buffers++;
     VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
@@ -4174,15 +4135,10 @@ OMX_ERRORTYPE  omx_video::fill_this_buffer_proxy(
     VIDC_TRACE_NAME_HIGH("FTB");
     (void)hComp;
     OMX_U8 *pmem_data_buf = NULL;
-    auto_lock l(m_buf_lock);
-    if (m_buffer_freed == true) {
-        DEBUG_PRINT_ERROR("ERROR: FTBProxy: Invalid call. Called after freebuffer");
-        return OMX_ErrorBadParameter;
-    }
+    OMX_ERRORTYPE nRet = OMX_ErrorNone;
 
-    if (bufferAdd != NULL) {
-        DEBUG_PRINT_LOW("FTBProxy: bufferAdd->pBuffer[%p]", bufferAdd->pBuffer);
-    }
+    DEBUG_PRINT_LOW("FTBProxy: bufferAdd->pBuffer[%p]", bufferAdd->pBuffer);
+
     if (bufferAdd == NULL || ((bufferAdd - m_out_mem_ptr) >= (int)m_sOutPortDef.nBufferCountActual) ) {
         DEBUG_PRINT_ERROR("ERROR: FTBProxy: Invalid i/p params");
         return OMX_ErrorBadParameter;
@@ -4523,7 +4479,7 @@ bool omx_video::release_done(void)
 bool omx_video::release_output_done(void)
 {
     bool bRet = false;
-    unsigned j = 0;
+    unsigned i=0,j=0;
 
     DEBUG_PRINT_LOW("Inside release_output_done()");
     if (m_out_mem_ptr) {
@@ -4557,7 +4513,7 @@ bool omx_video::release_output_done(void)
 bool omx_video::release_input_done(void)
 {
     bool bRet = false;
-    unsigned j = 0;
+    unsigned i=0,j=0;
 
     DEBUG_PRINT_LOW("Inside release_input_done()");
     if (m_inp_mem_ptr) {
@@ -5026,7 +4982,6 @@ void omx_video::omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer)
     }
 }
 #endif
-#ifndef _LINUX_
 omx_video::omx_c2d_conv::omx_c2d_conv()
 {
     c2dcc = NULL;
@@ -5178,7 +5133,6 @@ void omx_video::print_debug_color_aspects(ColorAspects *aspects, const char *pre
     DEBUG_PRINT_HIGH("%s : Color aspects : Primaries = %d Range = %d Transfer = %d MatrixCoeffs = %d",
             prefix, aspects->mPrimaries, aspects->mRange, aspects->mTransfer, aspects->mMatrixCoeffs);
 }
-#endif
 
 OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* buffer)
@@ -5186,10 +5140,8 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
     VIDC_TRACE_NAME_LOW("ETB-Opaque");
     unsigned nBufIndex = 0;
     OMX_ERRORTYPE ret = OMX_ErrorNone;
-#ifndef _LINUX_
     VideoGrallocMetadata *media_buffer; // This method primarily assumes gralloc-metadata
     private_handle_t *handle = NULL;
-#endif
     DEBUG_PRINT_LOW("ETBProxyOpaque: buffer[%p]", buffer);
 
     if (buffer == NULL) {
@@ -5209,7 +5161,6 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         return OMX_ErrorBadParameter;
     }
 
-#ifndef _LINUX_
     media_buffer = (VideoGrallocMetadata *)buffer->pBuffer;
     if (!media_buffer) {
         DEBUG_PRINT_ERROR("%s: invalid media_buffer",__FUNCTION__);
@@ -5235,12 +5186,10 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
     } else if (media_buffer) {
         handle = (private_handle_t *)media_buffer->pHandle;
     }
-#endif
 
     /*Enable following code once private handle color format is
       updated correctly*/
 
-#ifndef _LINUX_
     if (buffer->nFilledLen > 0 && handle) {
         if (c2d_opened && handle->format != c2d_conv.get_src_format()) {
             c2d_conv.close();
@@ -5274,7 +5223,6 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
             }
         }
     }
-#endif
     if (input_flush_progress == true) {
         m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
         DEBUG_PRINT_ERROR("ERROR: ETBProxyA: Input flush in progress");
@@ -5294,7 +5242,6 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
     return ret;
 }
 
-#ifndef _LINUX_
 OMX_ERRORTYPE omx_video::queue_meta_buffer(OMX_HANDLETYPE hComp,
         struct pmem &Input_pmem_info)
 {
@@ -5429,7 +5376,6 @@ OMX_ERRORTYPE omx_video::convert_queue_buffer(OMX_HANDLETYPE hComp,
     }
     return ret;
 }
-#endif
 
 OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
 {
@@ -5447,10 +5393,8 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
     }
     while (psource_frame != NULL && pdest_frame != NULL &&
             ret == OMX_ErrorNone) {
-#ifndef _LINUX_
         struct pmem Input_pmem_info;
         LEGACY_CAM_METADATA_TYPE *media_buffer;
-#endif
         index = pdest_frame - m_inp_mem_ptr;
         if (index >= m_sInPortDef.nBufferCountActual) {
             DEBUG_PRINT_ERROR("Output buffer index is wrong %u act count %u",
@@ -5465,7 +5409,6 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
         if (psource_frame->nFilledLen == 0 && (psource_frame->nFlags & OMX_BUFFERFLAG_EOS)) {
             return push_empty_eos_buffer(hComp);
         }
-#ifndef _LINUX_
         media_buffer = (LEGACY_CAM_METADATA_TYPE *)psource_frame->pBuffer;
         /*Will enable to verify camcorder in current TIPS can be removed*/
         if (media_buffer->buffer_type == LEGACY_CAM_SOURCE) {
@@ -5497,7 +5440,6 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
             else
                 ret = OMX_ErrorBadParameter;
         }
-#endif
     }
     return ret;
 }

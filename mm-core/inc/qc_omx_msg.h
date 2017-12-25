@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2009, 2016, The Linux Foundation. All rights reserved.
+Copyright (c) 2009, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -73,29 +73,14 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         #define DEBUG_PRINT       LOGI
         #define DEBUG_DETAIL      LOGV
     #else
-#include <stdlib.h>
-        enum {
-          PRIO_ERROR=1,
-          PRIO_INFO=1,
-          PRIO_HIGH=2,
-          PRIO_LOW=4
-        };
-        #define DEBUG_PRINT_CTL(level, fmt, args...)  \
-          do {                                        \
-            char *ptr = getenv("OMX_DEBUG_LEVEL");    \
-            if ( level & (ptr?atoi(ptr):0) )          \
-               printf(""fmt"\n", ##args);} while(0)
-        #define DEBUG_PRINT_ERROR(fmt,args...) \
-             DEBUG_PRINT_CTL(PRIO_ERROR, fmt, ##args)
-        #define DEBUG_PRINT(fmt,args...)       \
-             DEBUG_PRINT_CTL(PRIO_LOW, fmt, ##args)
-        #define DEBUG_DETAIL(fmt,args...)      \
-             DEBUG_PRINT_CTL(PRIO_HIGH, fmt, ##args)
+        #define DEBUG_PRINT_ERROR printf
+        #define DEBUG_PRINT       printf
+        #define DEBUG_DETAIL      printf
     #endif // _ANDROID_
 #else
-    #define DEBUG_PRINT_ERROR(...)
-    #define DEBUG_PRINT(...)
-    #define DEBUG_DETAIL(...)
+    #define DEBUG_PRINT_ERROR
+    #define DEBUG_PRINT
+    #define DEBUG_DETAIL
 #endif // _ENABLE_QC_MSG_LOG_
 
 #endif // _QC_OMX_MSG_H_

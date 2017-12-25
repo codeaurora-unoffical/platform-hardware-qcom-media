@@ -32,10 +32,6 @@
 
 #include <c2d2.h>
 #include <sys/types.h>
-#include "vidc_debug.h"
-#ifdef _LINUX_
-#include <pthread.h>
-#endif
 
 typedef C2D_STATUS (*LINK_c2dCreateSurface)( uint32 *surface_id,
         uint32 surface_bits,
@@ -71,9 +67,8 @@ typedef C2D_STATUS (*LINK_c2dUnMapAddr)(void * gpuaddr);
 
 typedef void (*LINK_AdrenoComputeAlignedWidthAndHeight) (int width, int height, int bpp, int tile_mode, int raster_mode,
                                                           int padding_threshold, int *aligned_width, int * aligned_height);
-#ifdef _ANDROID_
+
 namespace android {
-#endif
 
 /*TODO: THIS NEEDS TO ENABLED FOR JB PLUS*/
 enum ColorConvertFormat {
@@ -117,14 +112,11 @@ public:
     virtual int convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData) = 0;
     virtual int32_t getBuffReq(int32_t port, C2DBuffReq *req) = 0;
     virtual int32_t dumpOutput(char * filename, char mode) = 0;
-    virtual int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight) = 0;
 };
 
 typedef C2DColorConverterBase* createC2DColorConverter_t(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags, size_t srcStride);
 typedef void destroyC2DColorConverter_t(C2DColorConverterBase*);
 
-#ifdef _ANDROID_
 }
-#endif
 
 #endif  // C2D_ColorConverter_H_

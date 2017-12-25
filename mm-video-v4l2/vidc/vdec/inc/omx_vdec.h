@@ -47,7 +47,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <inttypes.h>
 #include <cstddef>
-#ifndef _LINUX_
 #include <cutils/atomic.h>
 #include <qdMetaData.h>
 #include <color_metadata.h>
@@ -73,14 +72,11 @@ static ptrdiff_t x;
 extern "C" {
 #include <utils/Log.h>
 }
-#endif // _ANDROID_
-#ifdef USE_ION
-#include <linux/msm_ion.h>
-#endif
 #include <linux/videodev2.h>
 #include <poll.h>
 #include "hevc_utils.h"
 #define TIMEOUT 5000
+#endif // _ANDROID_
 
 #if defined (_ANDROID_HONEYCOMB_) || defined (_ANDROID_ICS_)
 #include <media/hardware/HardwareAPI.h>
@@ -117,7 +113,6 @@ extern "C" {
 #include <cutils/properties.h>
 #else
 #define PROPERTY_VALUE_MAX 92
-#include <dlfcn.h>
 #endif
 extern "C" {
     OMX_API void * get_omx_component_factory_fn(void);
@@ -172,7 +167,7 @@ extern "C" {
 
 #define DESC_BUFFER_SIZE (8192 * 16)
 
-#if defined (_ANDROID_) || defined (_LINUX_)
+#ifdef _ANDROID_
 #define MAX_NUM_INPUT_OUTPUT_BUFFERS 64
 #endif
 
@@ -723,7 +718,6 @@ class omx_vdec: public qc_omx_component
         void set_frame_rate(OMX_S64 act_timestamp);
         void handle_extradata_secure(OMX_BUFFERHEADERTYPE *p_buf_hdr);
         void handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr);
-#ifndef _LINUX_
         void convert_color_space_info(OMX_U32 primaries, OMX_U32 range,
             OMX_U32 transfer, OMX_U32 matrix, ColorSpace_t *color_space,
             ColorAspects *aspects);
@@ -987,6 +981,10 @@ class omx_vdec: public qc_omx_component
         OMX_U32 client_extradata;
 #ifdef _ANDROID_
         bool m_debug_timestamp;
+        bool perf_flag;
+        OMX_U32 proc_frms, latency;
+        perf_metrics fps_metrics;
+        perf_metrics dec_time;
         bool m_reject_avc_1080p_mp;
         bool m_enable_android_native_buffers;
         bool m_use_android_native_buffers;
@@ -995,10 +993,6 @@ class omx_vdec: public qc_omx_component
         bool m_disable_dynamic_buf_mode;
         OMX_U32 m_conceal_color;
 #endif
-        bool perf_flag;
-        OMX_U32 proc_frms, latency;
-        perf_metrics fps_metrics;
-        perf_metrics dec_time;
 
 
         struct h264_mv_buffer {
@@ -1063,10 +1057,8 @@ class omx_vdec: public qc_omx_component
         bool m_decode_order_mode;
 
         bool m_input_pass_buffer_fd;
-#ifndef _LINUX_
         DescribeColorAspectsParams m_client_color_space;
         DescribeColorAspectsParams m_internal_color_space;
-#endif
 
         // HDRStaticInfo defined in HardwareAPI.h
         DescribeHDRStaticInfoParams m_client_hdr_info;
@@ -1153,7 +1145,6 @@ class omx_vdec: public qc_omx_component
         };
 #if  defined (_MSM8960_) || defined (_MSM8974_)
         allocate_color_convert_buf client_buffers;
-#endif
 #endif
         struct video_decoder_capability m_decoder_capability;
         struct debug_cap m_debug;
