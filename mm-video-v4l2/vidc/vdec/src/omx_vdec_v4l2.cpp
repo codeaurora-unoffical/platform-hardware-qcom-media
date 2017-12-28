@@ -5650,7 +5650,6 @@ void omx_vdec::free_extradata()
         close(drv_ctx.extradata_info.ion.fd_ion_data.fd);
         free_ion_memory(&drv_ctx.extradata_info.ion);
     }
-    memset(&drv_ctx.extradata_info, 0, sizeof(drv_ctx.extradata_info));
 #endif
     if (m_other_extradata) {
         free(m_other_extradata);
@@ -11959,13 +11958,13 @@ omx_vdec::allocate_color_convert_buf::allocate_color_convert_buf()
 {
     enabled = false;
     omx = NULL;
+    m_c2d_init_success = false;
     init_members();
     ColorFormat = OMX_COLOR_FormatMax;
     dest_format = YCbCr420P;
     m_c2d_width = 0;
     m_c2d_height = 0;
     m_c2d_output_format = 0;
-    m_c2d_init_success = false;
 }
 
 void omx_vdec::allocate_color_convert_buf::set_vdec_client(void *client)
