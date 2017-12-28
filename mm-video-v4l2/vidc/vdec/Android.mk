@@ -33,7 +33,6 @@ TARGETS_THAT_NEED_SW_VDEC := msm8937 msm8909
 TARGETS_THAT_SUPPORT_MAX_H264_LEVEL_42 := msm8937
 TARGETS_THAT_SUPPORT_MAX_H264_LEVEL_51 := msm8953 sdm660
 TARGETS_THAT_SUPPORT_MAX_H264_LEVEL_52 := msm8996 msm8998 apq8098_latv
-TARGETS_THAT_SUPPORT_HYPERVISOR := msm8996_gvmq
 
 ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_USE_HEVC_ADSP_HEAP)),true)
 libmm-vdec-def += -D_HEVC_USE_ADSP_HEAP_
@@ -114,7 +113,7 @@ libmm-vdec-def += -DMAX_H264_LEVEL_52
 endif
 
 # Hypervisor
-ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_SUPPORT_HYPERVISOR)),true)
+ifeq ($(ENABLE_HYP),true)
 libmm-vdec-def += -D_HYPERVISOR_
 endif
 # ---------------------------------------------------------------------------------
