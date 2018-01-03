@@ -964,6 +964,17 @@ bool venc_dev::handle_output_extradata(void *buffer, int index)
                 DEBUG_PRINT_LOW("LTRInfo Extradata = 0x%x", *((OMX_U32 *)p_extra->data));
                 break;
             }
+            case MSM_VIDC_EXTRADATA_MULTISLICE_INFO:
+            {
+                p_extra->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE) + p_extradata->data_size, 4);
+                p_extra->nVersion.nVersion = OMX_SPEC_VERSION;
+                p_extra->nPortIndex = OMX_DirOutput;
+                p_extra->eType = (OMX_EXTRADATATYPE) OMX_ExtraDataVideoMultiSliceInfo;
+                p_extra->nDataSize = p_extradata->data_size;
+                memcpy(p_extra->data, p_extradata->data, p_extradata->data_size);
+                DEBUG_PRINT_LOW("MultiSlice Info Extradata: num slices = %d", *((OMX_U32 *)p_extra->data));
+                break;
+            }
             case MSM_VIDC_EXTRADATA_NONE:
                 p_extra->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE), 4);
                 p_extra->nVersion.nVersion = OMX_SPEC_VERSION;

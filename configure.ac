@@ -76,6 +76,11 @@ AC_ARG_ENABLE([target-uses-ion],
                 [Enable conditional compile for target target-uses-ion [default=no]]),
         [target_uses_ion="${enableval}"])
 
+AC_ARG_ENABLE([target-uses-gbm],
+        AC_HELP_STRING([--enable-target-uses-gbm],
+                [Enable conditional compile for target target-uses-gbm [default=no]]),
+        [target_uses_gbm="${enableval}"])
+
 AC_ARG_ENABLE([targets-that-use-flag-msm8226],
         AC_HELP_STRING([--enable-targets-that-use-flag-msm8226],
                 [Enable conditional compile for target targets_that_use_flag_msm8226 [default=no]]),
@@ -102,8 +107,8 @@ AC_ARG_ENABLE([use-glib],
         [use_glib="${enableval}"])
 
 AC_ARG_ENABLE([build-mm-video],
-        AC_HELP_STRING([--enable-use-glib],
-                [Enable conditional compile for use glib [default=no]]),
+        AC_HELP_STRING([--enable-build-mm-video],
+                [Enable conditional compilation for mm-video [default=no]]),
         [build_mm_video="${enableval}"])
 
 AC_ARG_ENABLE([target-hypervisor],
@@ -188,6 +193,7 @@ AM_CONDITIONAL(TARGETS_THAT_SUPPORT_UBWC, [test "x$targets_that_support_ubwc" = 
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_PQ, [test "x$targets_that_support_pq" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_VQZIP, [test "x$targets_that_support_vqzip" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_ION, [test "x$target_uses_ion" = "xyes"])
+AM_CONDITIONAL(TARGET_USES_GBM, [test "x$target_uses_gbm" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_USE_FLAG_MSM8226, [test "x$targets_that_use_flag_msm8226" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_MEDIA_EXTENSIONS, [test "x$target_uses_media_extensions" = "xyes"])
 AM_CONDITIONAL(MASTER_SIDE_CP_TARGET_LIST, [test "x$master_side_cp_target_list" = "xyes"])
@@ -211,8 +217,9 @@ AC_SUBST([CFLAGS])
 
 AC_CONFIG_FILES([ \
         Makefile \
-	hypv-intercept/Makefile \
-        mm-core/Makefile
+        hypv-intercept/Makefile \
+        mm-core/Makefile \
+        libc2dcolorconvert/Makefile \
         mm-video-v4l2/Makefile \
         mm-video-v4l2/vidc/Makefile \
         mm-video-v4l2/vidc/venc/Makefile \

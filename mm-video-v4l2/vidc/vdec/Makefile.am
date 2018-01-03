@@ -54,6 +54,10 @@ if TARGET_USES_ION
 AM_CPPFLAGS += -DUSE_ION
 endif
 
+if TARGET_USES_GBM
+AM_CPPFLAGS += -DUSE_GBM
+endif
+
 if MASTER_SIDE_CP_TARGET_LIST
 AM_CPPFLAGS += -DMASTER_SIDE_CP
 endif
@@ -64,6 +68,9 @@ AM_CPPFLAGS += -I$(top_srcdir)/libc2dcolorconvert/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/src/common/
 AM_CPPFLAGS += -I$(top_srcdir)/hypv-intercept/
+AM_CPPFLAGS += -I$(top_srcdir)/../../../display/libqdutils/
+AM_CPPFLAGS += -I$(top_srcdir)/../../../display/libgralloc/
+AM_CPPFLAGS += -I$(top_srcdir)/../../../hardware/libhardware/include/
 
 c_sources         := src/frameparser.cpp
 c_sources         += src/h264_utils.cpp
@@ -73,13 +80,16 @@ c_sources         += src/hevc_utils.cpp
 c_sources         += src/omx_vdec_v4l2.cpp
 c_sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/extra_data_handler.cpp
 c_sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_color_converter.cpp
-#Hypervisor
-c_sources += ../common/src/hypv_intercept.cpp
+c_sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_vendor_extensions.cpp
 
 lib_LTLIBRARIES = libOmxVdec.la
 libOmxVdec_la_SOURCES = $(c_sources)
 libOmxVdec_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
-libOmxVdec_la_CFLAGS += ../libc2d2colorconvert/libc2dcolorconvert.la
-libOmxVdec_la_LDFLAGS = -llog -lutils -lbinder -lcutils -ldl -lqdMetaData -lglib-2.0 -shared -version-info 0
+libOmxVdec_la_CXXFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
+libOmxVdec_la_LIBADD = -llog -lbinder -lcutils -lqdMetaData -lglib-2.0
+if TARGET_USES_GBM
+libOmxVdec_la_LIBADD +=  -lgbm
+endif
+libOmxVdec_la_LDFLAGS = -module -shared -avoid-version $(GLIB_LIBS)
 libOmxVdec_la_LDFLAGS += -L$(top_builddir)/hypv-intercept
 libOmxVdec_la_LDFLAGS += -lhypv_intercept

@@ -38,7 +38,7 @@
 #include <errno.h>
 #include <media/msm_media_info.h>
 #include <gralloc_priv.h>
-
+#include <stdint.h>
 #undef LOG_TAG
 #define LOG_TAG "C2DColorConvert"
 #define ALIGN( num, to ) (((num) + (to-1)) & (~(to-1)))
@@ -59,6 +59,7 @@ public:
     C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags,size_t srcStride);
     int32_t getBuffReq(int32_t port, C2DBuffReq *req);
     int32_t dumpOutput(char * filename, char mode);
+    int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight);
 protected:
     virtual ~C2DColorConverter();
     virtual int convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData);
@@ -174,6 +175,8 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mDstSize = calcSize(dstFormat, dstWidth, dstHeight);
     mSrcYSize = calcYSize(srcFormat, srcWidth, srcHeight);
     mDstYSize = calcYSize(dstFormat, dstWidth, dstHeight);
+    mSrcSurfaceDef = NULL;
+    mDstSurfaceDef = NULL;
 
     mFlags = flags; // can be used for rotation
 
@@ -193,6 +196,21 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mBlit.surface_id = mSrcSurface;
 }
 
+int C2DColorConverter::SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight)
+{
+    mBlit.source_rect.x = x << 16;
+    mBlit.source_rect.y = y << 16;
+    mBlit.source_rect.width = srcWidth << 16;
+    mBlit.source_rect.height = srcHeight << 16;
+    mBlit.config_mask |= C2D_SOURCE_RECT_BIT;
+    ALOGV("C2D library: source rect x = %d, y = %d, width = %d, height = %d",
+         mBlit.source_rect.x >> 16,
+         mBlit.source_rect.y >> 16,
+         mBlit.source_rect.width >> 16,
+         mBlit.source_rect.height >> 16);
+    return 0;
+}
+
 C2DColorConverter::~C2DColorConverter()
 {
     if (!mError && mC2DLibHandle) {
@@ -210,6 +228,8 @@ C2DColorConverter::~C2DColorConverter()
         } else {
             delete ((C2D_RGB_SURFACE_DEF *)mDstSurfaceDef);
         }
+        mSrcSurfaceDef = NULL;
+        mDstSurfaceDef = NULL;
     }
 
     if (mC2DLibHandle) {

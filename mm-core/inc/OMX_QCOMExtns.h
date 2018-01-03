@@ -46,7 +46,7 @@ extern "C" {
 #include "OMX_Core.h"
 #include "OMX_Video.h"
 #include "string.h"
-
+#include <stdint.h>
 #define OMX_VIDEO_MAX_HP_LAYERS 6
 
 /**
@@ -263,6 +263,9 @@ typedef struct OMX_QCOM_PLATFORM_PRIVATE_PMEM_INFO
 {
     /** pmem file descriptor */
     unsigned long pmem_fd;
+#ifdef USE_GBM
+    unsigned long pmeta_fd;
+#endif
     /** Offset from pmem device base address */
     OMX_U32 offset;
     OMX_U32 size;
@@ -1478,6 +1481,7 @@ typedef enum OMX_QCOM_EXTRADATATYPE
     OMX_ExtraDataLightLevelSEI =           0x7F000012,
     OMX_ExtraDataEncoderOverrideQPInfo =   0x7F000013,
     OMX_ExtraDataOutputCropInfo =          0x7F000014,
+    OMX_ExtraDataVideoMultiSliceInfo =     0x7F000015,
 } OMX_QCOM_EXTRADATATYPE;
 
 struct ExtraDataMap {
@@ -2139,6 +2143,7 @@ typedef struct QOMX_VIDEO_CLIENT_EXTRADATA {
 #if defined(__cplusplus) && defined(USE_CAMERA_METABUFFER_UTILS)
 
 #define CAM_META_BUFFER_EVENT_PERF 0x01
+#include <cutils/native_handle.h>
 
 /**
  * Camera1 meta-buffer payload create/access/modify utility
