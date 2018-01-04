@@ -142,7 +142,7 @@ extern "C" {
 #include <drm_fourcc.h>
 #include <gl2.h>
 #include <egl.h>
-#include <eglext.h>
+#include <eglwaylandext.h>
 
 #include "gbm.h"
 #include "msm_drm.h"
