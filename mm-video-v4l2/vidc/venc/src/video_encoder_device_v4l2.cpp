@@ -85,6 +85,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VENC_BFRAME_MAX_FPS         60
 #define VENC_BFRAME_MAX_WIDTH       1920
 #define VENC_BFRAME_MAX_HEIGHT      1088
+#define VENC_INFINITE_GOP 0xFFFFFFF
 
 #undef LOG_TAG
 #define LOG_TAG "OMX-VENC: venc_dev"
@@ -1299,6 +1300,9 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
             case V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS:
                 color_format = COLOR_FMT_P010;
                 break;
+            case V4L2_PIX_FMT_NV12_TP10_UBWC:
+                color_format = COLOR_FMT_NV12_BPP10_UBWC;
+                break;
             default:
                 color_format = COLOR_FMT_NV12;
                 DEBUG_PRINT_LOW("Default format NV12 is set for logging [%lu]", inputformat);
@@ -1344,9 +1348,10 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
                 fwrite(ptemp, m_sVenc_cfg.input_width * 4, 1, m_debug.infile);
                 ptemp += stride;
             }
-        } else if (color_format == COLOR_FMT_NV12_UBWC || color_format == COLOR_FMT_RGBA8888_UBWC) {
-            if (color_format == COLOR_FMT_NV12_UBWC) {
-                msize -= 2 * extra_size;
+        } else if (color_format == COLOR_FMT_NV12_UBWC || color_format == COLOR_FMT_NV12_BPP10_UBWC || color_format == COLOR_FMT_RGBA8888_UBWC) {
+            if (color_format == COLOR_FMT_NV12_UBWC || color_format == COLOR_FMT_NV12_BPP10_UBWC) {
+                stride = VENUS_Y_STRIDE(color_format, m_sVenc_cfg.input_width);
+                msize -= MSM_MEDIA_MAX(extra_size + 8192, 48 * (unsigned int)stride);
             }
             fwrite(ptemp, msize, 1, m_debug.infile);
         } else if(color_format == COLOR_FMT_P010) {
@@ -5790,6 +5795,14 @@ bool venc_dev::venc_calibrate_gop()
             /*
             * No special handling needed for single layer
             */
+       DEBUG_PRINT_LOW("Clip num of P and B frames, nPframes: %d nBframes: %d",
+                       nPframes,nBframes);
+       if ((unsigned int)nPframes > VENC_INFINITE_GOP) {
+          nPframes =  VENC_INFINITE_GOP;
+       }
+       if ((unsigned int)nBframes > VENC_INFINITE_GOP) {
+          nBframes =  VENC_INFINITE_GOP;
+       }
     }
 
     DEBUG_PRINT_LOW("P/B Frames changed from: %ld/%ld to %d/%d",
