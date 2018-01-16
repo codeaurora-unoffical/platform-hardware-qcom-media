@@ -3953,19 +3953,16 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
         }
     }
 
-    if (buffer->nFilledLen == 0 && (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
-        DEBUG_PRINT_LOW("Zero length EOS buffer");
-        OMX_U32 ret = dev_handle_empty_eos_buffer();
-        /*
-         * 0 - succeeded in sw compoent
-         * 1 - did nothing in hw component
-         * 2 - failed in sw component
-         */
-        if (ret == 2)
-            return OMX_ErrorHardware;
-        else if(ret == 0) {
-            post_event((unsigned long)buffer, 0, OMX_COMPONENT_GENERATE_EBD);
-            return OMX_ErrorNone;
+    if (meta_mode_enable && !mUsesColorConversion) {
+        VideoGrallocMetadata *media_buffer = (VideoGrallocMetadata *)meta_buffer_hdr[nBufIndex].pBuffer;
+        if (buffer->nFilledLen == 0 && (buffer->nFlags & OMX_BUFFERFLAG_EOS) && !media_buffer->pHandle) {
+            DEBUG_PRINT_LOW("Zero length EOS buffer");
+            if(!dev_handle_empty_eos_buffer())
+                return OMX_ErrorHardware;
+            else {
+                post_event((unsigned long)buffer, 0, OMX_COMPONENT_GENERATE_EBD);
+                return OMX_ErrorNone;
+            }
         }
     }
 
