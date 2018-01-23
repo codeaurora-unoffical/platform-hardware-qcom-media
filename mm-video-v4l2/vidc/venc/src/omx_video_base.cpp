@@ -1932,6 +1932,16 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                 "valid for output port only");
                         eRet = OMX_ErrorUnsupportedIndex;
                     }
+                } else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataEncoderFrameQp) {
+                    if (pParam->nPortIndex == PORT_INDEX_OUT) {
+                        pParam->bEnabled =
+                            (OMX_BOOL)(m_sExtraData & VENC_EXTRADATA_FRAME_QP);
+                        DEBUG_PRINT_HIGH("Frame QP extradata %d", pParam->bEnabled);
+                    } else {
+                        DEBUG_PRINT_ERROR("get_parameter: FrameQP information is "
+                                "valid for output port only");
+                        eRet = OMX_ErrorUnsupportedIndex;
+                    }
                 } else {
                     DEBUG_PRINT_ERROR("get_parameter: unsupported extradata index (0x%x)",
                             pParam->nPortIndex);
@@ -1947,7 +1957,7 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     (QOMX_EXTRADATA_ENABLE *)paramData;
                 if (pParam->nPortIndex == PORT_INDEX_EXTRADATA_OUT) {
                     OMX_U32 output_extradata_mask = VENC_EXTRADATA_SLICEINFO | VENC_EXTRADATA_LTRINFO |
-                                                    VENC_EXTRADATA_MBINFO;
+                                                    VENC_EXTRADATA_MBINFO | VENC_EXTRADATA_FRAME_QP;
                     pParam->bEnable = (m_sExtraData & output_extradata_mask) ? OMX_TRUE : OMX_FALSE;
                     eRet = OMX_ErrorNone;
                 } else if (pParam->nPortIndex == PORT_INDEX_EXTRADATA_IN) {
