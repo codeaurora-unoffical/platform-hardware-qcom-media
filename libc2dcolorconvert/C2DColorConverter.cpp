@@ -116,6 +116,8 @@ private:
 C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags, size_t srcStride)
 {
      mError = 0;
+     mSrcSurfaceDef = NULL;
+     mDstSurfaceDef = NULL;
      if (NV12_UBWC == dstFormat) {
          ALOGE("%s: FATAL ERROR: could not support UBWC output formats ", __FUNCTION__);
          mError = -1;
@@ -196,6 +198,8 @@ C2DColorConverter::~C2DColorConverter()
         if (mC2DLibHandle) {
             dlclose(mC2DLibHandle);
         }
+        mSrcSurfaceDef = NULL;
+        mDstSurfaceDef = NULL;
         return;
     }
 
