@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2016 - 2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2016 - 2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -461,6 +461,22 @@ omx_core_cb_type core[] =
     }
   },
   {
+    "OMX.qcom.audio.encoder.amrwb",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxAmrEnc.so",
+    {
+      "audio_encoder.amrwb"
+    }
+  },
+  {
     "OMX.qcom.audio.encoder.amrnb",
     NULL,   // Create instance function
     // Unique instance handle
@@ -476,7 +492,71 @@ omx_core_cb_type core[] =
       "audio_encoder.amrnb"
     }
   },
- {
+  {
+    "OMX.qcom.audio.encoder.g711mlaw",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxG711Enc.so",
+    {
+      "audio_encoder.g711"
+    }
+  },
+  {
+    "OMX.qcom.audio.encoder.g711alaw",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxG711Enc.so",
+    {
+      "audio_encoder.g711"
+    }
+  },
+  {
+    "OMX.qcom.audio.decoder.g711mlaw",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxG711Dec.so",
+    {
+      "audio_decoder.g711"
+    }
+  },
+  {
+    "OMX.qcom.audio.decoder.g711alaw",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxG711Dec.so",
+    {
+      "audio_decoder.g711"
+    }
+  },
+  {
     "OMX.qcom.audio.decoder.aac",
     NULL,   // Create instance function
     // Unique instance handle
