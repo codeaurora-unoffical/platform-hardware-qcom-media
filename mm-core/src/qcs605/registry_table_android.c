@@ -238,7 +238,11 @@ omx_core_cb_type core[] =
     NULL,   // Shared object library handle
     "libOmxSwVdec.so",
     {
+#ifdef _ANDROID_O_MR1_DIVX_CHANGES
+      "video_decoder.divx4"
+#else
       "video_decoder.divx"
+#endif
     }
   },
   {
@@ -551,6 +555,22 @@ omx_core_cb_type core[] =
     "libOmxQcelp13Enc.so",
     {
       "audio_encoder.qcelp13"
+    }
+  },
+  {
+    "OMX.qcom.audio.encoder.mpegh",
+    NULL,   // Create instance function
+    // Unique instance handle
+    {
+      NULL,
+      NULL,
+      NULL,
+      NULL
+    },
+    NULL,   // Shared object library handle
+    "libOmxMpeghEncSw.so",
+    {
+      "audio_encoder.mpegh"
     }
   },
   {
