@@ -6938,10 +6938,31 @@ bool venc_dev::venc_validate_temporal_settings() {
     bool fps_30_plus = false;
     bool fps_60_plus = false;
     bool res_1080p_plus = false;
+    unsigned long session_load = 0;
+    unsigned long fps = m_sVenc_cfg.fps_num / m_sVenc_cfg.fps_den;
+    const unsigned long max_single_core_load = (4096 * 2304 / 256) * 30;
 
-    fps_30_plus = (((m_sVenc_cfg.fps_num / m_sVenc_cfg.fps_den) > 30) || ((operating_rate) > 30));
-    fps_60_plus = (((m_sVenc_cfg.fps_num / m_sVenc_cfg.fps_den) > 60) || ((operating_rate) > 60));
+    session_load = (m_sVenc_cfg.input_width * m_sVenc_cfg.input_height / 256) * fps;
+
+    fps_30_plus = ((fps > 30) || ((operating_rate) > 30));
+    fps_60_plus = ((fps > 60) || ((operating_rate) > 60));
     res_1080p_plus = ((m_sVenc_cfg.input_width * m_sVenc_cfg.input_height / 256) > (1920 * 1088 / 256));
+
+    if (intra_period.num_bframes > 0) {
+        DEBUG_PRINT_HIGH("TemporalLayer: Invalid B-frame settings for Hier layers");
+        return false;
+    }
+
+    if (rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_CFR &&
+        rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_CFR &&
+        rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_VFR) {
+        DEBUG_PRINT_HIGH("TemporalLayer: Hier layers cannot be enabled when RC is not VBR_CFR, MBR_CFR, MBR_VFR");
+        return false;
+    }
+
+    if (session_load > max_single_core_load) {
+        return true;
+    }
 
     if (res_1080p_plus == false && fps_60_plus == false) {
         DEBUG_PRINT_HIGH("TemporalLayer: Hier layers cannot be enabled for res <= 1080p & fps <= 60");
@@ -6950,16 +6971,6 @@ bool venc_dev::venc_validate_temporal_settings() {
 
     if (res_1080p_plus == true && fps_30_plus == false) {
         DEBUG_PRINT_HIGH("TemporalLayer: Hier layers cannot be enabled for res > 1080p & fps <= 30");
-        return false;
-    }
-
-    if (intra_period.num_bframes > 0) {
-        DEBUG_PRINT_HIGH("TemporalLayer: Invalid B-frame settings for Hier layers");
-        return false;
-    }
-
-    if (rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_CFR) {
-        DEBUG_PRINT_HIGH("TemporalLayer: Hier layers cannot be enabled when RC is not VBR_CFR");
         return false;
     }
 
