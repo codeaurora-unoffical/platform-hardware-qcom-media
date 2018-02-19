@@ -296,7 +296,8 @@ omx_video::omx_video():
     m_fbd_count(0),
     m_event_port_settings_sent(false),
     hw_overload(false),
-    m_graphicbuffer_size(0)
+    m_graphicbuffer_size(0),
+    m_buffer_freed(0)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -439,6 +440,9 @@ void omx_video::process_event_cb(void *ctxt, unsigned char id)
                             case OMX_CommandStateSet:
                                 pThis->m_state = (OMX_STATETYPE) p2;
                                 DEBUG_PRINT_LOW("Process -> state set to %d", pThis->m_state);
+                                if (pThis->m_state == OMX_StateLoaded) {
+                                    m_buffer_freed = false;
+                                }
                                 pThis->m_pCallbacks.EventHandler(&pThis->m_cmp, pThis->m_app_data,
                                         OMX_EventCmdComplete, p1, p2, NULL);
                                 break;
@@ -1911,8 +1915,13 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 }
                 else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoLTRInfo) {
                     if (pParam->nPortIndex == PORT_INDEX_OUT) {
+#ifndef _TARGET_KERNEL_VERSION_49_
                         pParam->bEnabled =
                             (OMX_BOOL)(m_sExtraData & VEN_EXTRADATA_LTRINFO);
+#else
+                        pParam->bEnabled =
+                            (OMX_BOOL)(m_sExtraData & VENC_EXTRADATA_LTRINFO);
+#endif
                         DEBUG_PRINT_HIGH("LTR Info extradata %d", pParam->bEnabled);
                     } else {
                         DEBUG_PRINT_ERROR("get_parameter: LTR information is "
@@ -3670,12 +3679,14 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         DEBUG_PRINT_LOW("Free Buffer while port %u disabled", (unsigned int)port);
     } else if (m_state == OMX_StateExecuting || m_state == OMX_StatePause) {
         DEBUG_PRINT_ERROR("ERROR: Invalid state to free buffer,ports need to be disabled");
+        m_buffer_freed = true;
         post_event(OMX_EventError,
                 OMX_ErrorPortUnpopulated,
                 OMX_COMPONENT_GENERATE_EVENT);
         return eRet;
     } else {
         DEBUG_PRINT_ERROR("ERROR: Invalid state to free buffer,port lost Buffers");
+        m_buffer_freed = true;
         post_event(OMX_EventError,
                 OMX_ErrorPortUnpopulated,
                 OMX_COMPONENT_GENERATE_EVENT);
@@ -3796,6 +3807,9 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
             DEBUG_PRINT_HIGH("in free buffer, release not done, need to free more buffers output %" PRIx64" input %" PRIx64,
                     m_out_bm_count, m_inp_bm_count);
         }
+    }
+    if (eRet != OMX_ErrorNone) {
+        m_buffer_freed = true;
     }
 
     return eRet;
@@ -4136,8 +4150,15 @@ OMX_ERRORTYPE  omx_video::fill_this_buffer_proxy(
     (void)hComp;
     OMX_U8 *pmem_data_buf = NULL;
     OMX_ERRORTYPE nRet = OMX_ErrorNone;
+    auto_lock l(m_buf_lock);
+    if (m_buffer_freed == true) {
+        DEBUG_PRINT_ERROR("ERROR: FTBProxy: Invalid call. Called after freebuffer");
+        return OMX_ErrorBadParameter;
+    }
 
-    DEBUG_PRINT_LOW("FTBProxy: bufferAdd->pBuffer[%p]", bufferAdd->pBuffer);
+    if (bufferAdd != NULL) {
+        DEBUG_PRINT_LOW("FTBProxy: bufferAdd->pBuffer[%p]", bufferAdd->pBuffer);
+    }
 
     if (bufferAdd == NULL || ((bufferAdd - m_out_mem_ptr) >= (int)m_sOutPortDef.nBufferCountActual) ) {
         DEBUG_PRINT_ERROR("ERROR: FTBProxy: Invalid i/p params");
