@@ -1951,7 +1951,8 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     pParam->bEnable = (m_sExtraData & output_extradata_mask) ? OMX_TRUE : OMX_FALSE;
                     eRet = OMX_ErrorNone;
                 } else if (pParam->nPortIndex == PORT_INDEX_EXTRADATA_IN) {
-                    pParam->bEnable = OMX_TRUE;
+                    OMX_U32 input_extradata_mask = VENC_EXTRADATA_ROI;
+                    pParam->bEnable = (m_sExtraData & input_extradata_mask) ? OMX_TRUE : OMX_FALSE;
                     eRet = OMX_ErrorNone;
                 } else {
                     DEBUG_PRINT_ERROR("get_parameter: unsupported extradata index (0x%x)",
@@ -3990,7 +3991,7 @@ void omx_video::free_input_extradata_buffer_header() {
 OMX_ERRORTYPE  omx_video::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* buffer)
 {
-    if(buffer->nInputPortIndex == PORT_INDEX_EXTRADATA_IN) {
+    if(buffer != NULL && buffer->nInputPortIndex == PORT_INDEX_EXTRADATA_IN) {
         if(!dev_handle_client_input_extradata(buffer)) {
             DEBUG_PRINT_ERROR("ERROR: omx_video::etb--> handling client extradata failed");
             return OMX_ErrorMax;
@@ -5231,7 +5232,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         ColorMapping::const_iterator found =
              mMapPixelFormat2Converter.find(handle->format);
 
-        if (found != mMapPixelFormat2Converter.end()) {
+        if (found != mMapPixelFormat2Converter.end() && is_conv_needed(handle)) {
             c2dSrcFmt = (ColorConvertFormat)found->second;
             c2dcc.setConversionNeeded(true);
         } else {
