@@ -3991,7 +3991,7 @@ void omx_video::free_input_extradata_buffer_header() {
 OMX_ERRORTYPE  omx_video::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         OMX_IN OMX_BUFFERHEADERTYPE* buffer)
 {
-    if(buffer->nInputPortIndex == PORT_INDEX_EXTRADATA_IN) {
+    if(buffer != NULL && buffer->nInputPortIndex == PORT_INDEX_EXTRADATA_IN) {
         if(!dev_handle_client_input_extradata(buffer)) {
             DEBUG_PRINT_ERROR("ERROR: omx_video::etb--> handling client extradata failed");
             return OMX_ErrorMax;
@@ -5232,7 +5232,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         ColorMapping::const_iterator found =
              mMapPixelFormat2Converter.find(handle->format);
 
-        if (found != mMapPixelFormat2Converter.end()) {
+        if (found != mMapPixelFormat2Converter.end() && is_conv_needed(handle)) {
             c2dSrcFmt = (ColorConvertFormat)found->second;
             c2dcc.setConversionNeeded(true);
         } else {
