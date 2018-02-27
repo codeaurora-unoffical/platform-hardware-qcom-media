@@ -49,23 +49,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <gralloc_priv.h>
 #endif
 
-#ifdef _USE_GLIB_
-#include <glib.h>
-#define strlcpy g_strlcpy
-#undef MIN
-#undef MAX
-#endif
-
 #include <qdMetaData.h>
 
 #define ATRACE_TAG ATRACE_TAG_VIDEO
 #include <utils/Trace.h>
 
-#ifdef ENABLE_ADSP_PQ
-#define YUV_STATS_LIBRARY_NAME "libadspstats.so" // adsp based library
-#else
-#define YUV_STATS_LIBRARY_NAME "libgpustats.so" // GPU based library
-#endif
+#define YUV_STATS_LIBRARY_NAME "libgpustats.so" // UBWC case: use GPU library
 
 #ifdef _HYPERVISOR_
 #define ioctl(x, y, z) hypv_ioctl(x, y, z)
@@ -303,14 +292,6 @@ venc_dev::venc_dev(class omx_venc *venc_class)
         m_pq.is_pq_force_disable = 1;
     } else {
         m_pq.is_pq_force_disable = 0;
-    }
-
-    property_value[0] = '\0';
-    property_get("vidc.enc.pq.library", property_value, "");
-    if (*property_value) {
-        snprintf(m_pq.libname, PROPERTY_VALUE_MAX, "lib%sstats.so", property_value);
-    } else {
-        strlcpy(m_pq.libname, YUV_STATS_LIBRARY_NAME, PROPERTY_VALUE_MAX);
     }
 #endif // _PQ_
 
@@ -825,7 +806,7 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
        *     a) Send data to Venus as PQ.
        *     b) ROI enabled and dirty : Copy the ROI contents to pq_roi buffer
        *     c) ROI enabled and no dirty : pq_roi is already memset. Hence nothing to do here
-       *     d) ROI disabled : Just PQ data will be filled by PQ.
+       *     d) ROI disabled : Just PQ data will be filled by GPU.
        * 4) Normal ROI handling is in #else part as PQ can introduce delays.
        *     By this time if client sets next ROI, then we shouldn't process new ROI here.
        */
@@ -1646,9 +1627,8 @@ bool venc_dev::venc_open(OMX_U32 codec)
     }
 
 #ifdef _PQ_
-    if ((codec == OMX_VIDEO_CodingAVC || codec == OMX_VIDEO_CodingHEVC)
-                    && !m_pq.is_pq_force_disable) {
-        m_pq.init(V4L2_PIX_FMT_NV12, m_sVenc_cfg.codectype);
+    if (codec == OMX_VIDEO_CodingAVC && !m_pq.is_pq_force_disable) {
+        m_pq.init(V4L2_DEFAULT_OUTPUT_COLOR_FMT);
         m_pq.get_caps();
     }
 #endif // _PQ_
@@ -4364,7 +4344,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
              * This is the place where all parameters for deciding
              * PQ enablement are available. Evaluate PQ for the final time.
              */
-            m_pq.reinit(m_sVenc_cfg.inputformat, m_sVenc_cfg.codectype);
+            m_pq.reinit(m_sVenc_cfg.inputformat);
             venc_configure_pq();
         }
     }
@@ -4538,7 +4518,7 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
             if (!streaming[OUTPUT_PORT]) {
                 m_pq.is_YUV_format_uncertain = false;
                 if(venc_check_for_pq()) {
-                    m_pq.reinit(m_sVenc_cfg.inputformat, m_sVenc_cfg.codectype);
+                    m_pq.reinit(m_sVenc_cfg.inputformat);
                     venc_configure_pq();
                 }
             }
@@ -8306,7 +8286,7 @@ bool venc_dev::venc_check_for_pq(void)
     bool is_non_vpe_session = false;
     bool enable = false;
 
-    codec_supported = (m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264) || (m_sVenc_cfg.codectype == V4L2_PIX_FMT_HEVC);
+    codec_supported = m_sVenc_cfg.codectype == V4L2_PIX_FMT_H264;
 
     rc_mode_supported = (rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_CFR) ||
         (rate_ctrl.rcmode == V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_CFR) ||
@@ -8379,18 +8359,17 @@ venc_dev::venc_dev_pq::venc_dev_pq()
     configured_format = 0;
     is_pq_force_disable = 0;
     pthread_mutex_init(&lock, NULL);
-    memset(&pConfig, 0, sizeof(pq_stats_lib_input_config));
+    memset(&pConfig, 0, sizeof(gpu_stats_lib_input_config));
     init_extradata_info(&roi_extradata_info);
     roi_extradata_info.size = 16 * 1024;            // Max size considering 4k
     roi_extradata_info.buffer_size = 16 * 1024;     // Max size considering 4k
     roi_extradata_info.port_index = OUTPUT_PORT;
 }
 
-bool venc_dev::venc_dev_pq::init(unsigned long format, unsigned long codec)
+bool venc_dev::venc_dev_pq::init(unsigned long format)
 {
     bool status = true;
     enum color_compression_format yuv_format;
-    enum codec_type output_fmt;
 
     if (mLibHandle) {
         DEBUG_PRINT_ERROR("PQ init called twice");
@@ -8408,32 +8387,20 @@ bool venc_dev::venc_dev_pq::init(unsigned long format, unsigned long codec)
             break;
     }
 
-    switch (codec) {
-        case V4L2_PIX_FMT_H264:
-            output_fmt = codec_type::AVC;
-            break;
-        case V4L2_PIX_FMT_HEVC:
-            output_fmt = codec_type::HEVC;
-            break;
-        default:
-            status = false;
-    }
-
     ATRACE_BEGIN("PQ init");
     if (status) {
-        mLibHandle = dlopen(libname, RTLD_NOW);
-        DEBUG_PRINT_HIGH("PQ lib loading %s ", libname);
+        mLibHandle = dlopen(YUV_STATS_LIBRARY_NAME, RTLD_NOW);
         if (mLibHandle) {
-            mPQInit = (pq_stats_lib_init_t)
-                dlsym(mLibHandle,"pq_stats_lib_init");
-            mPQDeInit = (pq_stats_lib_deinit_t)
-                dlsym(mLibHandle,"pq_stats_lib_deinit");
-            mPQGetCaps = (pq_stats_lib_get_caps_t)
-                dlsym(mLibHandle,"pq_stats_lib_get_caps");
-            mPQConfigure = (pq_stats_lib_configure_t)
-                dlsym(mLibHandle,"pq_stats_lib_configure");
-            mPQComputeStats = (pq_stats_lib_fill_data_t)
-                dlsym(mLibHandle,"pq_stats_lib_fill_data");
+            mPQInit = (gpu_stats_lib_init_t)
+                dlsym(mLibHandle,"gpu_stats_lib_init");
+            mPQDeInit = (gpu_stats_lib_deinit_t)
+                dlsym(mLibHandle,"gpu_stats_lib_deinit");
+            mPQGetCaps = (gpu_stats_lib_get_caps_t)
+                dlsym(mLibHandle,"gpu_stats_lib_get_caps");
+            mPQConfigure = (gpu_stats_lib_configure_t)
+                dlsym(mLibHandle,"gpu_stats_lib_configure");
+            mPQComputeStats = (gpu_stats_lib_fill_data_t)
+                dlsym(mLibHandle,"gpu_stats_lib_fill_data");
             if (!mPQInit || !mPQDeInit || !mPQGetCaps || !mPQConfigure || !mPQComputeStats)
                 status = false;
         } else {
@@ -8441,12 +8408,12 @@ bool venc_dev::venc_dev_pq::init(unsigned long format, unsigned long codec)
             status = false;
         }
         if (status) {
-            mPQInit(&mPQHandle, perf_hint::NORMAL, yuv_format, output_fmt);
+            mPQInit(&mPQHandle, perf_hint::NORMAL, yuv_format);
             if (mPQHandle == NULL) {
                 DEBUG_PRINT_ERROR("Failed to get handle for PQ Library");
                 status = false;
             } else {
-                DEBUG_PRINT_HIGH("PQ lib initialized successfully");
+                DEBUG_PRINT_HIGH("GPU PQ lib initialized successfully");
             }
 
         }
@@ -8486,7 +8453,7 @@ void venc_dev::venc_dev_pq::deinit()
     }
 }
 
-bool venc_dev::venc_dev_pq::reinit(unsigned long format, unsigned long codec_type)
+bool venc_dev::venc_dev_pq::reinit(unsigned long format)
 {
     bool status = false;
 
@@ -8494,7 +8461,7 @@ bool venc_dev::venc_dev_pq::reinit(unsigned long format, unsigned long codec_typ
         DEBUG_PRINT_HIGH("New format (%lu) is different from configure format (%lu);"
                                 " reinitializing PQ lib", format, configured_format);
         deinit();
-        status = init(format, codec_type);
+        status = init(format);
     } else {
         // ignore if new format is same as configured
     }
@@ -8504,12 +8471,12 @@ bool venc_dev::venc_dev_pq::reinit(unsigned long format, unsigned long codec_typ
 
 void venc_dev::venc_dev_pq::get_caps()
 {
-    memset(&caps, 0, sizeof(pq_stats_lib_caps_t));
+    memset(&caps, 0, sizeof(gpu_stats_lib_caps_t));
     if (mPQHandle)
         mPQGetCaps(mPQHandle, &caps);
-    DEBUG_PRINT_HIGH("PQ lib stats caps max (w,h) = (%u, %u)",caps.max_width, caps.max_height);
-    DEBUG_PRINT_HIGH("PQ lib stats caps max mb per sec = %u",caps.max_mb_per_sec);
-    DEBUG_PRINT_HIGH("PQ lib stats caps color_format = %u",caps.color_formats);
+    DEBUG_PRINT_HIGH("GPU lib stats caps max (w,h) = (%u, %u)",caps.max_width, caps.max_height);
+    DEBUG_PRINT_HIGH("GPU lib stats caps max mb per sec = %u",caps.max_mb_per_sec);
+    DEBUG_PRINT_HIGH("GPU lib stats caps color_format = %u",caps.color_formats);
 }
 
 bool venc_dev::venc_dev_pq::is_color_format_supported(unsigned long format)
@@ -8543,9 +8510,9 @@ bool venc_dev::venc_dev_pq::is_color_format_supported(unsigned long format)
     }
 
     if (support == true)
-        DEBUG_PRINT_HIGH("PQ lib supports this format %lu",format);
+        DEBUG_PRINT_HIGH("GPU lib supports this format %lu",format);
     else
-        DEBUG_PRINT_HIGH("PQ lib doesn't support this format %lu",format);
+        DEBUG_PRINT_HIGH("GPU lib doesn't support this format %lu",format);
 
     return support;
 }
@@ -8582,8 +8549,8 @@ bool venc_dev::venc_dev_pq::is_pq_handle_valid()
 int venc_dev::venc_dev_pq::fill_pq_stats(struct v4l2_buffer buf,
     unsigned int data_offset)
 {
-    pq_stats_lib_buffer_params_t input, output;
-    pq_stats_lib_buffer_params_t roi_input;
+    gpu_stats_lib_buffer_params_t input, output;
+    gpu_stats_lib_buffer_params_t roi_input;
 
     if (!mPQHandle || !is_pq_enabled) {
         DEBUG_PRINT_HIGH("Invalid Usage : Handle = %p PQ = %d",
