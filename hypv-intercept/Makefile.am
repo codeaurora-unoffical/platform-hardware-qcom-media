@@ -5,7 +5,8 @@
 AM_CFLAGS = -g -O3
 AM_CFLAGS += -Werror
 
-AM_CPPFLAGS = -D_LINUX_
+AM_CPPFLAGS = -D_ANDROID_
+AM_CPPFLAGS += -DHAVE_ANDROID_OS
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc
 
 # -----------------------------------------------------------------------------
