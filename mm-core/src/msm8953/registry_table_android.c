@@ -262,6 +262,20 @@ omx_core_cb_type core[] =
     }
   },
   {
+     "OMX.qcom.video.decoder.vp9.secure",
+     NULL,   // Create instance function
+     // Unique instance handle
+     {
+       NULL
+     },
+     NULL,   // Shared object library handle
+     "libOmxVdec.so",
+     {
+       "video_decoder.vp9"
+     }
+  },
+
+  {
     "OMX.qcom.audio.decoder.amrnb",
     NULL,   // Create instance function
     // Unique instance handle
@@ -654,19 +668,6 @@ omx_core_cb_type core[] =
     "libOmxVdec.so",
     {
       "video_decoder.vp8"
-    }
-  },
-  {
-    "OMX.qcom.video.decoder.vp9.secure",
-    NULL,   // Create instance function
-    // Unique instance handle
-    {
-      NULL
-    },
-    NULL,   // Shared object library handle
-    "libOmxVdec.so",
-    {
-      "video_decoder.vp9"
     }
   },
   {
