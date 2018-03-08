@@ -8412,11 +8412,14 @@ bool venc_dev::venc_dev_pq::init(unsigned long format, unsigned long codec)
     }
 
     switch (codec) {
+
         case V4L2_PIX_FMT_H264:
             output_fmt = codec_type::AVC;
+            strlcpy(libname,"libgpustats.so",PROPERTY_VALUE_MAX);
             break;
         case V4L2_PIX_FMT_HEVC:
             output_fmt = codec_type::HEVC;
+            strlcpy(libname, "libadspstats.so",PROPERTY_VALUE_MAX);
             break;
         default:
             status = false;
