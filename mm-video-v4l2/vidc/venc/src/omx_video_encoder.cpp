@@ -2023,6 +2023,7 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                     } else {
                         m_sParamAVC.nPFrames = pParam->nPFrames;
                         if ((m_sParamAVC.eProfile != OMX_VIDEO_AVCProfileBaseline) &&
+                            (m_sParamAVC.eProfile != (OMX_VIDEO_AVCPROFILETYPE) OMX_VIDEO_AVCProfileConstrainedBaseline) &&
                             (m_sParamAVC.eProfile != (OMX_VIDEO_AVCPROFILETYPE) QOMX_VIDEO_AVCProfileConstrainedBaseline))
                             m_sParamAVC.nBFrames = pParam->nBFrames;
                         else
@@ -2433,6 +2434,8 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
         for (i=0; i<m_sInPortDef.nBufferCountActual; i++ ) {
             if (BITMASK_PRESENT(&m_inp_bm_count, i)) {
                 BITMASK_CLEAR(&m_inp_bm_count, i);
+                if (BITMASK_PRESENT(&m_client_in_bm_count, i))
+                    BITMASK_CLEAR(&m_client_in_bm_count, i);
                 free_input_buffer (&m_inp_mem_ptr[i]);
             }
 
