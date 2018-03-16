@@ -1182,6 +1182,7 @@ private:
         }
 
         static OMX_ERRORTYPE describeColorFormat(OMX_PTR params);
+        bool m_buffer_error;
 
         class client_extradata_info {
             private:
