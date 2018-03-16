@@ -1159,6 +1159,7 @@ private:
         }
 
         static OMX_ERRORTYPE describeColorFormat(OMX_PTR params);
+        bool m_buffer_error;
 
 };
 
