@@ -38,6 +38,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <sys/mman.h>
 
+#include <cutils/log.h>
+
 #include "hypv_intercept.h"
 #include "vidc_debug.h"
 
