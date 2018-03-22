@@ -4099,15 +4099,10 @@ OMX_ERRORTYPE  omx_video::fill_this_buffer_proxy(
 {
     (void)hComp;
     OMX_U8 *pmem_data_buf = NULL;
-    OMX_ERRORTYPE nRet = OMX_ErrorNone;
     auto_lock l(m_buf_lock);
     if (m_buffer_freed == true) {
         DEBUG_PRINT_ERROR("ERROR: FTBProxy: Invalid call. Called after freebuffer");
         return OMX_ErrorBadParameter;
-    }
-
-    if (bufferAdd != NULL) {
-        DEBUG_PRINT_LOW("FTBProxy: bufferAdd->pBuffer[%p]", bufferAdd->pBuffer);
     }
 
     if (bufferAdd != NULL) {
