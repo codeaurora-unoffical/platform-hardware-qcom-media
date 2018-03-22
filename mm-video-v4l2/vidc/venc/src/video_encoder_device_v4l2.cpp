@@ -555,11 +555,8 @@ void* venc_dev::async_venc_message_thread (void *input)
                     DEBUG_PRINT_ERROR("ERROR: Wrong ioctl message");
                     break;
                 }
-#ifndef _TARGET_KERNEL_VERSION_49_
+
                 venc_msg.msgcode = VEN_MSG_FLUSH_OUPUT_DONE;
-#else
-                venc_msg.msgcode = VEN_MSG_FLUSH_OUTPUT_DONE;
-#endif
                 venc_msg.statuscode = VEN_S_SUCCESS;
 
                 if (omx->async_message_process(input,&venc_msg) < 0) {
@@ -3608,21 +3605,7 @@ unsigned venc_dev::venc_flush( unsigned port)
     struct v4l2_encoder_cmd enc;
     DEBUG_PRINT_LOW("in %s", __func__);
 
-    unsigned int cookie = 0;
-    for (unsigned int i = 0; i < (sizeof(fd_list)/sizeof(fd_list[0])); i++) {
-        cookie = fd_list[i];
-        if (cookie != 0) {
-            if (!ioctl(input_extradata_info.m_ion_dev, ION_IOC_FREE, &cookie)) {
-                DEBUG_PRINT_HIGH("Freed handle = %u", cookie);
-            }
-            fd_list[i] = 0;
-        }
-    }
-#ifndef _TARGET_KERNEL_VERSION_49_
     enc.cmd = V4L2_ENC_QCOM_CMD_FLUSH;
-#else
-    enc.cmd = V4L2_QCOM_CMD_FLUSH;
-#endif
     enc.flags = V4L2_QCOM_CMD_FLUSH_OUTPUT | V4L2_QCOM_CMD_FLUSH_CAPTURE;
 
     if (ioctl(m_nDriver_fd, VIDIOC_ENCODER_CMD, &enc)) {
