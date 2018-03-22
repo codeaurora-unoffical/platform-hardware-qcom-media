@@ -615,6 +615,18 @@ void venc_dev::append_extradata_ltrinfo(OMX_OTHER_EXTRADATATYPE *p_extra,
     memcpy(p_extra->data, p_extradata->data, p_extradata->data_size);
 }
 
+
+void venc_dev::append_extradata_frameQPinfo(OMX_OTHER_EXTRADATATYPE *p_extra,
+            struct msm_vidc_extradata_header *p_extradata)
+{
+    p_extra->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE) + p_extradata->data_size, 4);
+    p_extra->nVersion.nVersion = OMX_SPEC_VERSION;
+    p_extra->nPortIndex = OMX_DirOutput;
+    p_extra->eType = (OMX_EXTRADATATYPE) OMX_ExtraDataEncoderFrameQp;
+    p_extra->nDataSize = p_extradata->data_size;
+    memcpy(p_extra->data, p_extradata->data, p_extradata->data_size);
+}
+
 void venc_dev::append_extradata_none(OMX_OTHER_EXTRADATATYPE *p_extra)
 {
     p_extra->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE), 4);
@@ -974,6 +986,13 @@ bool venc_dev::handle_output_extradata(void *buffer, int index)
                 DEBUG_PRINT_LOW("LTRInfo Extradata = 0x%x", *((OMX_U32 *)p_extra->data));
                 break;
             }
+            case MSM_VIDC_EXTRADATA_FRAME_QP:
+                append_extradata_frameQPinfo(p_extra, p_extradata);
+                if(p_clientextra) {
+                    append_extradata_frameQPinfo(p_clientextra, p_extradata);
+                }
+                DEBUG_PRINT_LOW("FrameQP Extradata = %d", *((OMX_U32 *)p_extra->data));
+                break;
             case MSM_VIDC_EXTRADATA_NONE:
                 append_extradata_none(p_extra);
                 if(p_clientextra) {
@@ -2557,6 +2576,18 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 extradata = true;
                 break;
             }
+        case OMX_ExtraDataEncoderFrameQp:
+             {
+                DEBUG_PRINT_LOW("venc_set_param: OMX_ExtraDataEncoderFrameQp");
+                OMX_BOOL extra_data = *(OMX_BOOL *)(paramData);
+                if (venc_set_extradata(OMX_ExtraDataEncoderFrameQp, extra_data) == false) {
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_ExtraDataEncoderFrameQp failed");
+                    return false;
+                }
+
+		extradata = true;
+		break;
+            }
         case OMX_ExtraDataVideoEncoderMBInfo:
             {
                 DEBUG_PRINT_LOW("venc_set_param: OMX_ExtraDataVideoEncoderMBInfo");
@@ -3284,6 +3315,14 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
         {
             if(!venc_set_roi_qp_info((OMX_QTI_VIDEO_CONFIG_ROIINFO *)configData)) {
                 DEBUG_PRINT_ERROR("Failed to set ROI QP info");
+                return false;
+            }
+            break;
+        }
+        case OMX_IndexConfigVideoNalSize:
+        {
+            if(!venc_set_nal_size((OMX_VIDEO_CONFIG_NALSIZE *)configData)) {
+                DEBUG_PRINT_LOW("Failed to set Nal size info");
                 return false;
             }
             break;
@@ -4793,6 +4832,9 @@ bool venc_dev::venc_set_extradata(OMX_U32 extra_data, OMX_BOOL enable)
         case OMX_ExtraDataFrameDimension:
             control.value = V4L2_MPEG_VIDC_EXTRADATA_INPUT_CROP;
             break;
+        case OMX_ExtraDataEncoderFrameQp:
+            control.value = V4L2_MPEG_VIDC_EXTRADATA_ENC_FRAME_QP;
+	    break;
         default:
             DEBUG_PRINT_ERROR("Unrecognized extradata index 0x%x", (unsigned int)extra_data);
             return false;
@@ -7163,6 +7205,7 @@ bool venc_dev::venc_get_hevc_profile(OMX_U32* profile)
         } else return false;
     } else return false;
 }
+
 bool venc_dev::venc_get_profile_level(OMX_U32 *eProfile,OMX_U32 *eLevel)
 {
     bool status = true;
@@ -7394,6 +7437,46 @@ bool venc_dev::venc_get_profile_level(OMX_U32 *eProfile,OMX_U32 *eLevel)
     }
 
     return status;
+}
+
+bool venc_dev::venc_set_nal_size (OMX_VIDEO_CONFIG_NALSIZE *nalSizeInfo) {
+    struct v4l2_control gControl;
+    struct v4l2_control sControl;
+
+    DEBUG_PRINT_HIGH("set video stream format - nal size - %u", nalSizeInfo->nNaluBytes);
+    gControl.id = V4L2_CID_MPEG_VIDC_VIDEO_STREAM_FORMAT;
+
+    if (ioctl(m_nDriver_fd, VIDIOC_G_CTRL, &gControl)) {
+        DEBUG_PRINT_ERROR("get control: video stream format failed");
+        return false;
+    }
+
+    sControl.id = V4L2_CID_MPEG_VIDC_VIDEO_STREAM_FORMAT;
+    switch (nalSizeInfo->nNaluBytes) {
+            case 0:
+                sControl.value = V4L2_MPEG_VIDC_VIDEO_NAL_FORMAT_STARTCODES;
+                break;
+            case 2:
+                sControl.value = V4L2_MPEG_VIDC_VIDEO_NAL_FORMAT_TWO_BYTE_LENGTH;
+                break;
+            case 4:
+                sControl.value = V4L2_MPEG_VIDC_VIDEO_NAL_FORMAT_FOUR_BYTE_LENGTH;
+                break;
+            default:
+                return false;
+        }
+
+    if ((1 << sControl.value) & gControl.value) {
+        if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &sControl)) {
+            DEBUG_PRINT_ERROR("set control: video stream format failed - %u",
+                    (unsigned int)nalSizeInfo->nNaluBytes);
+            return false;
+        }
+        return true;
+    }
+
+    return false;
+
 }
 
 #ifdef _ANDROID_ICS_

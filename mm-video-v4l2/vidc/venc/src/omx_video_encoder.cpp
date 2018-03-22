@@ -1325,6 +1325,19 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         eRet = OMX_ErrorUnsupportedIndex;
                         break;
                     }
+                } else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataEncoderFrameQp) {
+                    if (pParam->nPortIndex == PORT_INDEX_OUT) {
+                        if (pParam->bEnabled == OMX_TRUE)
+                            mask = VENC_EXTRADATA_FRAME_QP;
+
+                        DEBUG_PRINT_HIGH("FrameQP extradata %s",
+                                ((pParam->bEnabled == OMX_TRUE) ? "enabled" : "disabled"));
+                    } else {
+                        DEBUG_PRINT_ERROR("set_parameter: FrameQP extradata is "
+                                "valid for output port only");
+                        eRet = OMX_ErrorUnsupportedIndex;
+                        break;
+                    }
                 } else {
                     DEBUG_PRINT_ERROR("set_parameter: unsupported extrdata index (%x)",
                             pParam->nIndex);
@@ -2163,6 +2176,25 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 VALIDATE_OMX_VENDOR_EXTENSION_PARAM_DATA(ext);
 
                 return set_vendor_extension_config(ext);
+            }
+        case OMX_IndexConfigVideoNalSize:
+            {
+                VALIDATE_OMX_PARAM_DATA(configData, OMX_VIDEO_CONFIG_NALSIZE);
+
+                OMX_VIDEO_CONFIG_NALSIZE* pParam =
+                    reinterpret_cast<OMX_VIDEO_CONFIG_NALSIZE*>(configData);
+                DEBUG_PRINT_HIGH("set_config(): OMX_IndexConfigVideoNalSize (%u)", (unsigned int)pParam->nNaluBytes);
+
+                if (pParam->nPortIndex == PORT_INDEX_OUT) {
+                    if (handle->venc_set_config(configData, OMX_IndexConfigVideoNalSize) != true) {
+                        DEBUG_PRINT_LOW("Setting OMX_IndexConfigVideoBitrate failed");
+                        return OMX_ErrorUnsupportedSetting;
+                    }
+                } else {
+                    DEBUG_PRINT_ERROR("ERROR: Unsupported port index: %u", (unsigned int)pParam->nPortIndex);
+                    return OMX_ErrorBadPortIndex;
+                }
+                break;
             }
 
         default:

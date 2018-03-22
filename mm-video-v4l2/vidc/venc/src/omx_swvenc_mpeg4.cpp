@@ -1353,6 +1353,23 @@ OMX_ERRORTYPE  omx_venc::set_parameter
                     break;
                 }
             }
+            else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataEncoderFrameQp)
+            {
+                if (pParam->nPortIndex == PORT_INDEX_OUT)
+                {
+                    mask = VEN_EXTRADATA_MBINFO;
+
+                    DEBUG_PRINT_HIGH("MBInfo extradata %s",
+                            ((pParam->bEnabled == OMX_TRUE) ? "enabled" : "disabled"));
+                }
+                else
+                {
+                    DEBUG_PRINT_ERROR("set_parameter: MB information is "
+                            "valid for output port only");
+                    eRet = OMX_ErrorUnsupportedIndex;
+                    break;
+                }
+            }
             else
             {
                 DEBUG_PRINT_ERROR("set_parameter: unsupported extrdata index (%x)",
