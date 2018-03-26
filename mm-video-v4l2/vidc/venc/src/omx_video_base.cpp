@@ -290,6 +290,7 @@ omx_video::omx_video():
     allocate_native_handle(false),
     m_out_bm_count(0),
     m_client_out_bm_count(0),
+    m_client_in_bm_count(0),
     m_inp_bm_count(0),
     m_flags(0),
     m_etb_count(0),
@@ -2654,6 +2655,7 @@ OMX_ERRORTYPE  omx_video::use_input_buffer(
 
         *bufferHdr = (m_inp_mem_ptr + i);
         BITMASK_SET(&m_inp_bm_count,i);
+        BITMASK_SET(&m_client_in_bm_count,i);
 
         (*bufferHdr)->pBuffer           = (OMX_U8 *)buffer;
         (*bufferHdr)->nSize             = sizeof(OMX_BUFFERHEADERTYPE);
@@ -3670,6 +3672,10 @@ OMX_ERRORTYPE  omx_video::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         nPortIndex = buffer - (OMX_BUFFERHEADERTYPE*)m_out_mem_ptr;
         if(BITMASK_PRESENT(&m_client_out_bm_count, nPortIndex))
             BITMASK_CLEAR(&m_client_out_bm_count,nPortIndex);
+    } else if (port == PORT_INDEX_IN) {
+        nPortIndex = buffer - (meta_mode_enable?meta_buffer_hdr:m_inp_mem_ptr);
+        if(BITMASK_PRESENT(&m_client_in_bm_count, nPortIndex))
+            BITMASK_CLEAR(&m_client_in_bm_count,nPortIndex);
     }
     if (m_state == OMX_StateIdle &&
             (BITMASK_PRESENT(&m_flags ,OMX_COMPONENT_LOADING_PENDING))) {
@@ -4033,7 +4039,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
 
         auto_lock l(m_buf_lock);
         pmem_data_buf = (OMX_U8 *)m_pInput_pmem[nBufIndex].buffer;
-        if (pmem_data_buf && BITMASK_PRESENT(&m_inp_bm_count, nBufIndex)) {
+        if (pmem_data_buf && BITMASK_PRESENT(&m_client_in_bm_count, nBufIndex)) {
             memcpy (pmem_data_buf, (buffer->pBuffer + buffer->nOffset),
                     buffer->nFilledLen);
         }
@@ -4800,8 +4806,12 @@ OMX_ERRORTYPE omx_video::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVE
             } else if (profileLevelType->nProfileIndex == 2) {
                 profileLevelType->eProfile = OMX_VIDEO_AVCProfileHigh;
             } else if (profileLevelType->nProfileIndex == 3) {
-                profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
+                profileLevelType->eProfile = OMX_VIDEO_AVCProfileConstrainedBaseline;
             } else if (profileLevelType->nProfileIndex == 4) {
+                profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedBaseline;
+            } else if (profileLevelType->nProfileIndex == 5) {
+                profileLevelType->eProfile = OMX_VIDEO_AVCProfileConstrainedHigh;
+            } else if (profileLevelType->nProfileIndex == 6) {
                 profileLevelType->eProfile = QOMX_VIDEO_AVCProfileConstrainedHigh;
             } else {
                 DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported nProfileIndex ret NoMore %u",
