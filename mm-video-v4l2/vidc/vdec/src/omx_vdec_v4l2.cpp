@@ -7288,10 +7288,11 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
                 m_pmem_info[i].pmem_fd = pmem_fd[block_idx];
 #ifdef USE_GBM
                 m_pmem_info[i].pmeta_fd = pmeta_fd[block_idx];
+                drv_ctx.op_buf_gbm_info[i].gbm = op_buf_gbm_info_temp[block_idx].gbm;
                 drv_ctx.op_buf_gbm_info[i].gbm_device_fd = op_buf_gbm_info_temp[block_idx].gbm_device_fd;
-                drv_ctx.op_buf_gbm_info[i].bo_fd= op_buf_gbm_info_temp[block_idx].bo_fd;
-                drv_ctx.op_buf_gbm_info[i].meta_fd= op_buf_gbm_info_temp[block_idx].meta_fd;
-                drv_ctx.op_buf_gbm_info[i].bo= op_buf_gbm_info_temp[block_idx].bo;
+                drv_ctx.op_buf_gbm_info[i].bo_fd = op_buf_gbm_info_temp[block_idx].bo_fd;
+                drv_ctx.op_buf_gbm_info[i].meta_fd = op_buf_gbm_info_temp[block_idx].meta_fd;
+                drv_ctx.op_buf_gbm_info[i].bo = op_buf_gbm_info_temp[block_idx].bo;
 #elif defined USE_ION
                 drv_ctx.op_buf_ion_info[i].ion_device_fd = op_buf_ion_info_temp[block_idx].ion_device_fd;
                 drv_ctx.op_buf_ion_info[i].ion_alloc_data = op_buf_ion_info_temp[block_idx].ion_alloc_data;
@@ -10335,17 +10336,17 @@ int omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,OMX_U32 buffer_size,
 
     fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     if (fd < 0) {
-       DEBUG_PRINT_ERROR("opening dri device for gbm failed with fd = %d", fd);
-       return fd;
+        DEBUG_PRINT_ERROR("opening dri device for gbm failed with fd = %d", fd);
+        return fd;
     }
     DEBUG_PRINT_LOW("Successfully open dri device for gbm");
     gbm = gbm_create_device(fd);
     if (gbm == NULL) {
-       DEBUG_PRINT_ERROR("create gbm device failed");
-       close(fd);
-       return -ENOMEM;
+        DEBUG_PRINT_ERROR("create gbm device failed");
+        close(fd);
+        return -ENOMEM;
     } else {
-       DEBUG_PRINT_LOW( "Successfully created gbm device");
+        DEBUG_PRINT_LOW( "Successfully created gbm device");
     }
 
 
@@ -10355,31 +10356,31 @@ int omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,OMX_U32 buffer_size,
 
 
     if (bo == NULL) {
-      DEBUG_PRINT_ERROR("Create bo failed");
-      gbm_device_destroy(gbm);
-      close(fd);
-      fd = -ENOMEM;
-      return fd;
+        DEBUG_PRINT_ERROR("Create bo failed");
+        gbm_device_destroy(gbm);
+        close(fd);
+        fd = -ENOMEM;
+        return fd;
     }
 
     bo_fd = gbm_bo_get_fd(bo);
     if (bo_fd < 0) {
-      DEBUG_PRINT_ERROR("Get bo fd failed");
-      gbm_bo_destroy(bo);
-      gbm_device_destroy(gbm);
-      close(fd);
-      fd = -ENOMEM;
-      return fd;
+        DEBUG_PRINT_ERROR("Get bo fd failed");
+        gbm_bo_destroy(bo);
+        gbm_device_destroy(gbm);
+        close(fd);
+        fd = -ENOMEM;
+        return fd;
     }
 
     gbm_perform(GBM_PERFORM_GET_METADATA_ION_FD, bo, &meta_fd);
     if (meta_fd < 0) {
-      DEBUG_PRINT_ERROR("Get bo meta fd failed");
-      gbm_bo_destroy(bo);
-      gbm_device_destroy(gbm);
-      close(fd);
-      fd = -ENOMEM;
-      return fd;
+        DEBUG_PRINT_ERROR("Get bo meta fd failed");
+        gbm_bo_destroy(bo);
+        gbm_device_destroy(gbm);
+        close(fd);
+        fd = -ENOMEM;
+        return fd;
     }
     op_buf_gbm_info->gbm = gbm;
     op_buf_gbm_info->bo = bo;
@@ -10387,30 +10388,30 @@ int omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,OMX_U32 buffer_size,
     op_buf_gbm_info->meta_fd = meta_fd;
 
     DEBUG_PRINT_LOW("allocate gbm bo fd meta fd  %p %d %d",bo,bo_fd,meta_fd);
-  return fd;
+    return fd;
 }
 
 void omx_vdec::free_gbm_memory(struct vdec_gbm *buf_gbm_info) {
-     if(!buf_gbm_info) {
-       DEBUG_PRINT_ERROR(" GBM: free called with invalid fd/allocdata");
-       return;
-     }
-     DEBUG_PRINT_LOW("free gbm bo fd meta fd  %p %d %d",
-            buf_gbm_info->bo,buf_gbm_info->bo_fd,buf_gbm_info->meta_fd);
+    if(!buf_gbm_info) {
+        DEBUG_PRINT_ERROR(" GBM: free called with invalid fd/allocdata");
+        return;
+    }
+    DEBUG_PRINT_LOW("free gbm bo fd meta fd  %p %d %d",
+           buf_gbm_info->bo,buf_gbm_info->bo_fd,buf_gbm_info->meta_fd);
 
-     if (buf_gbm_info->bo)
+    if (buf_gbm_info->bo)
         gbm_bo_destroy(buf_gbm_info->bo);
-     buf_gbm_info->bo = NULL;
+    buf_gbm_info->bo = NULL;
 
-     if (buf_gbm_info->gbm)
+    if (buf_gbm_info->gbm)
         gbm_device_destroy(buf_gbm_info->gbm);
-     buf_gbm_info->gbm = NULL;
+    buf_gbm_info->gbm = NULL;
 
-     close(buf_gbm_info->gbm_device_fd);
-     buf_gbm_info->gbm_device_fd = -1;
+    close(buf_gbm_info->gbm_device_fd);
+    buf_gbm_info->gbm_device_fd = -1;
 
-     buf_gbm_info->bo_fd = -1;
-     buf_gbm_info->meta_fd = -1;
+    buf_gbm_info->bo_fd = -1;
+    buf_gbm_info->meta_fd = -1;
 }
 #endif
 
