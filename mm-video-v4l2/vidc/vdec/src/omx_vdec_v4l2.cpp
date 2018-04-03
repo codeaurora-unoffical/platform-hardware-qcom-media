@@ -7398,28 +7398,12 @@ if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
     memset( (void *)&buf, 0, sizeof(buf));
     memset( (void *)&plane, 0, sizeof(plane));
     int rc;
-    if (temp_buffer->buffer_len == 0 && (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
-        struct v4l2_decoder_cmd dec;
-
-        DEBUG_PRINT_HIGH("Input EOS reached. Converted to STOP command") ;
-        memset(&dec, 0, sizeof(dec));
-        dec.cmd = V4L2_DEC_CMD_STOP;
-        rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_DECODER_CMD, &dec);
-        post_event ((unsigned long)buffer, VDEC_S_SUCCESS,
-            OMX_COMPONENT_GENERATE_EBD);
-        if (rc < 0) {
-            DEBUG_PRINT_ERROR("Decoder CMD failed");
-            return OMX_ErrorHardware;
-        }
-        return OMX_ErrorNone;
-    }
-
-    if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
-        DEBUG_PRINT_HIGH("Input EOS reached") ;
+    unsigned long  print_count;
+    if (temp_buffer->buffer_len == 0 || (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
         buf.flags = V4L2_QCOM_BUF_FLAG_EOS;
+        DEBUG_PRINT_HIGH("INPUT EOS reached") ;
     }
-
-
+    OMX_ERRORTYPE eRet = OMX_ErrorNone;
     buf.index = nPortIndex;
     buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
     buf.memory = V4L2_MEMORY_USERPTR;
