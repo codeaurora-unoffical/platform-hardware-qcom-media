@@ -6696,10 +6696,14 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
                                 munmap (drv_ctx.op_buf_map_info[index].base_address,
                                         drv_ctx.op_buf_map_info[index].map_size);
                             }
+#ifdef USE_GBM
+                            free_gbm_memory(&drv_ctx.op_buf_gbm_info[index]);
+#else
                             close (drv_ctx.ptr_outputbuffer[index].pmem_fd);
                             drv_ctx.ptr_outputbuffer[index].pmem_fd = -1;
 #ifdef USE_ION
                             free_ion_memory(&drv_ctx.op_buf_ion_info[index]);
+#endif
 #endif
                         } else {
                             drv_ctx.op_buf_ion_info[index].ion_device_fd = -1;
