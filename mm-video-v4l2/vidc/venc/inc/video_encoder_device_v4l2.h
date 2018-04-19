@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -415,10 +415,12 @@ class venc_dev
                 bool reinit(unsigned long, unsigned long);
                 struct pq_stats_lib_input_config pConfig;
                 int fill_pq_stats(struct v4l2_buffer buf, unsigned int data_offset);
+                void release_buffers();
                 pq_stats_lib_caps_t caps;
                 typedef pq_stats_lib_op_status (*pq_stats_lib_init_t)(void**, enum perf_hint pq_hint, enum color_compression_format format,
                                 uint32_t codec_type);
                 typedef pq_stats_lib_op_status (*pq_stats_lib_deinit_t)(void*);
+                typedef pq_stats_lib_op_status (*pq_stats_lib_release_buffers_t)(void*);
                 typedef pq_stats_lib_op_status (*pq_stats_lib_get_caps_t)(void* handle, pq_stats_lib_caps_t *caps);
                 typedef pq_stats_lib_op_status (*pq_stats_lib_configure_t)(void* handle, pq_stats_lib_input_config *input_t);
                 typedef pq_stats_lib_op_status (*pq_stats_lib_fill_data_t)(void *handle, pq_stats_lib_buffer_params_t *yuv_input,
@@ -431,6 +433,7 @@ class venc_dev
                 pq_stats_lib_get_caps_t mPQGetCaps;
                 pq_stats_lib_configure_t mPQConfigure;
                 pq_stats_lib_deinit_t mPQDeInit;
+                pq_stats_lib_release_buffers_t mPQReleaseBuffers;
                 pq_stats_lib_fill_data_t mPQComputeStats;
                 unsigned long configured_format;
         };

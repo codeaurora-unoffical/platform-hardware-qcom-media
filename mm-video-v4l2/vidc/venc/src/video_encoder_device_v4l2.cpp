@@ -1088,6 +1088,9 @@ void venc_dev::free_extradata(struct extradata_buffer_info *extradata_info)
 void venc_dev::free_extradata_all()
 {
     free_extradata(&output_extradata_info);
+#ifdef _PQ_
+    m_pq.release_buffers();
+#endif
     free_extradata(&input_extradata_info);
 #ifdef _PQ_
     free_extradata(&m_pq.roi_extradata_info);
@@ -8253,7 +8256,10 @@ bool venc_dev::venc_dev_pq::init(unsigned long format, unsigned long codec)
                 dlsym(mLibHandle,"pq_stats_lib_configure");
             mPQComputeStats = (pq_stats_lib_fill_data_t)
                 dlsym(mLibHandle,"pq_stats_lib_fill_data");
-            if (!mPQInit || !mPQDeInit || !mPQGetCaps || !mPQConfigure || !mPQComputeStats)
+            mPQReleaseBuffers = (pq_stats_lib_release_buffers_t)
+                dlsym(mLibHandle,"pq_stats_lib_release_buffers");
+            if (!mPQInit || !mPQDeInit || !mPQGetCaps || !mPQConfigure
+                        || !mPQComputeStats || !mPQReleaseBuffers)
                 status = false;
         } else {
             DEBUG_PRINT_ERROR("FATAL ERROR: could not dlopen %s: %s", YUV_STATS_LIBRARY_NAME, dlerror());
@@ -8439,6 +8445,14 @@ int venc_dev::venc_dev_pq::fill_pq_stats(struct v4l2_buffer buf,
     ATRACE_END();
     DEBUG_PRINT_HIGH("PQ data length = %d", output.filled_len);
     return output.filled_len;
+}
+
+void venc_dev::venc_dev_pq::release_buffers()
+{
+    if (mPQHandle)
+        mPQReleaseBuffers(mPQHandle);
+
+    return;
 }
 
 venc_dev::venc_dev_pq::~venc_dev_pq()
