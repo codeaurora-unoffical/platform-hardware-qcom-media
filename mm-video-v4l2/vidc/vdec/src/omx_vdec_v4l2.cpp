@@ -2401,7 +2401,11 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         m_frame_parser.init_start_codes(codec_type_parse);
     } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx311",\
                 OMX_MAX_STRINGNAME_SIZE)) {
+#ifdef _ANDROID_O_MR1_DIVX_CHANGES
+        strlcpy((char *)m_cRole, "video_decoder.divx311",OMX_MAX_STRINGNAME_SIZE);
+#else
         strlcpy((char *)m_cRole, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
+#endif
         DEBUG_PRINT_LOW ("DIVX 311 Decoder selected");
         drv_ctx.decoder_format = VDEC_CODECTYPE_DIVX_3;
         output_capability = V4L2_PIX_FMT_DIVX_311;
@@ -2411,7 +2415,11 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 
     } else if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx4",\
                 OMX_MAX_STRINGNAME_SIZE)) {
+#ifdef _ANDROID_O_MR1_DIVX_CHANGES
+        strlcpy((char *)m_cRole, "video_decoder.divx4",OMX_MAX_STRINGNAME_SIZE);
+#else
         strlcpy((char *)m_cRole, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
+#endif
         DEBUG_PRINT_ERROR ("DIVX 4 Decoder selected");
         drv_ctx.decoder_format = VDEC_CODECTYPE_DIVX_4;
         output_capability = V4L2_PIX_FMT_DIVX;
@@ -4755,12 +4763,25 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                           (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx311", OMX_MAX_STRINGNAME_SIZE)) ||
                                           (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx4", OMX_MAX_STRINGNAME_SIZE))
                                         ) {
+#ifdef _ANDROID_O_MR1_DIVX_CHANGES
+                                        if (!strncmp((const char*)comp_role->cRole, "video_decoder.divx4", OMX_MAX_STRINGNAME_SIZE)) {
+                                          strlcpy((char*)m_cRole, "video_decoder.divx4", OMX_MAX_STRINGNAME_SIZE);
+                                        } else if (!strncmp((const char*)comp_role->cRole, "video_decoder.divx311", OMX_MAX_STRINGNAME_SIZE)) {
+                                          strlcpy((char*)m_cRole, "video_decoder.divx311", OMX_MAX_STRINGNAME_SIZE);
+                                        } else if (!strncmp((const char*)comp_role->cRole, "video_decoder.divx", OMX_MAX_STRINGNAME_SIZE)) {
+                                          strlcpy((char*)m_cRole, "video_decoder.divx", OMX_MAX_STRINGNAME_SIZE);
+                                        } else {
+                                          DEBUG_PRINT_ERROR("Setparameter: unknown Index %s", comp_role->cRole);
+                                          eRet =OMX_ErrorUnsupportedSetting;
+                                        }
+#else
                                       if (!strncmp((const char*)comp_role->cRole, "video_decoder.divx", OMX_MAX_STRINGNAME_SIZE)) {
                                           strlcpy((char*)m_cRole, "video_decoder.divx", OMX_MAX_STRINGNAME_SIZE);
                                       } else {
                                           DEBUG_PRINT_ERROR("Setparameter: unknown Index %s", comp_role->cRole);
                                           eRet =OMX_ErrorUnsupportedSetting;
                                       }
+#endif
                                   } else if ( (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vc1", OMX_MAX_STRINGNAME_SIZE)) ||
                                           (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.wmv", OMX_MAX_STRINGNAME_SIZE))
                                         ) {
@@ -7993,28 +8014,10 @@ if (buffer->nFlags & QOMX_VIDEO_BUFFERFLAG_EOSEQ) {
     memset( (void *)&plane, 0, sizeof(plane));
     int rc;
     unsigned long  print_count;
-    if (temp_buffer->buffer_len == 0 && (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
-        struct v4l2_decoder_cmd dec;
-
-        DEBUG_PRINT_HIGH("Input EOS reached. Converted to STOP command") ;
-        memset(&dec, 0, sizeof(dec));
-        dec.cmd = V4L2_DEC_CMD_STOP;
-        rc = ioctl(drv_ctx.video_driver_fd, VIDIOC_DECODER_CMD, &dec);
-        post_event ((unsigned long)buffer, VDEC_S_SUCCESS,
-            OMX_COMPONENT_GENERATE_EBD);
-        if (rc < 0) {
-            DEBUG_PRINT_ERROR("Decoder CMD failed");
-            return OMX_ErrorHardware;
-        }
-        return OMX_ErrorNone;
-    }
-
-    if (buffer->nFlags & OMX_BUFFERFLAG_EOS) {
-        DEBUG_PRINT_HIGH("Input EOS reached") ;
+    if (temp_buffer->buffer_len == 0 || (buffer->nFlags & OMX_BUFFERFLAG_EOS)) {
         buf.flags = V4L2_QCOM_BUF_FLAG_EOS;
+        DEBUG_PRINT_HIGH("INPUT EOS reached") ;
     }
-
-
     OMX_ERRORTYPE eRet = OMX_ErrorNone;
     buf.index = nPortIndex;
     buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -8594,7 +8597,15 @@ OMX_ERRORTYPE  omx_vdec::component_role_enum(OMX_IN OMX_HANDLETYPE hComp,
     else if ((!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx",OMX_MAX_STRINGNAME_SIZE)) ||
             (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx311",OMX_MAX_STRINGNAME_SIZE))) {
         if ((0 == index) && role) {
+#ifdef _ANDROID_O_MR1_DIVX_CHANGES
+            if (!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.divx311",OMX_MAX_STRINGNAME_SIZE)) {
+                strlcpy((char *)role, "video_decoder.divx311",OMX_MAX_STRINGNAME_SIZE);
+            } else {
+                strlcpy((char *)role, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
+            }
+#else
             strlcpy((char *)role, "video_decoder.divx",OMX_MAX_STRINGNAME_SIZE);
+#endif
             DEBUG_PRINT_LOW("component_role_enum: role %s",role);
         } else {
             DEBUG_PRINT_LOW("No more roles");
