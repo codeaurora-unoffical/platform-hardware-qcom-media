@@ -9216,7 +9216,7 @@ int omx_vdec::async_message_process (void *context, void* message)
                    if (omxhdr && omxhdr->nFilledLen && !omx->m_need_turbo) {
                         omx->request_perf_level(VIDC_NOMINAL);
                    }
-                   if (!omx->m_enable_android_native_buffers && omx->output_use_buffer && omxhdr->pBuffer &&
+                   if (!omx->dynamic_buf_mode && omx->output_use_buffer && omxhdr->pBuffer &&
                        vdec_msg->msgdata.output_frame.bufferaddr)
                        memcpy ( omxhdr->pBuffer, (void *)
                                ((unsigned long)vdec_msg->msgdata.output_frame.bufferaddr +
