@@ -60,6 +60,7 @@ public:
     int32_t getBuffReq(int32_t port, C2DBuffReq *req);
     int32_t dumpOutput(char * filename, char mode);
     int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight);
+    int SetSourceConfigFlags(int flags);
 protected:
     virtual ~C2DColorConverter();
     virtual int convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData);
@@ -178,7 +179,7 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mSrcSurfaceDef = NULL;
     mDstSurfaceDef = NULL;
 
-    mFlags = flags; // can be used for rotation
+    mFlags = flags;
 
     mSrcSurfaceDef = getDummySurfaceDef(srcFormat, srcWidth, srcHeight, true);
     mDstSurfaceDef = getDummySurfaceDef(dstFormat, dstWidth, dstHeight, false);
@@ -209,6 +210,12 @@ int C2DColorConverter::SourceCrop(int x, int y, size_t srcWidth, size_t srcHeigh
          mBlit.source_rect.width >> 16,
          mBlit.source_rect.height >> 16);
     return 0;
+}
+
+int C2DColorConverter::SetSourceConfigFlags(int flags)
+{
+   mBlit.config_mask |= flags;
+   return 0;
 }
 
 C2DColorConverter::~C2DColorConverter()
