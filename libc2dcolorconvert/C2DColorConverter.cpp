@@ -59,8 +59,10 @@ public:
     C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags,size_t srcStride);
     int32_t getBuffReq(int32_t port, C2DBuffReq *req);
     int32_t dumpOutput(char * filename, char mode);
+    int32_t dumpInput(char * filename, char mode);
     int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight);
     int SetSourceConfigFlags(int flags);
+    int SetBlend(int x, int y, size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat);
 protected:
     virtual ~C2DColorConverter();
     virtual int convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData);
@@ -195,6 +197,65 @@ C2DColorConverter::C2DColorConverter(size_t srcWidth, size_t srcHeight, size_t d
     mBlit.target_rect.height = dstHeight << 16;
     mBlit.config_mask = C2D_ALPHA_BLEND_NONE | C2D_NO_BILINEAR_BIT | C2D_NO_ANTIALIASING_BIT | C2D_TARGET_RECT_BIT;
     mBlit.surface_id = mSrcSurface;
+}
+
+int C2DColorConverter::SetBlend(int x, int y, size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat)
+{
+    if (mSrcSurfaceDef)
+    {
+        mC2DDestroySurface(mSrcSurface);
+        if (isYUVSurface(mSrcFormat)) {
+            delete ((C2D_YUV_SURFACE_DEF *)mSrcSurfaceDef);
+        } else {
+            delete ((C2D_RGB_SURFACE_DEF *)mSrcSurfaceDef);
+        }
+        mSrcSurfaceDef = NULL;
+    }
+
+    if (mDstSurfaceDef)
+    {
+        mC2DDestroySurface(mDstSurface);
+        if (isYUVSurface(mDstFormat)) {
+            delete ((C2D_YUV_SURFACE_DEF *)mDstSurfaceDef);
+        } else {
+            delete ((C2D_RGB_SURFACE_DEF *)mDstSurfaceDef);
+        }
+        mDstSurfaceDef = NULL;
+    }
+
+    mSrcWidth = srcWidth;
+    mSrcHeight = srcHeight;
+    mSrcStride = 0;
+    mFlags = 0;
+    mDstWidth = dstWidth;
+    mDstHeight = dstHeight;
+    mSrcFormat = srcFormat;
+    mDstFormat = dstFormat;
+    mSrcSize = calcSize(srcFormat, srcWidth, srcHeight);
+    mDstSize = calcSize(dstFormat, dstWidth, dstHeight);
+    mSrcYSize = calcYSize(srcFormat, srcWidth, srcHeight);
+    mDstYSize = calcYSize(dstFormat, dstWidth, dstHeight);
+
+    mSrcSurfaceDef = getDummySurfaceDef(srcFormat, srcWidth, srcHeight, true);
+
+    mDstSurfaceDef = getDummySurfaceDef(dstFormat, dstWidth, dstHeight, false);
+
+    mBlit.source_rect.x = 0 << 16;
+    mBlit.source_rect.y = 0 << 16;
+    mBlit.source_rect.width = srcWidth << 16;
+    mBlit.source_rect.height = srcHeight << 16;
+    mBlit.target_rect.x = x << 16;
+    mBlit.target_rect.y = y << 16;
+    mBlit.target_rect.width = mSrcWidth << 16;
+    mBlit.target_rect.height = mSrcHeight << 16;
+    mBlit.config_mask = C2D_TARGET_RECT_BIT | C2D_ALPHA_BLEND_SRC_OVER;
+    mBlit.surface_id = mSrcSurface;
+    ALOGV("C2D library: target rect x = %d, y = %d, width = %d, height = %d",
+         mBlit.target_rect.x >> 16,
+         mBlit.target_rect.y >> 16,
+         mBlit.target_rect.width >> 16,
+         mBlit.target_rect.height >> 16);
+    return 0;
 }
 
 int C2DColorConverter::SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight)
@@ -334,6 +395,9 @@ bool C2DColorConverter::isYUVSurface(ColorConvertFormat format)
             return true;
         case RGB565:
         case RGBA8888:
+        case RGBA8888_NO_PREMULTIPLIED:
+        case ARGB8888:
+        case ARGB8888_NO_PREMULTIPLIED:
         default:
             return false;
     }
@@ -445,6 +509,12 @@ uint32_t C2DColorConverter::getC2DFormat(ColorConvertFormat format)
             return C2D_COLOR_FORMAT_565_RGB;
         case RGBA8888:
             return C2D_COLOR_FORMAT_8888_RGBA | C2D_FORMAT_SWAP_ENDIANNESS | C2D_FORMAT_PREMULTIPLIED;
+        case RGBA8888_NO_PREMULTIPLIED:
+            return C2D_COLOR_FORMAT_8888_RGBA;
+        case ARGB8888:
+            return C2D_COLOR_FORMAT_8888_ARGB | C2D_FORMAT_SWAP_ENDIANNESS | C2D_FORMAT_PREMULTIPLIED;
+        case ARGB8888_NO_PREMULTIPLIED:
+            return C2D_COLOR_FORMAT_8888_ARGB;
         case YCbCr420Tile:
             return (C2D_COLOR_FORMAT_420_NV12 | C2D_FORMAT_MACROTILED);
         case YCbCr420SP:
@@ -471,6 +541,9 @@ size_t C2DColorConverter::calcStride(ColorConvertFormat format, size_t width)
         case RGB565:
             return ALIGN(width, ALIGN32) * 2; // RGB565 has width as twice
         case RGBA8888:
+        case RGBA8888_NO_PREMULTIPLIED:
+        case ARGB8888:
+        case ARGB8888_NO_PREMULTIPLIED:
 	if (mSrcStride)
 		return mSrcStride * 4;
 	else
@@ -543,6 +616,9 @@ size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size
             size = ALIGN(size, ALIGN4K);
             break;
         case RGBA8888:
+        case RGBA8888_NO_PREMULTIPLIED:
+        case ARGB8888:
+        case ARGB8888_NO_PREMULTIPLIED:
             bpp = 4;
             mAdrenoComputeAlignedWidthAndHeight(width, height, bpp, tile_mode, raster_mode, padding_threshold,
                                                 &alignedw, &alignedh);
@@ -697,6 +773,9 @@ C2DBytesPerPixel C2DColorConverter::calcBytesPerPixel(ColorConvertFormat format)
             bpp.numerator = 2;
             break;
         case RGBA8888:
+        case RGBA8888_NO_PREMULTIPLIED:
+        case ARGB8888:
+        case ARGB8888_NO_PREMULTIPLIED:
             bpp.numerator = 4;
             break;
         case YCbCr420SP:
@@ -781,20 +860,116 @@ int32_t C2DColorConverter::dumpOutput(char * filename, char mode) {
       stride = dstSurfaceDef->stride;
       sliceHeight = dstSurfaceDef->height;
 
-      printf("rgb surface base is %p", base);
+      printf("rgb surface base is %p \n", base);
       printf("rgb surface dumpsslice height is %lu\n", (unsigned long)sliceHeight);
       printf("rgb surface dump stride is %lu\n", (unsigned long)stride);
 
       int bpp = 1; //bytes per pixel
       if (mDstFormat == RGB565) {
         bpp = 2;
-      } else if (mDstFormat == RGBA8888) {
+      } else if (mDstFormat == RGBA8888 || mDstFormat == ARGB8888 || mDstFormat == ARGB8888_NO_PREMULTIPLIED || mDstFormat == RGBA8888_NO_PREMULTIPLIED) {
         bpp = 4;
       }
 
       int count = 0;
       for (size_t i = 0; i < sliceHeight; i++) {
         ret = write(fd, base, mDstWidth*bpp);
+        if (ret < 0) {
+          printf("write failed, count = %d\n", count);
+          goto cleanup;
+        }
+        base += stride;
+        count += stride;
+      }
+    }
+ cleanup:
+    if (ret < 0) {
+      ALOGE("file write failed w/ errno %s", strerror(errno));
+    }
+    close(fd);
+    return ret < 0 ? ret : 0;
+}
+
+int32_t C2DColorConverter::dumpInput(char * filename, char mode) {
+    int fd;
+    size_t stride, sliceHeight;
+    if (!filename) return -1;
+
+    int flags = O_RDWR | O_CREAT;
+    if (mode == 'a') {
+      flags |= O_APPEND;
+    }
+
+    if ((fd = open(filename, flags)) < 0) {
+        ALOGE("open dump file failed w/ errno %s", strerror(errno));
+        return -1;
+    }
+
+    int ret = 0;
+    if (isYUVSurface(mSrcFormat)) {
+      C2D_YUV_SURFACE_DEF * srcSurfaceDef = (C2D_YUV_SURFACE_DEF *)mSrcSurfaceDef;
+      uint8_t * base = (uint8_t *)srcSurfaceDef->plane0;
+      stride = srcSurfaceDef->stride0;
+      sliceHeight = srcSurfaceDef->height;
+      /* dump luma */
+      for (size_t i = 0; i < sliceHeight; i++) {
+        ret = write(fd, base, mSrcWidth); //will work only for the 420 ones
+        if (ret < 0) goto cleanup;
+        base += stride;
+      }
+
+      if (mSrcFormat == YCbCr420P ||
+          mSrcFormat == YCrCb420P) {
+          printf("Dump Cb and Cr separately for Planar\n");
+          //dump Cb/Cr
+          base = (uint8_t *)srcSurfaceDef->plane1;
+          stride = srcSurfaceDef->stride1;
+          for (size_t i = 0; i < sliceHeight/2;i++) { //will work only for the 420 ones
+            ret = write(fd, base, mSrcWidth/2);
+            if (ret < 0) goto cleanup;
+            base += stride;
+          }
+
+          //dump Cr/Cb
+          base = (uint8_t *)srcSurfaceDef->plane2;
+          stride = srcSurfaceDef->stride2;
+
+          for (size_t i = 0; i < sliceHeight/2;i++) { //will work only for the 420 ones
+            ret = write(fd, base, mSrcWidth/2);
+            if (ret < 0) goto cleanup;
+            base += stride;
+          }
+
+      } else {
+          /* dump chroma */
+          base = (uint8_t *)srcSurfaceDef->plane1;
+          stride = srcSurfaceDef->stride1;
+          for (size_t i = 0; i < sliceHeight/2;i++) { //will work only for the 420 ones
+            ret = write(fd, base, mSrcWidth);
+            if (ret < 0) goto cleanup;
+            base += stride;
+          }
+      }
+    } else {
+      C2D_RGB_SURFACE_DEF * srcSurfaceDef = (C2D_RGB_SURFACE_DEF *)mSrcSurfaceDef;
+      uint8_t * base = (uint8_t *)srcSurfaceDef->buffer;
+      stride = srcSurfaceDef->stride;
+      sliceHeight = srcSurfaceDef->height;
+
+      printf("rgb surface base is %p", base);
+      printf("rgb surface dumpsslice height is %lu\n", (unsigned long)sliceHeight);
+      printf("rgb surface dump stride is %lu\n", (unsigned long)stride);
+
+      int bpp = 1; //bytes per pixel
+      if (mSrcFormat == RGB565) {
+        bpp = 2;
+      } else if (mSrcFormat == RGBA8888 || mSrcFormat == ARGB8888 || mSrcFormat == ARGB8888_NO_PREMULTIPLIED || mSrcFormat == RGBA8888_NO_PREMULTIPLIED) {
+        bpp = 4;
+      }
+
+      int count = 0;
+      for (size_t i = 0; i < sliceHeight; i++) {
+        ret = write(fd, base, mSrcWidth*bpp);
         if (ret < 0) {
           printf("write failed, count = %d\n", count);
           goto cleanup;
