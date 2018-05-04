@@ -2297,6 +2297,7 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
 
 OMX_U32 omx_venc::dev_stop( void)
 {
+    disable_color_metadata = false;
     return handle->venc_stop();
 }
 

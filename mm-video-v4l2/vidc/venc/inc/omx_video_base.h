@@ -238,6 +238,7 @@ class omx_video: public qc_omx_component
 #endif
     public:
 
+        bool disable_color_metadata;
         bool mUseProxyColorFormat;
         //RGB or non-native input, and we have pre-allocated conversion buffers
         bool mUsesColorConversion;

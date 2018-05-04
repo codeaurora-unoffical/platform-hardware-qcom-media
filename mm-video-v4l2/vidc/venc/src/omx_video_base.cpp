@@ -231,6 +231,7 @@ omx_video::omx_video():
     psource_frame(NULL),
     pdest_frame(NULL),
     secure_session(false),
+    disable_color_metadata(false),
     mUsesColorConversion(false),
     mC2dSrcFmt(NO_COLOR_FORMAT),
     mC2dDestFmt(NO_COLOR_FORMAT),

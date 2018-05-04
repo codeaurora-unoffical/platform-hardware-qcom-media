@@ -4220,8 +4220,10 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
                         /* Enum values from gralloc ColorMetaData matches with the driver values
                            as it is standard compliant */
-                        venc_set_colorspace(colorData.colorPrimaries, colorData.range,
+                        if(!venc_handle->disable_color_metadata) {
+                            venc_set_colorspace(colorData.colorPrimaries, colorData.range,
                                             colorData.transfer, colorData.matrixCoefficients);
+                        }
 
                         fmt.fmt.pix_mp.pixelformat = m_sVenc_cfg.inputformat;
                         fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
@@ -4302,7 +4304,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
             } else {
                 // color_format == 1 ==> RGBA to YUV Color-converted buffer
                 // Buffers color-converted via C2D have 601-Limited color
-                if (!streaming[OUTPUT_PORT]) {
+                if (!streaming[OUTPUT_PORT] && !venc_handle->disable_color_metadata) {
                     DEBUG_PRINT_HIGH("Setting colorspace 601-L for Color-converted buffer");
                     venc_set_colorspace(MSM_VIDC_BT601_6_625, 0 /*range-limited*/,
                             MSM_VIDC_TRANSFER_601_6_525, MSM_VIDC_MATRIX_601_6_525);
