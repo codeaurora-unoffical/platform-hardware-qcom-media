@@ -138,6 +138,12 @@ void omx_video::init_vendor_extensions(VendorExtensionStore &store) {
     ADD_PARAM    ("qp-p-max", OMX_AndroidVendorValueInt32)
     ADD_PARAM    ("qp-b-min", OMX_AndroidVendorValueInt32)
     ADD_PARAM_END("qp-b-max", OMX_AndroidVendorValueInt32)
+
+    ADD_EXTENSION("qti-ext-enc-color-space", OMX_QTIIndexConfigDescribeColorAspects, OMX_DirInput)
+    ADD_PARAM    ("color-range", OMX_AndroidVendorValueInt32)
+    ADD_PARAM    ("color-primaries",   OMX_AndroidVendorValueInt32)
+    ADD_PARAM    ("color-transfer",   OMX_AndroidVendorValueInt32)
+    ADD_PARAM_END("color-matrixcoeffs",   OMX_AndroidVendorValueInt32)
 }
 
 OMX_ERRORTYPE omx_video::get_vendor_extension_config(
@@ -354,6 +360,10 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
             setStatus &= vExt.setParamInt32(ext, "qp-p-max", m_sSessionQPRange.maxPQP);
             setStatus &= vExt.setParamInt32(ext, "qp-b-min", m_sSessionQPRange.minBQP);
             setStatus &= vExt.setParamInt32(ext, "qp-b-max", m_sSessionQPRange.maxBQP);
+            break;
+        }
+        case OMX_QTIIndexConfigDescribeColorAspects:
+        {
             break;
         }
         default:
@@ -871,6 +881,43 @@ OMX_ERRORTYPE omx_video::set_vendor_extension_config(
             if (err != OMX_ErrorNone) {
                 DEBUG_PRINT_ERROR("set_param: OMX_QcomIndexParamVideoIPBQPRange failed !");
             }
+            break;
+        }
+        case OMX_QTIIndexConfigDescribeColorAspects:
+        {
+            OMX_S32 color_range;
+            OMX_S32 color_primaries;
+            OMX_S32 color_transfer;
+            OMX_S32 color_matrixcoeffs;
+
+            DescribeColorAspectsParams params;
+            OMX_INIT_STRUCT(&params,DescribeColorAspectsParams);
+            params.nPortIndex = 0;
+            err = get_config(NULL, (OMX_INDEXTYPE)OMX_QTIIndexConfigDescribeColorAspects, &params);
+            if(err != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("get_config : OMX_QTIIndexConfigDescribeColorAspects failed");
+            }
+
+            valueSet |= vExt.readParamInt32(ext, "color-range", &color_range);
+            valueSet |= vExt.readParamInt32(ext, "color-primaries", &color_primaries);
+            valueSet |= vExt.readParamInt32(ext, "color-transfer", &color_transfer);
+            valueSet |= vExt.readParamInt32(ext, "color-matrixcoeffs", &color_matrixcoeffs);
+
+            if(!valueSet)
+            {
+                break;
+            }
+            params.sAspects.mRange = static_cast<android::ColorAspects::Range>(color_range);
+            params.sAspects.mPrimaries = static_cast<android::ColorAspects::Primaries>(color_primaries);
+            params.sAspects.mTransfer = static_cast<android::ColorAspects::Transfer>(color_transfer);
+            params.sAspects.mMatrixCoeffs= static_cast<android::ColorAspects::MatrixCoeffs>(color_matrixcoeffs);
+            err = set_config(NULL, (OMX_INDEXTYPE)OMX_QTIIndexConfigDescribeColorAspects, &params);
+            if(err != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("set_config : OMX_QTIIndexConfigDescribeColorAspects failed");
+            } else {
+                disable_color_metadata = true;
+            }
+
             break;
         }
         default:
