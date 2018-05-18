@@ -151,6 +151,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     client_req_disable_bframe   = false;
     bframe_implicitly_enabled = false;
     client_req_disable_temporal_layers  = false;
+    enable_hier_p_mode = false;
     client_req_turbo_mode  = false;
     intra_period.num_pframes = 29;
     intra_period.num_bframes = 0;
@@ -2742,6 +2743,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 }
 
                 venc_copy_temporal_settings(temporalParams);
+                enable_hier_p_mode = false;
 
                 if (!venc_set_intra_period(pParam->nKeyFrameInterval, 0)) {
                    DEBUG_PRINT_ERROR("Failed to set Intraperiod: %d", pParam->nKeyFrameInterval);
@@ -6736,6 +6738,11 @@ bool venc_dev::venc_get_temporal_layer_caps(OMX_U32 *nMaxLayers,
 }
 
 bool venc_dev::venc_check_for_hybrid_hp(OMX_VIDEO_ANDROID_TEMPORALLAYERINGPATTERNTYPE ePattern) {
+
+    if (enable_hier_p_mode) {
+        return false;
+    }
+
     //Hybrid HP is only for H264 and CFR
     if (m_sVenc_cfg.codectype != V4L2_PIX_FMT_H264) {
         DEBUG_PRINT_LOW("TemporalLayer: Hybrid HierP is not supported for non H264");
@@ -7133,6 +7140,7 @@ void venc_dev::venc_copy_temporal_settings(OMX_VIDEO_PARAM_ANDROID_TEMPORALLAYER
         client_req_disable_temporal_layers = true;
     } else {
         client_req_disable_temporal_layers = false;
+        enable_hier_p_mode = true;
     }
 }
 
