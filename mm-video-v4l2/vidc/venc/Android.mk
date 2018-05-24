@@ -65,6 +65,10 @@ ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_SUPPORT_PQ)),true)
 libmm-venc-def += -D_PQ_
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),msm8953)
+libmm-venc-def += -DENABLE_ADSP_PQ
+endif
+
 ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_USE_FLAG_MSM8226)),true)
 libmm-venc-def += -D_MSM8226_
 endif
@@ -113,7 +117,7 @@ libmm-venc-inc      += hardware/qcom/media/hypv-intercept
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/libvqzip
 libmm-venc-inc      += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_SUPPORT_PQ)),true)
-libmm-venc-inc      += $(TARGET_OUT_HEADERS)/libgpustats
+libmm-venc-inc      += $(TARGET_OUT_HEADERS)/libpqstats
 endif
 
 # Common Dependencies
