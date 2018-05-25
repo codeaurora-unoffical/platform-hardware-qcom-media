@@ -101,7 +101,7 @@ public:
     }
 
 protected:
-    static const int sNumFds = 7;
+    static const int sNumFds = 13;
     static const int sNumInts = 9;
     static const int sMagic = 0x53424e48; /*SBNH*/
 };
