@@ -123,9 +123,6 @@ class omx_venc: public omx_video
         sp<GraphicBuffer> dstBuffer;
         SWVENC_IPBUFFER *m_pIpbuffers;
 
-        OMX_VIDEO_PARAM_MPEG4TYPE m_sParamMPEG4;
-        OMX_VIDEO_PARAM_H263TYPE m_sParamH263;
-
         OMX_U32 dev_stop(void);
         OMX_U32 dev_pause(void);
         OMX_U32 dev_start(void);
