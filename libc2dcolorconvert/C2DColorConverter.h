@@ -79,6 +79,9 @@ enum ColorConvertFormat {
     YCbCr420P,
     YCrCb420P,
     RGBA8888,
+    RGBA8888_NO_PREMULTIPLIED,
+    ARGB8888,
+    ARGB8888_NO_PREMULTIPLIED,
     NV12_2K,
     NV12_128m,
     NV12_UBWC,
@@ -113,8 +116,10 @@ public:
     virtual int convertC2D(int srcFd, void *srcBase, void * srcData, int dstFd, void *dstBase, void * dstData) = 0;
     virtual int32_t getBuffReq(int32_t port, C2DBuffReq *req) = 0;
     virtual int32_t dumpOutput(char * filename, char mode) = 0;
+    virtual int32_t dumpInput(char * filename, char mode) = 0;
     virtual int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight) = 0;
     virtual int SetSourceConfigFlags(int flags) = 0;
+    virtual int SetBlend(int x, int y, size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat) = 0;
 };
 
 typedef C2DColorConverterBase* createC2DColorConverter_t(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags, size_t srcStride);
