@@ -2528,6 +2528,7 @@ SWVENC_STATUS omx_venc::swvenc_empty_buffer_done
 #ifdef _ANDROID_ICS_
         if (meta_mode_enable)
         {
+           int fd = -1;
            LEGACY_CAM_METADATA_TYPE *meta_buf = NULL;
            unsigned int size = 0;
            meta_buf = (LEGACY_CAM_METADATA_TYPE *)omxhdr->pBuffer;
@@ -2536,14 +2537,25 @@ SWVENC_STATUS omx_venc::swvenc_empty_buffer_done
               if (meta_buf->buffer_type == LEGACY_CAM_SOURCE)
               {
                   size = meta_buf->meta_handle->data[2];
+                  private_handle_t *handle = (private_handle_t *)meta_buf->meta_handle;
+                  if (handle)
+                      fd = handle->fd;
               }
               else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource)
               {
                   VideoGrallocMetadata *meta_buf = (VideoGrallocMetadata *)omxhdr->pBuffer;
-                  private_handle_t *handle = (private_handle_t *)meta_buf->pHandle;
-                  size = handle->size;
+                  if (meta_buf)
+                  {
+                      private_handle_t *handle = (private_handle_t *)meta_buf->pHandle;
+                      if (handle)
+                      {
+                          size = handle->size;
+                          fd = handle->fd;
+                      }
+                  }
               }
            }
+           ion_invalidate_ip(p_ipbuffer,fd);
            int status = munmap(p_ipbuffer->p_buffer, size);
            DEBUG_PRINT_HIGH("Unmapped pBuffer <%p> size <%d> status <%d>", p_ipbuffer->p_buffer, size, status);
         }
@@ -3074,3 +3086,68 @@ SWVENC_STATUS omx_venc::swvenc_set_color_format
     }
     RETURN(Ret);
 }
+void omx_venc::ion_invalidate_ip(SWVENC_IPBUFFER *p_ipbuffer,int buffer_fd)
+{
+        if ((buffer_fd == -1) || (p_ipbuffer == NULL))
+            return;
+
+        int fd = -EINVAL;
+        int rc = -EINVAL;
+
+        struct ion_fd_data     fd_data;
+        struct ion_flush_data  flush_data;
+        struct ion_custom_data custom_data;
+
+        memset(&fd_data,     0, sizeof(fd_data));
+        memset(&flush_data,  0, sizeof(flush_data));
+        memset(&custom_data, 0, sizeof(custom_data));
+
+        if ((fd = open("/dev/ion", O_RDONLY)) < 0)
+        {
+            DEBUG_PRINT_ERROR("failed to open /dev/ion, error %s",
+                                 strerror(errno));
+
+            goto ion_invalidate_ip_exit;
+        }
+
+        fd_data.fd = buffer_fd;
+
+        rc = ioctl(fd, ION_IOC_IMPORT, &fd_data);
+
+        if (rc)
+        {
+            DEBUG_PRINT_ERROR("ioctl() for import failed; fd %d",
+                                 fd_data.fd);
+
+            close(fd);
+            goto ion_invalidate_ip_exit;
+        }
+
+        flush_data.handle = fd_data.handle;
+
+        flush_data.fd     = buffer_fd;
+        flush_data.vaddr  = p_ipbuffer->p_buffer;
+        flush_data.length = p_ipbuffer->size;
+
+        custom_data.cmd = ION_IOC_INV_CACHES;
+        custom_data.arg = (unsigned long) &flush_data;
+
+        DEBUG_PRINT_LOW("handle %d, fd %d, vaddr %p, length %d",
+                           flush_data.handle,
+                           flush_data.fd,
+                           flush_data.vaddr,
+                           flush_data.length);
+
+        rc = ioctl(fd, ION_IOC_CUSTOM, &custom_data);
+
+        if (rc < 0)
+        {
+            DEBUG_PRINT_ERROR("ioctl() for clean cache failed");
+        }
+
+        close(fd);
+
+ion_invalidate_ip_exit:
+    return;
+}
+

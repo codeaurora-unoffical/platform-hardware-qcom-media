@@ -167,6 +167,7 @@ class omx_venc: public omx_video
            OMX_U32 port
         );
         int swvenc_input_log_buffers(const char *buffer, int bufferlen);
+        void ion_invalidate_ip(SWVENC_IPBUFFER *p_ipbuffer,int buffer_fd);
 
 };
 
