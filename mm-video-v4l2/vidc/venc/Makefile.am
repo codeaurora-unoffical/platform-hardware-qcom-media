@@ -69,8 +69,8 @@ AM_CPPFLAGS += -I$(top_srcdir)/libplatformconfig/
 sources = src/omx_video_base.cpp
 sources += src/omx_video_encoder.cpp
 sources += src/video_encoder_device_v4l2.cpp
-#sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_common.cpp
-#sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_vendor_extensions.cpp
+sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_common.cpp
+sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_vendor_extensions.cpp
 
 lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
