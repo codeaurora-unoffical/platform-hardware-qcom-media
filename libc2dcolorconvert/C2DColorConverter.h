@@ -31,6 +31,7 @@
 #define C2D_ColorConverter_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <linux/msm_kgsl.h>
 #include <sys/ioctl.h>
