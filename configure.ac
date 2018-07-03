@@ -207,5 +207,6 @@ AC_CONFIG_FILES([ \
         mm-video-v4l2/Makefile \
         mm-video-v4l2/vidc/Makefile \
         mm-video-v4l2/vidc/venc/Makefile \
+        libplatformconfig/Makefile \
         ])
 AC_OUTPUT

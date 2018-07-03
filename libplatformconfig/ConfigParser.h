@@ -42,6 +42,10 @@
 
 #define BUF_SIZE                    1024
 
+#ifndef __unused
+#define __unused __attribute__((__unused__))
+#endif
+
 #ifdef __cplusplus
     extern "C" {
 #endif
