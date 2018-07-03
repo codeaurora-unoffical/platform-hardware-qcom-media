@@ -8069,7 +8069,7 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
                 output_capability == V4L2_PIX_FMT_MPEG2)
             is_duplicate_ts_valid = false;
 
-        if (buffer->nFilledLen > 0) {
+        if (buffer->nFilledLen > 0 || ((buffer->nFilledLen == 0) && (buffer->nFlags & OMX_BUFFERFLAG_DECODEONLY))) {
             time_stamp_dts.get_next_timestamp(buffer,
                     is_interlaced && is_duplicate_ts_valid && !is_mbaff);
         }
