@@ -4228,7 +4228,11 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             } else {
                                 DEBUG_PRINT_INFO("Encoding in HLG mode");
                             }
+#ifdef __LIBGBM__
+                        } else if (handle->format == GBM_FORMAT_P010) {
+#else
                         } else if (handle->format == HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS) {
+#endif
                             if ((m_codec == OMX_VIDEO_CodingHEVC) &&
                                  (codec_profile.profile == V4L2_MPEG_VIDC_VIDEO_HEVC_PROFILE_MAIN10)) {
                                 m_sVenc_cfg.inputformat = V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS;
