@@ -45,10 +45,26 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
+#ifndef __LIBGBM__
 #include <gralloc_priv.h>
 #endif
+#endif
 
+#ifdef __LIBGBM__
+#include <gbm.h>
+#include <gbm_priv.h>
+#endif
+
+#ifdef _USE_GLIB_
+#include <glib.h>
+#define strlcpy g_strlcpy
+#undef MIN
+#undef MAX
+#endif
+
+#ifndef __LIBGBM__
 #include <qdMetaData.h>
+#endif
 #include <color_metadata.h>
 #include "PlatformConfig.h"
 
@@ -4041,12 +4057,21 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         color_format = (OMX_COLOR_FORMATTYPE)MetaBufferUtil::getIntAt(hnd, 0, MetaBufferUtil::INT_COLORFORMAT);
 
                         memset(&fmt, 0, sizeof(fmt));
+#ifdef __LIBGBM__
+                        if (usage & GBM_METADATA_COLOR_SPACE_ITU_R_709 ||
+                                usage & GBM_METADATA_COLOR_SPACE_ITU_R_601) {
+#else
                         if (usage & private_handle_t::PRIV_FLAGS_ITU_R_709 ||
                                 usage & private_handle_t::PRIV_FLAGS_ITU_R_601) {
+#endif
                             DEBUG_PRINT_ERROR("Camera buffer color format is not 601_FR.");
                             DEBUG_PRINT_ERROR(" This leads to unknown color space");
                         }
+#ifdef __LIBGBM__
+                        if (usage & GBM_METADATA_COLOR_SPACE_ITU_R_601_FR) {
+#else
                         if (usage & private_handle_t::PRIV_FLAGS_ITU_R_601_FR) {
+#endif
                             if (is_csc_enabled) {
                                 struct v4l2_control control;
                                 control.id = V4L2_CID_MPEG_VIDC_VIDEO_VPE_CSC;
@@ -4069,7 +4094,11 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
                         fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
                         fmt.fmt.pix_mp.width = m_sVenc_cfg.input_width;
+#ifdef __LIBGBM__
+                        if (usage & GBM_BO_USAGE_UBWC_ALIGNED_QTI) {
+#else
                         if (usage & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) {
+#endif
                             m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_UBWC;
                         }
 
@@ -4109,13 +4138,18 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             fd, plane[0].bytesused, plane[0].length, buf.flags, m_sVenc_cfg.inputformat);
                 } else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
                     VideoGrallocMetadata *meta_buf = (VideoGrallocMetadata *)bufhdr->pBuffer;
+#ifdef __LIBGBM__
+                    struct gbm_bo *handle = (struct gbm_bo *)meta_buf->pHandle;
+#else
                     private_handle_t *handle = (private_handle_t *)meta_buf->pHandle;
+#endif
 
                     if (!handle) {
                         DEBUG_PRINT_ERROR("%s : handle is null!", __FUNCTION__);
                         return false;
                     }
 
+#ifndef __LIBGBM__ // TBD: Currently not available in libgbm headers. Will update after libgbm upgradation.
                     if (mUseAVTimerTimestamps) {
                         uint64_t avTimerTimestampNs = bufhdr->nTimeStamp * 1000;
                         if (getMetaData(handle, GET_VT_TIMESTAMP, &avTimerTimestampNs) == 0
@@ -4124,11 +4158,17 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             DEBUG_PRINT_LOW("AVTimer TS : %llu us", (unsigned long long)bufhdr->nTimeStamp);
                         }
                     }
+#endif
 
                     if (!streaming[OUTPUT_PORT]) {
                         ColorMetaData colorData= {};
                         // Moment of truth... actual colorspace is known here..
+#ifdef __LIBGBM__
+                        if (gbm_perform(GBM_PERFORM_GET_METADATA, handle, GBM_METADATA_GET_COLOR_SPACE, \
+                                            &colorData) == GBM_ERROR_NONE) {
+#else
                         if (getMetaData(handle, GET_COLOR_METADATA, &colorData) == 0) {
+#endif
                             DEBUG_PRINT_INFO("ENC_CONFIG: gralloc Color MetaData colorPrimaries=%d colorRange=%d "
                                              "transfer=%d matrixcoefficients=%d",
                                              colorData.colorPrimaries, colorData.range,
@@ -4139,8 +4179,13 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         memset(&fmt, 0, sizeof(fmt));
                         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 
+#ifdef __LIBGBM__
+                        bool isUBWC = (handle->usage_flags & GBM_BO_USAGE_UBWC_ALIGNED_QTI) && is_gralloc_source_ubwc;
+                        if (handle->format == GBM_FORMAT_NV12_ENCODEABLE) {
+#else
                         bool isUBWC = (handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) && is_gralloc_source_ubwc;
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
+#endif
                             m_sVenc_cfg.inputformat = isUBWC ? V4L2_PIX_FMT_NV12_UBWC : V4L2_PIX_FMT_NV12;
                             DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12 %s", isUBWC ? "UBWC" : "Linear");
                         } else if (handle->format == HAL_PIXEL_FORMAT_RGBA_8888) {
@@ -4158,7 +4203,11 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         } else if (handle->format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m) {
                             m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
                             DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12 Linear");
+#ifdef __LIBGBM__
+                        } else if (handle->format == GBM_FORMAT_YCbCr_420_TP10_UBWC) {
+#else
                         } else if (handle->format == HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC) {
+#endif
                             if ((m_codec == OMX_VIDEO_CodingHEVC) &&
                                  (codec_profile.profile == V4L2_MPEG_VIDC_VIDEO_HEVC_PROFILE_MAIN10)) {
                                 m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_TP10_UBWC;
@@ -4237,11 +4286,15 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             return false;
                         }
                     }
-
                     struct UBWCStats cam_ubwc_stats[2];
                     unsigned long long int cr = 1 << 16;
 
+#ifdef __LIBGBM__
+                    if (gbm_perform(GBM_PERFORM_GET_METADATA, handle, GBM_METADATA_GET_UBWC_BUF_STAT, \
+                                        (void *)cam_ubwc_stats) == GBM_ERROR_NONE) {
+#else
                     if (getMetaData(handle, GET_UBWC_CR_STATS_INFO, (void *)cam_ubwc_stats) == 0) {
+#endif
                         if (cam_ubwc_stats[0].bDataValid) {
                             switch (cam_ubwc_stats[0].version) {
                             case UBWC_2_0:
@@ -4286,13 +4339,19 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         }
                     }
 
+#ifndef __LIBGBM__ // TBD: Currently not available in libgbm headers. Will update after libgbm upgradation.
                     uint32_t encodePerfMode = 0;
                     if (getMetaData(handle, GET_VIDEO_PERF_MODE, &encodePerfMode) == 0) {
                         if (encodePerfMode == OMX_TRUE) {
                             buf.flags |= V4L2_QCOM_BUF_FLAG_PERF_MODE;
                         }
                     }
+#endif
+#ifdef __LIBGBM__
+                    fd = handle->ion_fd;
+#else
                     fd = handle->fd;
+#endif
                     plane[0].data_offset = 0;
                     plane[0].length = handle->size;
                     plane[0].bytesused = handle->size;

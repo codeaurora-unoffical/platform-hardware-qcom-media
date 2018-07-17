@@ -151,8 +151,13 @@ bool C2DColorConverter::isPropChanged(size_t srcWidth, size_t srcHeight, size_t 
             mSrcFormat != srcFormat  ||
             mDstFormat != dstFormat  ||
             mSrcStride != srcStride  ||
+#ifdef __LIBGBM__
+            (mFlags & GBM_BO_USAGE_UBWC_ALIGNED_QTI)  !=
+                      (flags  & GBM_BO_USAGE_UBWC_ALIGNED_QTI));
+#else
             (mFlags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED)  !=
                       (flags  & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED));
+#endif
 }
 
 bool C2DColorConverter::setResolution(size_t srcWidth, size_t srcHeight,
@@ -378,7 +383,11 @@ int32_t C2DColorConverter::getDummySurfaceDef(ColorConvertFormat format,
         }
         (*surfaceRGBDef)->format = getC2DFormat(format);
 
+#ifdef __LIBGBM__
+        if (mFlags & GBM_BO_USAGE_UBWC_ALIGNED_QTI)
+#else
         if (mFlags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED)
+#endif
             (*surfaceRGBDef)->format |= C2D_FORMAT_UBWC_COMPRESSED;
         (*surfaceRGBDef)->width = width;
         (*surfaceRGBDef)->height = height;
