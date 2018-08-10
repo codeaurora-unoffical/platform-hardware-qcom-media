@@ -9175,6 +9175,13 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
                                S3D_FORMAT, (void*)&stereo_output_mode);
         }
 
+        if (drv_ctx.decoder_format == VDEC_CODECTYPE_H264 ||
+            drv_ctx.decoder_format == VDEC_CODECTYPE_HEVC)
+        {
+            OMX_U32 buf_index = buffer - m_out_mem_ptr;
+            set_video_full_range_flag_metadata(buf_index);
+        }
+
         if (il_buffer) {
             log_output_buffers(il_buffer);
             if (dynamic_buf_mode) {
@@ -11446,6 +11453,7 @@ bool omx_vdec::handle_color_space_info(void *data,
             {
                 struct msm_vidc_vui_display_info_payload *display_info_payload;
                 display_info_payload = (struct msm_vidc_vui_display_info_payload*)data;
+                m_extradata_info.video_full_range_flag = display_info_payload->video_full_range_flag;
 
                 /* Refer H264 Spec @ Rec. ITU-T H.264 (02/2014) to understand this code */
 
@@ -12245,6 +12253,7 @@ OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U64 requested_extradata,
         }
         if (requested_extradata & OMX_DISPLAY_INFO_EXTRADATA) {
             control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
+            DEBUG_PRINT_LOW("Enable Display info extra data");
             switch(output_capability) {
                 case V4L2_PIX_FMT_H264:
                 case V4L2_PIX_FMT_HEVC:
@@ -12458,6 +12467,22 @@ void omx_vdec::print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra)
     } else {
         DEBUG_PRINT_HIGH("======= End of Driver Extradata ========");
     }
+}
+
+void omx_vdec::set_video_full_range_flag_metadata(OMX_U32 buf_index)
+{
+    OMX_U32 video_full_range_flag;
+    private_handle_t *handle;
+
+    video_full_range_flag = m_extradata_info.video_full_range_flag;
+    DEBUG_PRINT_LOW("set_video_full_range_flag_metadata: video_full_range_flag %d", video_full_range_flag);
+
+    handle = (private_handle_t *)native_buffer[buf_index].nativehandle;
+    if(!handle) {
+        DEBUG_PRINT_ERROR("%s: Native Buffer handle is NULL",__func__);
+        return;
+    }
+    setMetaData(handle, PP_PARAM_VIDEO_FULLRANGE, (void*)&video_full_range_flag);
 }
 
 void omx_vdec::append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
