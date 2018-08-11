@@ -46,6 +46,10 @@ h_sources +=inc/QOMX_StreamingExtensions.h
 c_sources  =src/common/omx_core_cmp.cpp
 c_sources +=src/common/qc_omx_core.c
 
+if TARGET_SDM845
+TARGET_REGISTRY = sdm845
+endif
+
 if TARGET_MSM8953
 TARGET_REGISTRY = msm8953
 endif
