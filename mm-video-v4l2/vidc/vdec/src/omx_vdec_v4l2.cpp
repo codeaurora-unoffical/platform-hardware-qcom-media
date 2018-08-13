@@ -3828,7 +3828,7 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                     // Also use default format-list if FLEXIBLE YUV is supported,
                                     // as the client negotiates the standard color-format if it needs to
                                     bool useNonSurfaceMode = false;
-#if defined(_ANDROID_) && !defined(FLEXYUV_SUPPORTED)
+#if defined(_ANDROID_) && !defined(FLEXYUV_SUPPORTED) && !defined(USE_GBM)
                                     useNonSurfaceMode = (m_enable_android_native_buffers == OMX_FALSE);
 #endif
                                     if (is_thulium_v1) {
@@ -10360,6 +10360,9 @@ int omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,OMX_U32 buffer_size,
     struct gbm_device *gbm = NULL;
     struct gbm_bo *bo = NULL;
     int bo_fd = -1, meta_fd = -1;
+
+    OMX_U32 gbm_flags = GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING;
+
     if (!op_buf_gbm_info || buffer_size <= 0 ) {
         DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_ion_memory");
         return -EINVAL;
@@ -10380,11 +10383,13 @@ int omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,OMX_U32 buffer_size,
         DEBUG_PRINT_LOW( "Successfully created gbm device");
     }
 
+    DEBUG_PRINT_LOW("create gbm_bo with format=%d, width=%d, height=%d",
+                        drv_ctx.output_format, w, h);
+    if (drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_UBWC) {
+        gbm_flags |= GBM_BO_USAGE_UBWC_ALIGNED_QTI;
+    }
 
-    DEBUG_PRINT_LOW("create NV12 gbm_bo with width=%d, height=%d", w, h);
-    bo = gbm_bo_create(gbm, w, h,GBM_FORMAT_NV12,
-              GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
-
+    bo = gbm_bo_create(gbm, w, h, GBM_FORMAT_NV12, gbm_flags);
 
     if (bo == NULL) {
         DEBUG_PRINT_ERROR("Create bo failed");
