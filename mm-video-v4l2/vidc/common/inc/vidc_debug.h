@@ -182,7 +182,7 @@ public:
 
 #ifdef _ANDROID_
 #define ATRACE_TAG ATRACE_TAG_VIDEO
-#include <utils/Trace.h>
+#include <cutils/trace.h>
 
 class AutoTracer {
     int mPrio;
