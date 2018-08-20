@@ -31,6 +31,11 @@ AC_ARG_ENABLE([target-msm8953],
                 [Enable conditional compile for target msm8953 [default=no]]),
         [target_msm8953="${enableval}"])
 
+AC_ARG_ENABLE([target-qcs605],
+        AC_HELP_STRING([--enable-target-qcs605],
+                [Enable conditional compile for target qcs605 [default=no]]),
+        [target_qcs605="${enableval}"])
+
 AC_ARG_ENABLE([target-msm8909],
         AC_HELP_STRING([--enable-target-msm8909],
                 [Enable conditional compile for target msm8909 [default=no]]),
@@ -161,7 +166,17 @@ AC_ARG_WITH([glib-lib-dir],
         [AS_HELP_STRING([--with-binder-inc=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
+AC_ARG_ENABLE([targets-use-libgbm],
+        AC_HELP_STRING([--enable-targets-use-libgbm],
+                [Enable conditional compile for target targets_use_libgbm [default=no]]),
+        [targets_use_libgbm="${enableval}"])
+
+AC_ARG_WITH([media-headers],
+        [AS_HELP_STRING([--with-binder-inc=DIR],[location of common headers])],
+        [CPPFLAGS="$CPPFLAGS -I$withval"])
+
 AM_CONDITIONAL(TARGET_MSM8953, [test "x$target_msm8953" = "xyes"])
+AM_CONDITIONAL(TARGET_QCS605, [test "x$target_qcs605" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8909, [test "x$target_msm8909" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8996, [test "x$target_msm8996" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8610, [test "x$target_msm8610" = "xyes"])
@@ -175,6 +190,7 @@ AM_CONDITIONAL(TARGET_USES_MEDIA_EXTENSIONS, [test "x$target_uses_media_extensio
 AM_CONDITIONAL(MASTER_SIDE_CP_TARGET_LIST, [test "x$master_side_cp_target_list" = "xyes"])
 AM_CONDITIONAL(USE_GLIB, [test "x$use_glib" = "xyes"])
 AM_CONDITIONAL(BUILD_MM_VIDEO, [test "x$build_mm_video" = "xyes"])
+AM_CONDITIONAL(TARGET_USES_LIBGBM, [test "x$targets_use_libgbm" = "xyes"])
 
 AC_ARG_WITH([glib],
       AC_HELP_STRING([--with-glib],
@@ -197,6 +213,6 @@ AC_CONFIG_FILES([ \
         mm-video-v4l2/Makefile \
         mm-video-v4l2/vidc/Makefile \
         mm-video-v4l2/vidc/venc/Makefile \
-        mm-video-v4l2/vidc/vdec/Makefile \
+        libplatformconfig/Makefile \
         ])
 AC_OUTPUT

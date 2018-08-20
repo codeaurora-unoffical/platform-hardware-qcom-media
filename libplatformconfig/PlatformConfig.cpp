@@ -39,6 +39,9 @@
 namespace Platform {
 
 #define PLAT_CONFIG_FILE "/vendor/etc/system_properties.xml"
+#ifndef nullptr
+#define nullptr NULL
+#endif
 
 Config* Config::mInstance;
 
