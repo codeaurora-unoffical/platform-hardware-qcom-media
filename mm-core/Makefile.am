@@ -42,6 +42,7 @@ h_sources +=inc/QOMX_SourceExtensions.h
 h_sources +=inc/QOMX_VideoExtensions.h
 h_sources +=inc/OMX_IndexExt.h
 h_sources +=inc/QOMX_StreamingExtensions.h
+h_sources +=inc/OMX_VideoExt.h
 
 c_sources  =src/common/omx_core_cmp.cpp
 c_sources +=src/common/qc_omx_core.c
