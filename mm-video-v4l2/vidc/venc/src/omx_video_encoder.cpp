@@ -247,7 +247,7 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     } else if (!strncmp((char *)m_nkind, "OMX.qcom.video.encoder.heic",    \
                 OMX_MAX_STRINGNAME_SIZE)) {
         strlcpy((char *)m_cRole, "video_encoder.hevc", OMX_MAX_STRINGNAME_SIZE);
-        codec_type = OMX_VIDEO_CodingHEVC;
+        codec_type = OMX_VIDEO_CodingImageHEIC;
     } else if (!strncmp((char *)m_nkind, "OMX.qcom.video.encoder.hevc.secure",    \
                 OMX_MAX_STRINGNAME_SIZE)) {
         strlcpy((char *)m_cRole, "video_encoder.hevc", OMX_MAX_STRINGNAME_SIZE);
@@ -599,6 +599,9 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     m_sParamColorSpaceConversion.bEnable = OMX_FALSE;
 
     OMX_INIT_STRUCT(&m_sBaseLayerID, OMX_SKYPE_VIDEO_CONFIG_BASELAYERPID);
+
+    OMX_INIT_STRUCT(&m_sParamLinearColorFormat, QOMX_ENABLETYPE);
+    m_sParamLinearColorFormat.bEnable = OMX_FALSE;
 
     m_state                   = OMX_StateLoaded;
     m_sExtraData = 0;
@@ -1730,10 +1733,21 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 VALIDATE_OMX_PARAM_DATA(paramData, QOMX_ENABLETYPE);
                 if (!handle->venc_set_param(paramData,
                             (OMX_INDEXTYPE)OMX_QTIIndexParamColorSpaceConversion)) {
-                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_QTIIndexParamLowLatencyMode failed");
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_QTIIndexParamColorSpaceConversion failed");
                     return OMX_ErrorUnsupportedSetting;
                 }
                 memcpy(&m_sParamColorSpaceConversion, paramData, sizeof(QOMX_ENABLETYPE));
+                break;
+            }
+        case OMX_QTIIndexParamEnableLinearColorFormat:
+            {
+                VALIDATE_OMX_PARAM_DATA(paramData, QOMX_ENABLETYPE);
+                if (!handle->venc_set_param(paramData,
+                            (OMX_INDEXTYPE)OMX_QTIIndexParamEnableLinearColorFormat)) {
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_QTIIndexParamEnableLinearColorFormat failed");
+                    return OMX_ErrorUnsupportedSetting;
+                }
+                memcpy(&m_sParamLinearColorFormat, paramData, sizeof(QOMX_ENABLETYPE));
                 break;
             }
         case OMX_IndexParamVideoSliceFMO:
@@ -1974,10 +1988,6 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                     DEBUG_PRINT_ERROR("ERROR: un supported Rotation %u", (unsigned int)pParam->nRotation);
                     return OMX_ErrorUnsupportedSetting;
                 }
-                if (m_sConfigFrameRotation.nRotation == pParam->nRotation) {
-                    DEBUG_PRINT_HIGH("set_config: rotation (%d) not changed", pParam->nRotation);
-                    break;
-                }
 
                 if (handle->venc_set_config(configData,
                     OMX_IndexConfigCommonRotate) != true) {
@@ -1985,15 +1995,6 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                         return OMX_ErrorUnsupportedSetting;
                 }
                 m_sConfigFrameRotation.nRotation = pParam->nRotation;
-
-                // Update output-port resolution (since it might have been flipped by rotation)
-                if (handle->venc_get_dimensions(PORT_INDEX_OUT,
-                        &m_sOutPortDef.format.video.nFrameWidth,
-                        &m_sOutPortDef.format.video.nFrameHeight)) {
-                    DEBUG_PRINT_HIGH("set Rotation: updated dimensions = %u x %u",
-                            m_sOutPortDef.format.video.nFrameWidth,
-                            m_sOutPortDef.format.video.nFrameHeight);
-                }
                 break;
             }
         case OMX_QcomIndexConfigVideoFramePackingArrangement:

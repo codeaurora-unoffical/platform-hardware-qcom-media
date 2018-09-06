@@ -1978,6 +1978,9 @@ int omx_vdec::update_resolution(int width, int height, int stride, int scan_line
 
 int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len, uint64_t timeStamp, int fd)
 {
+    if (!m_debug.in_buffer_log)
+        return 0;
+
 #ifdef USE_ION
     do_cache_operations(fd);
 #else
@@ -2658,6 +2661,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
 
     OMX_INIT_STRUCT(&m_sParamLowLatency, QOMX_EXTNINDEX_VIDEO_LOW_LATENCY_MODE);
     m_sParamLowLatency.nNumFrames = 0;
+    m_sParamLowLatency.bEnableLowLatencyMode = OMX_FALSE;
 
     return eRet;
 }
@@ -3880,6 +3884,9 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 DEBUG_PRINT_LOW("get_parameter: describeColorFormat");
                 VALIDATE_OMX_PARAM_DATA(paramData, DescribeColorFormatParams);
                 eRet = describeColorFormat(paramData);
+                if (eRet == OMX_ErrorUnsupportedSetting) {
+                    DEBUG_PRINT_LOW("The standard OMX linear formats are understood by client. Please ignore this  Unsupported Setting (0x80001019).");
+                }
                 break;
             }
 #endif
@@ -4701,6 +4708,8 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                 if (rc) {
                                     DEBUG_PRINT_ERROR("Set low latency failed");
                                     eRet = OMX_ErrorUnsupportedSetting;
+                                } else {
+                                    m_sParamLowLatency.bEnableLowLatencyMode = pParam->bEnableLowLatencyMode;
                                 }
                                break;
                            }
@@ -4887,7 +4896,7 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 VALIDATE_OMX_PARAM_DATA(paramData, AllocateNativeHandleParams);
 
                 if (allocateNativeHandleParams->nPortIndex != OMX_CORE_INPUT_PORT_INDEX) {
-                    DEBUG_PRINT_ERROR("Enable/Disable allocate-native-handle allowed only on input port!");
+                    DEBUG_PRINT_LOW("Enable/Disable allocate-native-handle allowed only on input port!. Please ignore this Unsupported Setting (0x80001019).");
                     eRet = OMX_ErrorUnsupportedSetting;
                     break;
                 } else if (m_inp_mem_ptr) {
@@ -5274,7 +5283,7 @@ OMX_ERRORTYPE  omx_vdec::get_config(OMX_IN OMX_HANDLETYPE      hComp,
             DescribeColorAspectsParams *params = (DescribeColorAspectsParams *)configData;
 
             if (params->bRequestingDataSpace) {
-                DEBUG_PRINT_ERROR("Does not handle dataspace request");
+                DEBUG_PRINT_LOW("Does not handle dataspace request. Please ignore this Unsupported Setting (0x80001019).");
                 return OMX_ErrorUnsupportedSetting;
             }
 

@@ -114,6 +114,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     mBatchSize = 0;
     deinterlace_enabled = false;
     m_roi_enabled = false;
+    low_latency_mode = false;
     pthread_mutex_init(&m_roilock, NULL);
     pthread_mutex_init(&pause_resume_mlock, NULL);
     pthread_cond_init(&pause_resume_cond, NULL);
@@ -196,6 +197,9 @@ venc_dev::venc_dev(class omx_venc *venc_class)
          strlcpy(m_debug.log_loc, property_value, PROPERTY_VALUE_MAX);
 
     mUseAVTimerTimestamps = false;
+    mUseLinearColorFormat = false;
+    Platform::Config::getInt32(Platform::vidc_enc_linear_color_format,
+            (int32_t *)&mUseLinearColorFormat, 0);
 
     profile_level_converter::init();
 }
@@ -2019,7 +2023,7 @@ bool venc_dev::venc_get_buf_req(OMX_U32 *min_buff_count,
         input_extradata_info.buffer_size =  ALIGN(extra_data_size, SZ_4K);
         input_extradata_info.count = MAX_V4L2_BUFS;
         input_extradata_info.size = input_extradata_info.buffer_size * input_extradata_info.count;
-        venc_handle->m_client_in_extradata_info.set_extradata_info(extra_data_size,m_sInput_buff_property.actualcount);
+        venc_handle->m_client_in_extradata_info.set_extradata_info(input_extradata_info.buffer_size,m_sInput_buff_property.actualcount);
     } else {
         unsigned int extra_idx = 0;
         memset(&fmt, 0, sizeof(fmt));
@@ -2097,7 +2101,7 @@ bool venc_dev::venc_get_buf_req(OMX_U32 *min_buff_count,
         output_extradata_info.buffer_size = ALIGN(extra_data_size, SZ_4K);
         output_extradata_info.count = m_sOutput_buff_property.actualcount;
         output_extradata_info.size = output_extradata_info.buffer_size * output_extradata_info.count;
-        venc_handle->m_client_out_extradata_info.set_extradata_info(extra_data_size,m_sOutput_buff_property.actualcount);
+        venc_handle->m_client_out_extradata_info.set_extradata_info(output_extradata_info.buffer_size,output_extradata_info.count);
     }
 
     DEBUG_PRINT_HIGH("venc_get_buf_req: port %d, wxh %dx%d, format %#x, driver min count %d, "
@@ -2186,13 +2190,8 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                             input_extradata_info.count = m_sInput_buff_property.actualcount + 1;
 
                         if (!downscalar_enabled) {
-                            if (m_rotation.rotation == 90 || m_rotation.rotation == 270) {
-                                m_sVenc_cfg.dvs_height = portDefn->format.video.nFrameWidth;
-                                m_sVenc_cfg.dvs_width = portDefn->format.video.nFrameHeight;
-                            } else {
-                                m_sVenc_cfg.dvs_height = portDefn->format.video.nFrameHeight;
-                                m_sVenc_cfg.dvs_width = portDefn->format.video.nFrameWidth;
-                            }
+                            m_sVenc_cfg.dvs_height = portDefn->format.video.nFrameHeight;
+                            m_sVenc_cfg.dvs_width = portDefn->format.video.nFrameWidth;
                         }
                         memset(&fmt, 0, sizeof(fmt));
                         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -2272,10 +2271,6 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
 
                         if (num_output_planes > 1)
                             output_extradata_info.count = m_sOutput_buff_property.actualcount;
-
-                        //reset rotation as output port dimension is changed
-                        m_rotation.rotation = 0;
-                        venc_handle->m_sConfigFrameRotation.nRotation = 0;
                     } else {
                         DEBUG_PRINT_LOW("venc_set_param: OMX_IndexParamPortDefinition: parameters not changed on port %d",
                             portDefn->nPortIndex);
@@ -2872,6 +2867,12 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 QOMX_ENABLETYPE *pParam = (QOMX_ENABLETYPE *)paramData;
                 csc_enable = pParam->bEnable;
                 DEBUG_PRINT_INFO("CSC settings: Enabled : %d ", pParam->bEnable);
+            }
+        case OMX_QTIIndexParamEnableLinearColorFormat:
+            {
+                QOMX_ENABLETYPE *pParam = (QOMX_ENABLETYPE *)paramData;
+                mUseLinearColorFormat = pParam->bEnable;
+                DEBUG_PRINT_INFO("Linear Color Format Enabled : %d ", pParam->bEnable);
             }
         default:
             DEBUG_PRINT_ERROR("ERROR: Unsupported parameter in venc_set_param: %u",
@@ -6043,7 +6044,6 @@ bool venc_dev::venc_set_vpe_rotation(OMX_S32 rotation_angle)
     int rc;
     struct v4l2_format fmt;
     struct v4l2_requestbuffers bufreq;
-    bool flip_dimensions = false;
 
     if ((OMX_S32)m_rotation.rotation == rotation_angle) {
         DEBUG_PRINT_HIGH("venc_set_vpe_rotation: rotation (%d) not changed", rotation_angle);
@@ -6052,16 +6052,6 @@ bool venc_dev::venc_set_vpe_rotation(OMX_S32 rotation_angle)
 
     control.id = V4L2_CID_ROTATE;
     control.value = rotation_angle;
-    if ((rotation_angle == 0) || (rotation_angle == 180)) {
-        if (m_rotation.rotation == 90 || m_rotation.rotation == 270)
-            flip_dimensions = true;
-    } else if ((rotation_angle == 90) || (rotation_angle == 270)) {
-        if (m_rotation.rotation == 0 || m_rotation.rotation == 180)
-            flip_dimensions = true;
-    } else {
-        DEBUG_PRINT_ERROR("Failed to find valid rotation angle");
-        return false;
-    }
 
     DEBUG_PRINT_LOW("Calling IOCTL set control for id=%x, val=%d", control.id, control.value);
     rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
@@ -6073,36 +6063,6 @@ bool venc_dev::venc_set_vpe_rotation(OMX_S32 rotation_angle)
 
     /* successfully set rotation_angle, save it */
     m_rotation.rotation = rotation_angle;
-
-    memset(&fmt, 0, sizeof(fmt));
-    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    if (flip_dimensions) {
-        OMX_U32 nWidth = m_sVenc_cfg.dvs_height;
-        OMX_U32 nHeight = m_sVenc_cfg.dvs_width;
-        m_sVenc_cfg.dvs_height = nHeight;
-        m_sVenc_cfg.dvs_width = nWidth;
-        DEBUG_PRINT_LOW("Rotation (%u) Flipping wxh to %lux%lu",
-                rotation_angle, m_sVenc_cfg.dvs_width, m_sVenc_cfg.dvs_height);
-    }
-
-    fmt.fmt.pix_mp.height = m_sVenc_cfg.dvs_height;
-    fmt.fmt.pix_mp.width = m_sVenc_cfg.dvs_width;
-    fmt.fmt.pix_mp.pixelformat = m_sVenc_cfg.codectype;
-    if (ioctl(m_nDriver_fd, VIDIOC_S_FMT, &fmt)) {
-        DEBUG_PRINT_ERROR("Failed to set format on capture port");
-        return false;
-    }
-
-    m_sOutput_buff_property.datasize = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
-    bufreq.memory = V4L2_MEMORY_USERPTR;
-    bufreq.count = m_sOutput_buff_property.actualcount;
-    bufreq.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    if (ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq)) {
-        DEBUG_PRINT_ERROR("ERROR: Request for o/p buffer count failed for rotation");
-            return false;
-    }
-    if (bufreq.count >= m_sOutput_buff_property.mincount)
-        m_sOutput_buff_property.actualcount = m_sOutput_buff_property.mincount = bufreq.count;
 
     return true;
 }
@@ -7011,16 +6971,21 @@ void venc_dev::venc_get_consumer_usage(OMX_U32* usage) {
     /* Initialize to zero & update as per required color format */
     *usage = 0;
 
-    /* TODO: P010 & NV12 color format addition pending */
+    /* TODO: NV12 color format addition pending */
 
     /* Configure UBWC as default */
     *usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
 
-    if(hevc && eProfile == (OMX_U32)OMX_VIDEO_HEVCProfileMain10HDR10) {
-        DEBUG_PRINT_INFO("Setting TP10 consumer usage bits");
+    if (hevc && eProfile == (OMX_U32)OMX_VIDEO_HEVCProfileMain10HDR10) {
+        DEBUG_PRINT_INFO("Setting 10-bit consumer usage bits");
         *usage |= GRALLOC_USAGE_PRIVATE_10BIT_VIDEO;
+        if (mUseLinearColorFormat) {
+            *usage &= ~GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+            DEBUG_PRINT_INFO("Clear UBWC consumer usage bits for P010");
+        }
     }
 
+    DEBUG_PRINT_INFO("venc_get_consumer_usage 0x%x", *usage);
 }
 
 bool venc_dev::venc_get_profile_level(OMX_U32 *eProfile,OMX_U32 *eLevel)
