@@ -571,6 +571,7 @@ struct extradata_info {
     OMX_CONFIG_RECTTYPE output_crop_rect;
     OMX_U32 output_width;
     OMX_U32 output_height;
+    OMX_U32 video_full_range_flag;
 };
 
 struct prefetch_info {
@@ -972,6 +973,7 @@ class omx_vdec: public qc_omx_component
         void prepare_color_aspects_metadata(OMX_U32 primaries, OMX_U32 range,
                                             OMX_U32 transfer, OMX_U32 matrix,
                                             ColorMetaData *color_mdata);
+        void set_video_full_range_flag_metadata(OMX_U32 buf_index);
 #ifdef _MSM8974_
         void append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
                 OMX_U32 interlaced_format_type);

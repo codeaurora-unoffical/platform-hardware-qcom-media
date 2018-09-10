@@ -1638,6 +1638,7 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         [3] = QOMX_COLOR_Format32bitRGBA8888,
                         [4] = QOMX_COLOR_FormatAndroidOpaque,
                         [5] = OMX_COLOR_FormatYUV420SemiPlanar,
+                        [6] = QOMX_COLOR_FormatYVU420SemiPlanar,
                     };
 #else
                     //we support two formats
