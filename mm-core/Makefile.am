@@ -61,6 +61,9 @@ endif
 if TARGET_MSM8937
 TARGET_REGISTRY = 8937
 endif
+if TARGET_QCS40X
+TARGET_REGISTRY = qcs40x
+endif
 
 c_sources +=src/${TARGET_REGISTRY}/registry_table_android.c
 

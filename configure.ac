@@ -56,6 +56,11 @@ AC_ARG_ENABLE([target-msm8937],
                 [Enable conditional compile for target msm8937 [default=no]]),
         [target_msm8937="${enableval}"])
 
+AC_ARG_ENABLE([target-qcs40x],
+        AC_HELP_STRING([--enable-target-qcs40x],
+                [Enable conditional compile for target qcs40x [default=no]]),
+        [target_qcs40x="${enableval}"])
+
 AC_ARG_ENABLE([is-ubwc-supported],
         AC_HELP_STRING([--enable-ubwc-supported],
                 [Enable conditional compile for target msm8953 [default=no]]),
@@ -185,6 +190,7 @@ AM_CONDITIONAL(TARGET_MSM8996, [test "x$target_msm8996" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8610, [test "x$target_msm8610" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8226, [test "x$target_msm8226" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8937, [test "x$target_msm8937" = "xyes"])
+AM_CONDITIONAL(TARGET_QCS40X,  [test "x$target_qcs40x" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_UBWC, [test "x$targets_that_support_ubwc" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_PQ, [test "x$targets_that_support_pq" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_ADSP_PQ, [test "x$targets_that_support_adsp_pq" = "xyes"])
