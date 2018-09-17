@@ -3825,7 +3825,7 @@ bool venc_dev::venc_use_buf(void *buf_addr, unsigned port,unsigned index)
         extra_idx = EXTRADATA_IDX(num_input_planes);
 
         if ((num_input_planes > 1) && (extra_idx)) {
-            rc = allocate_extradata(&input_extradata_info, ION_FLAG_CACHED);
+            rc = allocate_extradata(&input_extradata_info, 0);
 
             if (rc)
                 DEBUG_PRINT_ERROR("Failed to allocate extradata: %d\n", rc);
