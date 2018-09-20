@@ -1143,15 +1143,15 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 AllocateNativeHandleParams* allocateNativeHandleParams = (AllocateNativeHandleParams *) paramData;
 
                 if (!secure_session) {
-                    DEBUG_PRINT_ERROR("Enable/Disable allocate-native-handle allowed only in secure session");
+                    DEBUG_PRINT_INFO("WARN: Enable/Disable allocate-native-handle allowed only in secure session");
                     eRet = OMX_ErrorUnsupportedSetting;
                     break;
                 } else if (allocateNativeHandleParams->nPortIndex != PORT_INDEX_OUT) {
-                    DEBUG_PRINT_ERROR("Enable/Disable allocate-native-handle allowed only on Output port!");
+                    DEBUG_PRINT_INFO("WARN: Enable/Disable allocate-native-handle allowed only on Output port!");
                     eRet = OMX_ErrorUnsupportedSetting;
                     break;
                 } else if (m_out_mem_ptr) {
-                    DEBUG_PRINT_ERROR("Enable/Disable allocate-native-handle is not allowed since Output port is not free !");
+                    DEBUG_PRINT_INFO("WARN: Enable/Disable allocate-native-handle is not allowed since Output port is not free !");
                     eRet = OMX_ErrorInvalidState;
                     break;
                 }
@@ -1317,11 +1317,11 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                         }
                     }
                 } else if (pParam->nPortIndex == PORT_INDEX_OUT && secure_session) {
-                            DEBUG_PRINT_ERROR("set_parameter: metamode is "
+                            DEBUG_PRINT_INFO("WARN: set_parameter: metamode is "
                             "valid for input port only in secure session");
                             return OMX_ErrorUnsupportedSetting;
                 } else {
-                    DEBUG_PRINT_ERROR("set_parameter: metamode is "
+                    DEBUG_PRINT_INFO("WARN: set_parameter: metamode is "
                             "valid for input port only");
                     eRet = OMX_ErrorUnsupportedIndex;
                 }
@@ -1750,6 +1750,17 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 memcpy(&m_sParamLinearColorFormat, paramData, sizeof(QOMX_ENABLETYPE));
                 break;
             }
+        case OMX_QTIIndexParamVideoEnableBlur:
+            {
+                VALIDATE_OMX_PARAM_DATA(paramData, OMX_QTI_VIDEO_CONFIG_BLURINFO);
+                if (!handle->venc_set_param(paramData,
+                            (OMX_INDEXTYPE)OMX_QTIIndexParamVideoEnableBlur)) {
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_QTIIndexParamVideoEnableBlur failed");
+                    return OMX_ErrorUnsupportedSetting;
+                }
+                memcpy(&m_blurInfo, paramData, sizeof(OMX_QTI_VIDEO_CONFIG_BLURINFO));
+                break;
+            }
         case OMX_IndexParamVideoSliceFMO:
         default:
             {
@@ -1766,7 +1777,7 @@ bool omx_venc::update_profile_level()
     OMX_U32 eProfile, eLevel;
 
     if (!handle->venc_get_profile_level(&eProfile,&eLevel)) {
-        DEBUG_PRINT_ERROR("Failed to update the profile_level");
+        DEBUG_PRINT_INFO("WARN: Failed to update the profile_level");
         return false;
     }
 
@@ -2181,7 +2192,7 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                     DEBUG_PRINT_ERROR("Failed to set OMX_QTIIndexConfigVideoBlurResolution");
                     return OMX_ErrorUnsupportedSetting;
                 }
-                memcpy(&m_blurInfo, pParam, sizeof(m_blurInfo));
+                memcpy(&m_blurInfo, pParam, sizeof(OMX_QTI_VIDEO_CONFIG_BLURINFO));
                 break;
            }
         case OMX_QcomIndexConfigH264Transform8x8:

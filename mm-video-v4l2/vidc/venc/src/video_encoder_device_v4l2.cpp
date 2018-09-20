@@ -509,7 +509,7 @@ bool inline venc_dev::venc_validate_range(OMX_S32 id, OMX_S32 val) {
         if (val >= cap.minimum && val <= cap.maximum) {
             return true;
         } else {
-            DEBUG_PRINT_ERROR("id = %u, value = %u, min = %u, max = %u",
+            DEBUG_PRINT_INFO("id = %u, value = %u, min = %u, max = %u",
                 cap.id, val, cap.minimum, cap.maximum);
         }
     }
@@ -1066,6 +1066,7 @@ int venc_dev::venc_set_format(int format)
 
         switch (color_format) {
         case NV12_128m:
+        case NV12_512:
             return venc_set_color_format((OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m);
         case NV12_UBWC:
             return venc_set_color_format((OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed);
@@ -1415,7 +1416,7 @@ int venc_dev::venc_extradata_log_buffers(char *buffer_addr, bool input)
 }
 
 int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int plane_offset,
-        unsigned long inputformat) {
+        unsigned long inputformat, bool interlaced) {
     int status = 0;
     if (venc_handle->is_secure_session()) {
         DEBUG_PRINT_ERROR("logging secure input buffers is not allowed!");
@@ -1452,6 +1453,9 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
             case V4L2_PIX_FMT_NV12:
                 color_format = COLOR_FMT_NV12;
                 break;
+            case V4L2_PIX_FMT_NV12_512:
+                color_format = COLOR_FMT_NV12_512;
+                break;
             case V4L2_PIX_FMT_NV12_UBWC:
                 color_format = COLOR_FMT_NV12_UBWC;
                 break;
@@ -1473,7 +1477,7 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
                 break;
         }
 
-        msize = VENUS_BUFFER_SIZE(color_format, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
+        msize = VENUS_BUFFER_SIZE_USED(color_format, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height,interlaced);
         const unsigned int extra_size = VENUS_EXTRADATA_SIZE(m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
 
         if (metadatamode == 1) {
@@ -2451,7 +2455,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 }
 
                 if (!venc_set_grid_enable()) {
-                    DEBUG_PRINT_ERROR("ERROR: Failed to set tile dimension");
+                    DEBUG_PRINT_ERROR("ERROR: Failed to set grid-enable");
                     return false;
                 }
                 break;
@@ -2867,12 +2871,23 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                 QOMX_ENABLETYPE *pParam = (QOMX_ENABLETYPE *)paramData;
                 csc_enable = pParam->bEnable;
                 DEBUG_PRINT_INFO("CSC settings: Enabled : %d ", pParam->bEnable);
+                break;
             }
         case OMX_QTIIndexParamEnableLinearColorFormat:
             {
                 QOMX_ENABLETYPE *pParam = (QOMX_ENABLETYPE *)paramData;
                 mUseLinearColorFormat = pParam->bEnable;
                 DEBUG_PRINT_INFO("Linear Color Format Enabled : %d ", pParam->bEnable);
+                break;
+            }
+        case OMX_QTIIndexParamVideoEnableBlur:
+            {
+                OMX_QTI_VIDEO_CONFIG_BLURINFO *pParam = (OMX_QTI_VIDEO_CONFIG_BLURINFO *)paramData;
+                if (!venc_set_blur_resolution(pParam)) {
+                    DEBUG_PRINT_ERROR("ERROR: Setting OMX_QTIIndexParamVideoEnableBlur failed");
+                    return false;
+                }
+                break;
             }
         default:
             DEBUG_PRINT_ERROR("ERROR: Unsupported parameter in venc_set_param: %u",
@@ -3156,7 +3171,7 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
         {
              OMX_QTI_VIDEO_CONFIG_BLURINFO *blur = (OMX_QTI_VIDEO_CONFIG_BLURINFO *)configData;
              if (blur->nPortIndex == (OMX_U32)PORT_INDEX_IN) {
-                 DEBUG_PRINT_LOW("Set_config: blur resolution: %d", blur->eTargetResol);
+                 DEBUG_PRINT_LOW("Set_config: blur resolution: %u", blur->nBlurInfo);
                  if(!venc_set_blur_resolution(blur)) {
                     DEBUG_PRINT_ERROR("Failed to set Blur Resolution");
                     return false;
@@ -3959,6 +3974,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     struct v4l2_requestbuffers bufreq;
     struct v4l2_plane plane[VIDEO_MAX_PLANES];
     int rc = 0, extra_idx;
+    bool interlace_flag = false;
     struct OMX_BUFFERHEADERTYPE *bufhdr;
     LEGACY_CAM_METADATA_TYPE * meta_buf = NULL;
     temp_buffer = (struct pmem *)buffer;
@@ -4104,6 +4120,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         DEBUG_PRINT_ERROR("%s : handle is null!", __FUNCTION__);
                         return false;
                     }
+                    interlace_flag = is_ubwc_interlaced(handle);
 
                     if (mUseAVTimerTimestamps) {
                         uint64_t avTimerTimestampNs = bufhdr->nTimeStamp * 1000;
@@ -4351,7 +4368,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     }
 
     if (m_debug.in_buffer_log) {
-        venc_input_log_buffers(bufhdr, fd, plane[0].data_offset, m_sVenc_cfg.inputformat);
+        venc_input_log_buffers(bufhdr, fd, plane[0].data_offset, m_sVenc_cfg.inputformat, interlace_flag);
     }
     if (m_debug.extradata_log && extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
         DEBUG_PRINT_ERROR("Extradata Addr 0x%llx, Buffer Addr = 0x%x", (OMX_U64)input_extradata_info.uaddr, (unsigned int)plane[extra_idx].m.userptr);
@@ -5224,7 +5241,7 @@ bool venc_dev::venc_set_grid_enable()
     int rc;
     struct v4l2_control control;
 
-    DEBUG_PRINT_LOW("venc_set_tile_dimension");
+    DEBUG_PRINT_LOW("venc_set_grid_enable");
     control.id = V4L2_CID_MPEG_VIDC_IMG_GRID_ENABLE;
     control.value = 1;
     rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
@@ -5256,8 +5273,8 @@ bool venc_dev::_venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames)
     struct v4l2_control control;
     char property_value[PROPERTY_VALUE_MAX] = {0};
 
-    if (m_sVenc_cfg.codectype != V4L2_PIX_FMT_H264 &&
-        m_sVenc_cfg.codectype != V4L2_PIX_FMT_HEVC &&
+    if ((m_sVenc_cfg.codectype != V4L2_PIX_FMT_H264 &&
+        m_sVenc_cfg.codectype != V4L2_PIX_FMT_HEVC) ||
         m_codec == OMX_VIDEO_CodingImageHEIC) {
         nBFrames = 0;
     }
@@ -5714,10 +5731,13 @@ unsigned long venc_dev::venc_get_color_format(OMX_COLOR_FORMATTYPE eColorFormat)
         format = V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS;
         break;
     default:
-        DEBUG_PRINT_ERROR("Unsupported eColorFormat %#x", eColorFormat);
+        DEBUG_PRINT_INFO("WARN: Unsupported eColorFormat %#x", eColorFormat);
         format = V4L2_DEFAULT_OUTPUT_COLOR_FMT;
         break;
     }
+
+    if (m_codec == OMX_VIDEO_CodingImageHEIC)
+        format = V4L2_PIX_FMT_NV12_512;
 
     return format;
 }
@@ -5761,6 +5781,9 @@ bool venc_dev::venc_set_color_format(OMX_COLOR_FORMATTYPE color_format)
             DEBUG_PRINT_HIGH("Default color format NV12 UBWC is set");
             break;
     }
+
+    if (m_codec == OMX_VIDEO_CodingImageHEIC)
+        m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_512;
 
     memset(&fmt, 0, sizeof(fmt));
     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -6463,31 +6486,17 @@ bool venc_dev::venc_set_blur_resolution(OMX_QTI_VIDEO_CONFIG_BLURINFO *blurInfo)
 
     int blur_width = 0, blur_height = 0;
 
-    switch (blurInfo->eTargetResol) {
-        case BLUR_RESOL_DISABLED:
+    switch (blurInfo->nBlurInfo) {
+        case 0:
             blur_width = 0;
             blur_height = 0;
-            break;
-        case BLUR_RESOL_240:
-            blur_width = 426;
-            blur_height = 240;
-            break;
-        case BLUR_RESOL_480:
-            blur_width = 854;
-            blur_height = 480;
-            break;
-        case BLUR_RESOL_720:
-            blur_width = 1280;
-            blur_height = 720;
-            break;
-        case BLUR_RESOL_1080:
-            blur_width = 1920;
-            blur_height = 1080;
-            break;
+        case 1:
+            blur_width = 1;
+            blur_height = 1;
         default:
-            blur_width = blurInfo->eTargetResol >> 16;
-            blur_height = blurInfo->eTargetResol & 0xFFFF;
-            DEBUG_PRINT_LOW("Custom blur resolution %dx%d", blur_width, blur_height);
+            blur_width = blurInfo->nBlurInfo >> 16;
+            blur_height = blurInfo->nBlurInfo & 0xFFFF;
+            DEBUG_PRINT_LOW("Custom blur resolution %ux%u", blur_width, blur_height);
             break;
     }
 
@@ -6505,7 +6514,7 @@ bool venc_dev::venc_set_blur_resolution(OMX_QTI_VIDEO_CONFIG_BLURINFO *blurInfo)
         DEBUG_PRINT_ERROR("Failed to set blur resoltion");
         return false;
     }
-    DEBUG_PRINT_LOW("Blur resolution set = %d x %d", blur_width, blur_height);
+    DEBUG_PRINT_LOW("Blur resolution set = %u x %u", blur_width, blur_height);
     return true;
 
 }
@@ -6798,14 +6807,14 @@ bool venc_dev::venc_validate_temporal_extn(OMX_VIDEO_PARAM_ANDROID_TEMPORALLAYER
 
     if (!venc_validate_range(V4L2_CID_MPEG_VIDC_VIDEO_HIER_B_NUM_LAYERS, temporal_settings.nBLayerCountMax - 1) &&
         (temporal_settings.nBLayerCountMax > 0)) {
-        DEBUG_PRINT_ERROR("TemporalLayer: Invalid settings, hardware doesn't"
+        DEBUG_PRINT_INFO("WARN: TemporalLayer: Invalid settings, hardware doesn't"
                     " support %u HB layers", temporal_settings.nBLayerCountMax);
         return false;
     }
 
     if (!venc_validate_range(V4L2_CID_MPEG_VIDC_VIDEO_HIER_P_NUM_LAYERS, temporal_settings.nLayerCountMax - 1) &&
         !venc_validate_range(V4L2_CID_MPEG_VIDC_VIDEO_HYBRID_HIERP_MODE, temporal_settings.nLayerCountMax - 1)) {
-        DEBUG_PRINT_ERROR("TemporalLayer: Invalid settings, hardware doesn't"
+        DEBUG_PRINT_INFO("WARN: TemporalLayer: Invalid settings, hardware doesn't"
                     " support %u temporal layers", temporal_settings.nLayerCountMax);
         return false;
     }
