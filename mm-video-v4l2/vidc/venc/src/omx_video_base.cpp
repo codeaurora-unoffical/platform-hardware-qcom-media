@@ -3351,7 +3351,14 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
         DEBUG_PRINT_LOW("Virtual address in allocate buffer is %p", m_pInput_pmem[i].buffer);
         BITMASK_SET(&m_inp_bm_count,i);
         //here change the I/P param here from buf_adr to pmem
+#ifdef _HYPERVISOR_
+        //mUseProxyColorFormat is removed since same buffers are getting
+        //registered during ETB. Also buffers are now registered in this function
+        //since the backend does not support dynamic buffer registration
+        if (dev_use_buf(&m_pInput_pmem[i],PORT_INDEX_IN,i) != true) {
+#else
         if (!mUseProxyColorFormat && (dev_use_buf(&m_pInput_pmem[i],PORT_INDEX_IN,i) != true)) {
+#endif
             DEBUG_PRINT_ERROR("ERROR: dev_use_buf FAILED for i/p buf");
             return OMX_ErrorInsufficientResources;
         }

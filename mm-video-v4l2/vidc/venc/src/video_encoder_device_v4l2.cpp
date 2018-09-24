@@ -3967,17 +3967,19 @@ bool venc_dev::venc_color_align(OMX_BUFFERHEADERTYPE *buffer,
         src_buf += width * height;
         dst_buf += y_stride * y_scanlines;
         for (int line = height / 2 - 1; line >= 0; --line) {
+            /* Align the length to 16 for better memove performance. */
             memmove(dst_buf + line * uv_stride,
                     src_buf + line * width,
-                    width);
+                    ALIGN(width, 16));
         }
 
         dst_buf = src_buf = buffer->pBuffer;
         //Copy the Y next
         for (int line = height - 1; line > 0; --line) {
+            /* Align the length to 16 for better memove performance. */
             memmove(dst_buf + line * y_stride,
                     src_buf + line * width,
-                    width);
+                    ALIGN(width, 16));
         }
         /* Inform driver to do cache flush on total buffer */
         buffer->nFilledLen = buffer->nAllocLen;
