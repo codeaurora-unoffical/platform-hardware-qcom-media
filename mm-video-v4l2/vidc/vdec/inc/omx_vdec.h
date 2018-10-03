@@ -571,7 +571,6 @@ struct extradata_info {
     OMX_CONFIG_RECTTYPE output_crop_rect;
     OMX_U32 output_width;
     OMX_U32 output_height;
-    OMX_U32 video_full_range_flag;
 };
 
 struct prefetch_info {
@@ -720,8 +719,6 @@ class omx_vdec: public qc_omx_component
         pthread_t msg_thread_id;
         pthread_t async_thread_id;
         bool is_component_secure();
-        void buf_ref_add(int nPortIndex);
-        void buf_ref_remove();
         OMX_BUFFERHEADERTYPE* get_omx_output_buffer_header(int index);
         OMX_ERRORTYPE set_dpb(bool is_split_mode, int dpb_color_format);
         OMX_ERRORTYPE decide_dpb_buffer_mode(bool split_opb_dpb_with_same_color_fmt);
@@ -973,7 +970,6 @@ class omx_vdec: public qc_omx_component
         void prepare_color_aspects_metadata(OMX_U32 primaries, OMX_U32 range,
                                             OMX_U32 transfer, OMX_U32 matrix,
                                             ColorMetaData *color_mdata);
-        void set_video_full_range_flag_metadata(OMX_U32 buf_index);
 #ifdef _MSM8974_
         void append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
                 OMX_U32 interlaced_format_type);
@@ -1292,7 +1288,6 @@ class omx_vdec: public qc_omx_component
 
         //variables to handle dynamic buffer mode
         bool dynamic_buf_mode;
-        struct dynamic_buf_list *out_dynamic_list;
         OMX_U32 m_reconfig_width;
         OMX_U32 m_reconfig_height;
         bool m_smoothstreaming_mode;

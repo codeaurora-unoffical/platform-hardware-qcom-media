@@ -817,7 +817,6 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
     m_fill_output_msg = OMX_COMPONENT_GENERATE_FTB;
     client_buffers.set_vdec_client(this);
     dynamic_buf_mode = false;
-    out_dynamic_list = NULL;
     is_down_scalar_enabled = false;
     m_enable_downscalar = 0;
     m_downscalar_width = 0;
@@ -8241,7 +8240,6 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer_proxy(
     if (dynamic_buf_mode) {
         drv_ctx.ptr_outputbuffer[nPortIndex].offset = 0;
         drv_ctx.ptr_outputbuffer[nPortIndex].buffer_len = buffer->nAllocLen;
-        buf_ref_add(nPortIndex);
         drv_ctx.ptr_outputbuffer[nPortIndex].mmaped_size = buffer->nAllocLen;
     }
 
@@ -9173,13 +9171,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
             DEBUG_PRINT_LOW("stereo_output_mode = %d",stereo_output_mode);
             setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                                S3D_FORMAT, (void*)&stereo_output_mode);
-        }
-
-        if (drv_ctx.decoder_format == VDEC_CODECTYPE_H264 ||
-            drv_ctx.decoder_format == VDEC_CODECTYPE_HEVC)
-        {
-            OMX_U32 buf_index = buffer - m_out_mem_ptr;
-            set_video_full_range_flag_metadata(buf_index);
         }
 
         if (il_buffer) {
@@ -10589,7 +10580,6 @@ void omx_vdec::free_output_buffer_header()
 #endif
     free(drv_ctx.op_buf_map_info);
     drv_ctx.op_buf_map_info = NULL;
-    buf_ref_remove();
 }
 
 void omx_vdec::free_input_buffer_header()
@@ -11078,14 +11068,6 @@ OMX_ERRORTYPE omx_vdec::allocate_output_headers()
             return OMX_ErrorInsufficientResources;
         }
 #endif
-        if (dynamic_buf_mode) {
-            out_dynamic_list = (struct dynamic_buf_list *) \
-                calloc (sizeof(struct dynamic_buf_list), drv_ctx.op_buf.actualcount);
-            if (out_dynamic_list) {
-               for (unsigned int i = 0; i < drv_ctx.op_buf.actualcount; i++)
-                  out_dynamic_list[i].dup_fd = -1;
-            }
-        }
 
         if (m_out_mem_ptr && pPtr && drv_ctx.ptr_outputbuffer
                 && drv_ctx.ptr_respbuffer) {
@@ -11453,7 +11435,6 @@ bool omx_vdec::handle_color_space_info(void *data,
             {
                 struct msm_vidc_vui_display_info_payload *display_info_payload;
                 display_info_payload = (struct msm_vidc_vui_display_info_payload*)data;
-                m_extradata_info.video_full_range_flag = display_info_payload->video_full_range_flag;
 
                 /* Refer H264 Spec @ Rec. ITU-T H.264 (02/2014) to understand this code */
 
@@ -12253,7 +12234,6 @@ OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U64 requested_extradata,
         }
         if (requested_extradata & OMX_DISPLAY_INFO_EXTRADATA) {
             control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
-            DEBUG_PRINT_LOW("Enable Display info extra data");
             switch(output_capability) {
                 case V4L2_PIX_FMT_H264:
                 case V4L2_PIX_FMT_HEVC:
@@ -12467,22 +12447,6 @@ void omx_vdec::print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra)
     } else {
         DEBUG_PRINT_HIGH("======= End of Driver Extradata ========");
     }
-}
-
-void omx_vdec::set_video_full_range_flag_metadata(OMX_U32 buf_index)
-{
-    OMX_U32 video_full_range_flag;
-    private_handle_t *handle;
-
-    video_full_range_flag = m_extradata_info.video_full_range_flag;
-    DEBUG_PRINT_LOW("set_video_full_range_flag_metadata: video_full_range_flag %d", video_full_range_flag);
-
-    handle = (private_handle_t *)native_buffer[buf_index].nativehandle;
-    if(!handle) {
-        DEBUG_PRINT_ERROR("%s: Native Buffer handle is NULL",__func__);
-        return;
-    }
-    setMetaData(handle, PP_PARAM_VIDEO_FULLRANGE, (void*)&video_full_range_flag);
 }
 
 void omx_vdec::append_interlace_extradata(OMX_OTHER_EXTRADATATYPE *extra,
@@ -13458,96 +13422,6 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::cache_ops(
         return OMX_ErrorUndefined;
     }
     return OMX_ErrorNone;
-}
-
-void omx_vdec::buf_ref_add(int nPortIndex)
-{
-    unsigned long i = 0;
-    bool buf_present = false;
-    long fd = drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd;
-    OMX_U32 offset = drv_ctx.ptr_outputbuffer[nPortIndex].offset;
-
-    if (!dynamic_buf_mode || !out_dynamic_list) {
-        return;
-    }
-
-    pthread_mutex_lock(&m_lock);
-    for (i = 0; i < drv_ctx.op_buf.actualcount; i++) {
-        //check the buffer fd, offset, uv addr with list contents
-        //If present increment reference.
-        if ((out_dynamic_list[i].fd == fd) &&
-            (out_dynamic_list[i].offset == offset)) {
-               DEBUG_PRINT_LOW("buf_ref_add: [ALREADY PRESENT] fd = %u ref_count = %u",
-                     (unsigned int)out_dynamic_list[i].fd, (unsigned int)out_dynamic_list[i].ref_count);
-               if (!secure_mode) {
-                   drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr = out_dynamic_list[i].buffaddr;
-               }
-               buf_present = true;
-               break;
-        }
-    }
-    if (!buf_present) {
-        for (i = 0; i < drv_ctx.op_buf.actualcount; i++) {
-            //search for a entry to insert details of the new buffer
-            if (out_dynamic_list[i].dup_fd < 0) {
-                out_dynamic_list[i].fd = fd;
-                out_dynamic_list[i].offset = offset;
-                out_dynamic_list[i].dup_fd = dup(fd);
-                out_dynamic_list[i].ref_count++;
-                DEBUG_PRINT_LOW("buf_ref_add: [ADDED] fd = %u ref_count = %u",
-                     (unsigned int)out_dynamic_list[i].fd, (unsigned int)out_dynamic_list[i].ref_count);
-
-                if (!secure_mode) {
-                    drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr =
-                            (OMX_U8*)mmap(0, drv_ctx.ptr_outputbuffer[nPortIndex].buffer_len,
-                                          PROT_READ|PROT_WRITE, MAP_SHARED,
-                                          drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd, 0);
-                    //mmap returns (void *)-1 on failure and sets error code in errno.
-                    if (drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr == MAP_FAILED) {
-                        DEBUG_PRINT_ERROR("buf_ref_add: mmap failed - errno: %d", errno);
-                        drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr = NULL;
-                        break;
-                    }
-                    out_dynamic_list[i].buffaddr = drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr;
-                    out_dynamic_list[i].mapped_size = drv_ctx.ptr_outputbuffer[nPortIndex].buffer_len;
-                    DEBUG_PRINT_LOW("mmap: %p %ld", out_dynamic_list[i].buffaddr, out_dynamic_list[i].mapped_size);
-                }
-                break;
-            }
-        }
-    }
-   pthread_mutex_unlock(&m_lock);
-}
-
-void omx_vdec::buf_ref_remove()
-{
-    unsigned long i = 0;
-
-    if (!dynamic_buf_mode || !out_dynamic_list) {
-        return;
-    }
-
-    pthread_mutex_lock(&m_lock);
-    for (i = 0; i < drv_ctx.op_buf.actualcount; i++) {
-        if (!secure_mode && out_dynamic_list[i].buffaddr && out_dynamic_list[i].mapped_size) {
-            DEBUG_PRINT_LOW("munmap: %p %ld", out_dynamic_list[i].buffaddr, out_dynamic_list[i].mapped_size);
-            munmap(out_dynamic_list[i].buffaddr,
-                        out_dynamic_list[i].mapped_size);
-        }
-
-        if (out_dynamic_list[i].dup_fd > -1) {
-            DEBUG_PRINT_LOW("buf_ref_remove: [REMOVED] fd = %u ref_count = %u",
-                    (unsigned int)out_dynamic_list[i].fd, (unsigned int)out_dynamic_list[i].ref_count);
-            close(out_dynamic_list[i].dup_fd);
-            out_dynamic_list[i].dup_fd = -1;
-        }
-    }
-    pthread_mutex_unlock(&m_lock);
-
-    if (out_dynamic_list) {
-        free(out_dynamic_list);
-        out_dynamic_list = NULL;
-    }
 }
 
 #ifdef _MSM8974_
