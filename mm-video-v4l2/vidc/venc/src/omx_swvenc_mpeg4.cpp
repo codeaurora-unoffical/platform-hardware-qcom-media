@@ -116,6 +116,7 @@ omx_venc::omx_venc()
     m_bIsInFlipDone = false;
     m_bIsOutFlipDone = false;
     m_bUseAVTimerTimestamps = false;
+    m_bIsIntraperiodSet = false;
     m_pIpbuffers = nullptr;
     set_format = false;
     update_offset = true;
@@ -867,20 +868,21 @@ OMX_ERRORTYPE  omx_venc::set_parameter
             }
 
             /* set the intra period */
-            if(pParam->nPFrames)
+            if (!m_bIsIntraperiodSet)
             {
                 DEBUG_PRINT_LOW("pParam->nPFrames : %d", pParam->nPFrames);
                 Ret = swvenc_set_intra_period(pParam->nPFrames,pParam->nBFrames);
                 if (Ret != SWVENC_S_SUCCESS)
                 {
                     DEBUG_PRINT_ERROR("%s, swvenc_set_intra_period failed (%d)",
-                    __FUNCTION__, Ret);
+                        __FUNCTION__, Ret);
                     RETURN(OMX_ErrorUnsupportedSetting);
                 }
                 else
                 {
                     m_sIntraperiod.nPFrames = pParam->nPFrames;
                     m_sIntraperiod.nBFrames = pParam->nBFrames;
+                    m_bIsIntraperiodSet = true;
                 }
             }
 
@@ -933,17 +935,21 @@ OMX_ERRORTYPE  omx_venc::set_parameter
             DEBUG_PRINT_LOW("set_parameter: OMX_IndexParamVideoH263");
 
             /* set the intra period */
-            Ret = swvenc_set_intra_period(pParam->nPFrames,pParam->nBFrames);
-            if (Ret != SWVENC_S_SUCCESS)
+            if (!m_bIsIntraperiodSet)
             {
-               DEBUG_PRINT_ERROR("%s, swvenc_set_intra_period failed (%d)",
-                 __FUNCTION__, Ret);
-               RETURN(OMX_ErrorUnsupportedSetting);
-            }
-            else
-            {
-                m_sIntraperiod.nPFrames = pParam->nPFrames;
-                m_sIntraperiod.nBFrames = pParam->nBFrames;
+                Ret = swvenc_set_intra_period(pParam->nPFrames,pParam->nBFrames);
+                if (Ret != SWVENC_S_SUCCESS)
+                {
+                    DEBUG_PRINT_ERROR("%s, swvenc_set_intra_period failed (%d)",
+                        __FUNCTION__, Ret);
+                    RETURN(OMX_ErrorUnsupportedSetting);
+                }
+                else
+                {
+                    m_sIntraperiod.nPFrames = pParam->nPFrames;
+                    m_sIntraperiod.nBFrames = pParam->nBFrames;
+                    m_bIsIntraperiodSet = true;
+                }
             }
 
             /* set profile/level */
@@ -3028,6 +3034,11 @@ SWVENC_STATUS omx_venc::swvenc_empty_buffer_done
     OMX_BUFFERHEADERTYPE* omxhdr = NULL;
 
     //omx_video *omx = reinterpret_cast<omx_video*>(p_client);
+    if (!p_ipbuffer) {
+        DEBUG_PRINT_ERROR("EBD: null buffer");
+        return SWVENC_S_NULL_POINTER;
+    }
+
     omxhdr = (OMX_BUFFERHEADERTYPE*)p_ipbuffer->p_client_data;
 
     DEBUG_PRINT_LOW("EBD: clientData (%p)", p_ipbuffer->p_client_data);
