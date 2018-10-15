@@ -11490,6 +11490,8 @@ bool omx_vdec::handle_color_space_info(void *data,
                 display_info_payload = (struct msm_vidc_vui_display_info_payload*)data;
 
                 /* Refer H264 Spec @ Rec. ITU-T H.264 (02/2014) to understand this code */
+                if (display_info_payload->video_full_range_flag)
+                    *color_space = ITU_R_601_FR;
 
                 if (display_info_payload->video_signal_present_flag &&
                         display_info_payload->color_description_present_flag) {
@@ -11504,8 +11506,6 @@ bool omx_vdec::handle_color_space_info(void *data,
                                                    display_info_payload->transfer_characteristics,
                                                    display_info_payload->matrix_coefficients,
                                                    color_mdata);
-                } else if (display_info_payload->video_full_range_flag) {
-                    *color_space = ITU_R_601_FR;
                 }
             }
             break;
@@ -11994,6 +11994,7 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                 case MSM_VIDC_EXTRADATA_VC1_SEQDISP:
                 case MSM_VIDC_EXTRADATA_VPX_COLORSPACE_INFO:
                     color_event = handle_color_space_info((void *)data->data, &color_space, &color_mdata, set_disp_color_aspects_only);
+                    DEBUG_PRINT_HIGH("setMetaData for Color Space after handle_color_space_info = 0x%x (601=%u FR=%u 709=%u)", color_space, ITU_R_601, ITU_R_601_FR, ITU_R_709);
                     set_colorspace_in_handle(color_space, buf_index);
                     break;
                 case MSM_VIDC_EXTRADATA_S3D_FRAME_PACKING:
