@@ -47,6 +47,7 @@ extern "C" {
 #include "OMX_Video.h"
 #include "string.h"
 #include "stdint.h"
+#include <cutils/native_handle.h>
 
 #define OMX_VIDEO_MAX_HP_LAYERS 6
 
