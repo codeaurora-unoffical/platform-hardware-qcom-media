@@ -162,6 +162,8 @@ extern "C" {
 
 #define LUMINANCE_DIV_FACTOR 10000.0
 
+#define COLOR_ASPECTS_UNSPECIFIED 2
+
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 
@@ -11438,6 +11440,15 @@ void omx_vdec::prepare_color_aspects_metadata(OMX_U32 primaries, OMX_U32 range,
                                               OMX_U32 transfer, OMX_U32 matrix,
                                               ColorMetaData *color_mdata)
 {
+    if (primaries == COLOR_ASPECTS_UNSPECIFIED) {
+        primaries = ColorPrimaries_BT601_6_625;
+    }
+    if (transfer == COLOR_ASPECTS_UNSPECIFIED) {
+        transfer = Transfer_SMPTE_170M;
+    }
+    if (matrix == COLOR_ASPECTS_UNSPECIFIED) {
+        matrix = MatrixCoEff_BT601_6_625;
+    }
 
     /* ColorAspects in qdMetaData */
     color_mdata->colorPrimaries = (enum ColorPrimaries) primaries;
