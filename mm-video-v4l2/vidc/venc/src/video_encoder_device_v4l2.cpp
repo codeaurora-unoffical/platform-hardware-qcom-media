@@ -50,6 +50,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <gralloc_priv.h>
 #endif
 
+#ifdef _USE_GLIB_
+#include <glib.h>
+#define strlcpy g_strlcpy
+#endif
+
 #include <qdMetaData.h>
 #include <color_metadata.h>
 #include "PlatformConfig.h"
@@ -63,8 +68,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define ALIGN(x, to_align) ((((unsigned long) x) + (to_align - 1)) & ~(to_align - 1))
 #define EXTRADATA_IDX(__num_planes) ((__num_planes) ? (__num_planes) - 1 : 0)
 #define MAXDPB 16
+#ifndef MIN
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
+#endif
+#ifndef MAX
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
+#endif
+
 #define ROUND(__sz, __align) (((__sz) + ((__align>>1))) & (~(__align-1)))
 #define MAX_PROFILE_PARAMS 6
 #define HEVC_MAIN_START 0
@@ -1478,8 +1488,8 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
     }
 
     if (m_debug.infile && pbuffer && pbuffer->nFilledLen) {
-        int stride, scanlines;
-        int color_format;
+        unsigned long stride, scanlines;
+        unsigned long color_format;
         unsigned long i, msize;
         unsigned char *pvirt = NULL, *ptemp = NULL;
         unsigned char *temp = (unsigned char *)pbuffer->pBuffer;
@@ -1542,6 +1552,23 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
             }
             for (i = 0; i < m_sVenc_cfg.input_height/2; i++) {
                 fwrite(ptemp, m_sVenc_cfg.input_width, 1, m_debug.infile);
+                ptemp += stride;
+            }
+        } else if (color_format == COLOR_FMT_NV12_512) {
+            stride = VENUS_Y_STRIDE(color_format, m_sVenc_cfg.input_width);
+            scanlines = VENUS_Y_SCANLINES(color_format, m_sVenc_cfg.input_height);
+
+            for (i = 0; i < scanlines; i++) {
+                fwrite(ptemp, stride, 1, m_debug.infile);
+                ptemp += stride;
+            }
+            if (metadatamode == 1) {
+                ptemp = pvirt + (stride * scanlines);
+            } else {
+                ptemp = (unsigned char *)pbuffer->pBuffer + (stride * scanlines);
+            }
+            for (i = 0; i < scanlines/2; i++) {
+                fwrite(ptemp, stride, 1, m_debug.infile);
                 ptemp += stride;
             }
         } else if (color_format == COLOR_FMT_RGBA8888) {
@@ -4218,6 +4245,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
                             m_sVenc_cfg.inputformat = isUBWC ? V4L2_PIX_FMT_NV12_UBWC : V4L2_PIX_FMT_NV12;
                             DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12 %s", isUBWC ? "UBWC" : "Linear");
+                        } else if (handle->format == HAL_PIXEL_FORMAT_NV12_HEIF) {
+                            m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_512;
+                            DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12_512");
                         } else if (handle->format == HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC) {
                             m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_UBWC;
                             DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12_UBWC");
