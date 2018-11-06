@@ -9671,6 +9671,14 @@ int omx_vdec::async_message_process (void *context, void* message)
             DEBUG_PRINT_HIGH("Port settings changed");
             omx->m_reconfig_width = vdec_msg->msgdata.output_frame.picsize.frame_width;
             omx->m_reconfig_height = vdec_msg->msgdata.output_frame.picsize.frame_height;
+            if ((vdec_msg->msgdata.output_frame.interlaced_format == VDEC_InterlaceInterleaveFrameTopFieldFirst) ||
+                (vdec_msg->msgdata.output_frame.interlaced_format == VDEC_InterlaceInterleaveFrameBottomFieldFirst)) {
+                if (omx->drv_ctx.output_format != VDEC_YUV_FORMAT_NV12) {
+                    // if interlace mode, output buffer format must be NV12 linear
+                    omx->drv_ctx.output_format = VDEC_YUV_FORMAT_NV12;
+                    omx->capture_capability = V4L2_PIX_FMT_NV12;
+                }
+            }
             omx->post_event (OMX_CORE_OUTPUT_PORT_INDEX, OMX_IndexParamPortDefinition,
                     OMX_COMPONENT_GENERATE_PORT_RECONFIG);
             if (!omx->m_need_turbo) {
