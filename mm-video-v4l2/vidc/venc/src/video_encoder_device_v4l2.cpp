@@ -104,6 +104,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #define GRALLOC_USAGE_PRIVATE_HEIF_VIDEO (UINT32_C(1) << 27)
 #define GRALLOC_USAGE_PRIVATE_10BIT_VIDEO (UINT32_C(1) << 30)
+
+#define REQUEST_LINEAR_COLOR_8_BIT   0x1
+#define REQUEST_LINEAR_COLOR_10_BIT  0x2
+#define REQUEST_LINEAR_COLOR_ALL     (REQUEST_LINEAR_COLOR_8_BIT | REQUEST_LINEAR_COLOR_10_BIT)
+
 #undef LOG_TAG
 #define LOG_TAG "OMX-VENC: venc_dev"
 
@@ -174,6 +179,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     client_req_turbo_mode  = false;
     intra_period.num_pframes = 29;
     intra_period.num_bframes = 0;
+    m_hdr10meta_enabled = false;
 
     Platform::Config::getInt32(Platform::vidc_enc_log_in,
             (int32_t *)&m_debug.in_buffer_log, 0);
@@ -213,7 +219,6 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 
     mUseAVTimerTimestamps = false;
     mIsGridset = false;
-    mUseLinearColorFormat = false;
     Platform::Config::getInt32(Platform::vidc_enc_linear_color_format,
             (int32_t *)&mUseLinearColorFormat, 0);
 
@@ -851,7 +856,7 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
                                 + colorData.dynamicMetaDataLen;
     packet_size = (sizeof(OMX_OTHER_EXTRADATATYPE) + payload_size + 3)&(~3);
 
-    if (m_hdr10meta_enabled && (filled_len + packet_size <= input_extradata_info.buffer_size)) {
+    if (m_hdr10meta_enabled && (filled_len + packet_size <= input_extradata_info.buffer_size) && colorData.dynamicMetaDataLen > 0) {
         struct msm_vidc_hdr10plus_metadata_payload *payload;
 
         data->nSize = packet_size;
@@ -866,6 +871,8 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
 
         filled_len += data->nSize;
         data = (OMX_OTHER_EXTRADATATYPE *)((char *)data + data->nSize);
+    } else if (colorData.dynamicMetaDataLen == 0) {
+        DEBUG_PRINT_HIGH("DynamicMetaDataLength == 0 Skip writing metadata.");
     } else {
         if (m_hdr10meta_enabled) {
             DEBUG_PRINT_HIGH("Insufficient size for HDR10Metadata: Required %u Available %lu",
@@ -2938,7 +2945,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
         case OMX_QTIIndexParamEnableLinearColorFormat:
             {
                 QOMX_ENABLETYPE *pParam = (QOMX_ENABLETYPE *)paramData;
-                mUseLinearColorFormat = pParam->bEnable;
+                mUseLinearColorFormat = pParam->bEnable ? REQUEST_LINEAR_COLOR_ALL : 0;
                 DEBUG_PRINT_INFO("Linear Color Format Enabled : %d ", pParam->bEnable);
                 break;
             }
@@ -3600,6 +3607,7 @@ bool venc_dev::venc_set_extradata_hdr10metadata()
 {
     struct v4l2_control control;
 
+    /* HDR10 Metadata is enabled by default for HEVC Main10 profile. */
     if (m_sVenc_cfg.codectype == V4L2_PIX_FMT_HEVC &&
         codec_profile.profile == V4L2_MPEG_VIDC_VIDEO_HEVC_PROFILE_MAIN10) {
 
@@ -3614,6 +3622,12 @@ bool venc_dev::venc_set_extradata_hdr10metadata()
         }
         m_hdr10meta_enabled = true;
         extradata = true;
+
+        //Get upated buffer requirement as enable extradata leads to two buffer planes
+        venc_get_buf_req (&venc_handle->m_sInPortDef.nBufferCountMin,
+                                 &venc_handle->m_sInPortDef.nBufferCountActual,
+                                 &venc_handle->m_sInPortDef.nBufferSize,
+                                 venc_handle->m_sInPortDef.nPortIndex);
     }
 
     return true;
@@ -3666,7 +3680,7 @@ unsigned venc_dev::venc_start(void)
         return 1;
     }
 
-    //venc_set_extradata_hdr10metadata();
+    venc_set_extradata_hdr10metadata();
 
     venc_config_print();
 
@@ -7078,18 +7092,19 @@ void venc_dev::venc_get_consumer_usage(OMX_U32* usage) {
     /* Initialize to zero & update as per required color format */
     *usage = 0;
 
-    /* TODO: NV12 color format addition pending */
-
     /* Configure UBWC as default */
     *usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
 
     if (hevc && eProfile == (OMX_U32)OMX_VIDEO_HEVCProfileMain10HDR10) {
         DEBUG_PRINT_INFO("Setting 10-bit consumer usage bits");
         *usage |= GRALLOC_USAGE_PRIVATE_10BIT_VIDEO;
-        if (mUseLinearColorFormat) {
+        if (mUseLinearColorFormat & REQUEST_LINEAR_COLOR_10_BIT) {
             *usage &= ~GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
-            DEBUG_PRINT_INFO("Clear UBWC consumer usage bits for P010");
+            DEBUG_PRINT_INFO("Clear UBWC consumer usage bits as 10-bit linear color requested");
         }
+    } else if (mUseLinearColorFormat & REQUEST_LINEAR_COLOR_8_BIT) {
+        *usage &= ~GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+        DEBUG_PRINT_INFO("Clear UBWC consumer usage bits as 8-bit linear color requested");
     }
 
     if (m_codec == OMX_VIDEO_CodingImageHEIC) {
