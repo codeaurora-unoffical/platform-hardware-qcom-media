@@ -54,26 +54,18 @@ if MASTER_SIDE_CP_TARGET_LIST
 AM_CPPFLAGS += -DMASTER_SIDE_CP
 endif
 
-if TARGET_USES_LIBGBM
-AM_CPPFLAGS += -D__LIBGBM__
-endif
-
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/venc/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/libc2dcolorconvert/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/src/common/
 AM_CPPFLAGS += -I$(top_srcdir)/libstagefrighthw/
-AM_CPPFLAGS += -I$(top_srcdir)/libplatformconfig/
 
 sources = src/omx_video_base.cpp
 sources += src/omx_video_encoder.cpp
 sources += src/video_encoder_device_v4l2.cpp
 sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/extra_data_handler.cpp
 sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_color_converter.cpp
-sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_common.cpp
-sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_vendor_extensions.cpp
-sources += $(top_srcdir)/libc2dcolorconvert/C2DColorConverter.cpp
 
 lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
