@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2009-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2009-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -1448,6 +1448,7 @@ static const struct ExtraDataMap kExtradataMap[] = {
         { "mbinfo", OMX_ExtraDataVideoEncoderMBInfo },
         { "outputcropinfo", OMX_ExtraDataOutputCropInfo },
         { "roiinfo", OMX_ExtraDataInputROIInfo },
+        { "frameqp", OMX_ExtraDataEncoderFrameQp }
 };
 
 static inline OMX_S32 getIndexForExtradataType(char * type) {

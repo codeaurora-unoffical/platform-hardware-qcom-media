@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2017, 2019 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -295,6 +295,17 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
                 const char *extraDataVideoEncoderROIInfo = getStringForExtradataType(OMX_ExtraDataInputROIInfo);
                 if(extraDataVideoEncoderROIInfo != NULL &&
                         (strlcat(exType, extraDataVideoEncoderROIInfo,
+                                 OMX_MAX_STRINGVALUE_SIZE)) >= OMX_MAX_STRINGVALUE_SIZE) {
+                    DEBUG_PRINT_LOW("extradata string size exceeds size %d",OMX_MAX_STRINGVALUE_SIZE );
+                }
+            }
+            if ((OMX_BOOL)(m_sExtraData & VENC_EXTRADATA_FRAME_QP)){
+                if (exType[0]!=0) {
+                    strlcat(exType,"|", OMX_MAX_STRINGVALUE_SIZE);
+                }
+                const char *extraDataVideoEncoderFrameQp = getStringForExtradataType(OMX_ExtraDataEncoderFrameQp);
+                if(extraDataVideoEncoderFrameQp != NULL &&
+                        (strlcat(exType, extraDataVideoEncoderFrameQp,
                                  OMX_MAX_STRINGVALUE_SIZE)) >= OMX_MAX_STRINGVALUE_SIZE) {
                     DEBUG_PRINT_LOW("extradata string size exceeds size %d",OMX_MAX_STRINGVALUE_SIZE );
                 }
@@ -757,7 +768,8 @@ OMX_ERRORTYPE omx_video::set_vendor_extension_config(
                     continue;
                 }
                 if (extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoLTRInfo ||
-                    extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderMBInfo) {
+                    extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderMBInfo ||
+                    extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataEncoderFrameQp) {
                     extraDataParam.nPortIndex = (OMX_U32)PORT_INDEX_OUT;
                 } else if (extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataInputROIInfo) {
                     extraDataParam.nPortIndex = (OMX_U32)PORT_INDEX_IN;
