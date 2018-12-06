@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 - 2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012 - 2018, The Linux Foundation. All rights reserved.
  *
  * redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -473,7 +473,7 @@ size_t C2DColorConverter::calcYSize(ColorConvertFormat format, size_t width, siz
         case YCbCr420SP:
             return (ALIGN(width, ALIGN16) * height);
         case YCbCr420P:
-            return ALIGN(width, ALIGN16) * height;
+            return ALIGN(width, ALIGN16) * ALIGN(height, ALIGN16);
         case YCrCb420P:
             return ALIGN(width, ALIGN16) * height;
         case YCbCr420Tile:
@@ -529,11 +529,13 @@ size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size
             break;
         case YCbCr420P:
             alignedw = ALIGN(width, ALIGN16);
-            size = ALIGN((alignedw * height) + (ALIGN(width/2, ALIGN16) * (height/2) * 2), ALIGN4K);
+            alignedh = ALIGN(height, ALIGN16);
+            size = ALIGN((alignedw * height) + ((alignedw * height) / 2), ALIGN4K);
             break;
         case YCrCb420P:
             alignedw = ALIGN(width, ALIGN16);
-            size = ALIGN((alignedw * height) + (ALIGN(width/2, ALIGN16) * (height/2) * 2), ALIGN4K);
+            alignedh = ALIGN(height, ALIGN16);
+            size = ALIGN((alignedw * height) + ((alignedw * height) / 2), ALIGN4K);
             break;
         case YCbCr420Tile:
             alignedw = ALIGN(width, ALIGN128);
