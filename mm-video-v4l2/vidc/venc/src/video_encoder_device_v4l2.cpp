@@ -6632,6 +6632,8 @@ bool venc_dev::venc_set_priority(OMX_U32 priority) {
                 priority == 0 ? "ENABLE" : "DISABLE");
         return false;
     }
+    sess_priority.priority = priority;
+
     return true;
 }
 

@@ -20,6 +20,6 @@ sources += ConfigParser.cpp
 lib_LTLIBRARIES = libplatformconfig.la
 libplatformconfig_la_SOURCES = $(sources)
 libplatformconfig_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
-libplatformconfig_la_LDFLAGS = -llog -lutils -lcutils -lglib-2.0 -ldl -shared
+libplatformconfig_la_LDFLAGS = -llog -lutils -lcutils -lexpat  -lglib-2.0 -ldl -shared
 libplatformconfig_la_LDFLAGS += -version-info 0
 
