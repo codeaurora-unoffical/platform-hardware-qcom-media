@@ -11623,6 +11623,47 @@ void omx_vdec::set_colorspace_in_handle(ColorSpace_t color_space, unsigned int b
     }
 }
 
+#ifdef USE_GBM
+void omx_vdec::set_colorspace_in_bo(ColorSpace_t color_space, unsigned int buf_index) {
+    if (buf_index < drv_ctx.op_buf.actualcount &&
+            buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS &&
+            drv_ctx.op_buf_gbm_info[buf_index].bo_fd) {
+        int ret;
+        uint32_t gmb_color_space;
+
+        switch (color_space) {
+            case ITU_R_601:
+                gmb_color_space = GBM_METADATA_COLOR_SPACE_ITU_R_601;
+                break;
+            case ITU_R_601_FR:
+                gmb_color_space = GBM_METADATA_COLOR_SPACE_ITU_R_601_FR;
+                break;
+            case ITU_R_709:
+                gmb_color_space = GBM_METADATA_COLOR_SPACE_ITU_R_709;
+                break;
+            case ITU_R_2020:
+                gmb_color_space = GBM_METADATA_COLOR_SPACE_ITU_R_2020;
+                break;
+            case ITU_R_2020_FR:
+                gmb_color_space = GBM_METADATA_COLOR_SPACE_ITU_R_2020_FR;
+                break;
+            default:
+                gmb_color_space = GBM_METADATA_COLOR_SPACE_ITU_R_601;
+                break;
+        }
+        DEBUG_PRINT_LOW("set gbm color space for bo  %d %d",gmb_color_space,
+            drv_ctx.op_buf_gbm_info[buf_index].bo_fd);
+        ret = gbm_perform(GBM_PERFORM_SET_METADATA, drv_ctx.op_buf_gbm_info[buf_index].bo,
+                  GBM_METADATA_SET_COLOR_SPACE, (void *)&gmb_color_space);
+        if (ret == GBM_ERROR_NONE)
+           DEBUG_PRINT_LOW(" GBM_METADATA_SET_COLOR_SPACE Success");
+        else
+           DEBUG_PRINT_ERROR(" GBM_METADATA_SET_COLOR_SPACE Failed");
+    }
+
+}
+#endif
+
 void omx_vdec::print_debug_hdr_color_info(HDRStaticInfo *hdr_info, const char *prefix)
 {
     if (!hdr_info->mID) {
@@ -11751,6 +11792,25 @@ void omx_vdec::set_colormetadata_in_handle(ColorMetaData *color_mdata, unsigned 
         setMetaData(private_handle, COLOR_METADATA, (void*)color_mdata);
     }
 }
+
+#ifdef USE_GBM
+void omx_vdec::set_colormetadata_in_bo(ColorMetaData *color_mdata, unsigned int buf_index)
+{
+    if (buf_index < drv_ctx.op_buf.actualcount &&
+        buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS &&
+        drv_ctx.op_buf_gbm_info[buf_index].bo_fd) {
+        int ret;
+        DEBUG_PRINT_LOW("set color meta for bo  %p %d",color_mdata,
+            drv_ctx.op_buf_gbm_info[buf_index].bo_fd);
+        ret = gbm_perform(GBM_PERFORM_SET_METADATA, drv_ctx.op_buf_gbm_info[buf_index].bo,
+                  GBM_METADATA_SET_COLOR_METADATA, (void *)color_mdata);
+        if (ret == GBM_ERROR_NONE)
+           DEBUG_PRINT_LOW(" GBM_METADATA_SET_COLOR_META Success");
+        else
+           DEBUG_PRINT_ERROR(" GBM_METADATA_SET_COLOR_META Failed");
+    }
+}
+#endif
 
 void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
 {
@@ -12112,6 +12172,18 @@ void omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                 set_colorspace_in_handle(color_space, buf_index);
             }
         }
+#ifdef USE_GBM
+        else {
+            if (set_disp_color_aspects_only) {
+                print_debug_hdr_color_info_mdata(&m_color_mdata);
+                set_colormetadata_in_bo(&m_color_mdata, buf_index);
+            } else {
+                DEBUG_PRINT_HIGH("setMetaData for Color Space = 0x%x (601=%u FR=%u 709=%u)", color_space, ITU_R_601, ITU_R_601_FR, ITU_R_709);
+                set_colorspace_in_bo(color_space, buf_index);
+            }
+        }
+#endif
+
 
     }
 unrecognized_extradata:
