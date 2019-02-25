@@ -19,6 +19,12 @@ AM_CPPFLAGS += -UINPUT_BUFFER_LOG
 AM_CPPFLAGS += -UOUTPUT_BUFFER_LOG
 AM_CPPFLAGS += -Werror
 AM_CPPFLAGS += -D_ANDROID_ICS_
+
+if TARGET_HYPERVISOR
+AM_CPPFLAGS += -DHYPERVISOR
+AM_CPPFLAGS += -I$(top_srcdir)/hypv-intercept/
+endif
+
 AM_CPPFLAGS += -DUSE_ION
 AM_CPPFLAGS += -Wno-enum-compare
 #AM_CPPFLAGS += "-include stdint.h"
@@ -59,6 +65,10 @@ if TARGET_USES_LIBGBM
 AM_CPPFLAGS += -D__LIBGBM__
 endif
 
+if TARGETS_THAT_SUPPORT_UBWC
+AM_CPPFLAGS += -D_UBWC_
+endif
+
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/venc/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/libc2dcolorconvert/
@@ -85,3 +95,8 @@ libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -l
 
 libOmxVenc_la_LDFLAGS += -L$(top_builddir)/libplatformconfig
 libOmxVenc_la_LDFLAGS += -lplatformconfig
+
+if TARGET_HYPERVISOR
+libOmxVenc_la_LDFLAGS += -L$(top_builddir)/hypv-intercept
+libOmxVenc_la_LDFLAGS += -lhypv_intercept
+endif
