@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2018, Linux Foundation. All rights reserved.
+Copyright (c) 2010-2019, Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -4234,8 +4234,8 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
 #ifdef __LIBGBM__
             // if input buffer dimensions is different from what is configured,
             // reject the buffer
-            if (ALIGN((int)m_sInPortDef.format.video.nFrameWidth,32) != ALIGN(handle->aligned_width,32) ||
-                    ALIGN((int)m_sInPortDef.format.video.nFrameHeight,32) != ALIGN(handle->aligned_height,32)) {
+            if (ALIGN((int)m_sInPortDef.format.video.nFrameWidth,32) != ALIGN(handle->width,32) ||
+                    ALIGN((int)m_sInPortDef.format.video.nFrameHeight,32) != ALIGN(handle->height,32)) {
                 ALOGE("GBM buf size(%dx%d) does not match configured size(%ux%u)",
                         handle->aligned_width, handle->aligned_height,
                         m_sInPortDef.format.video.nFrameWidth, m_sInPortDef.format.video.nFrameHeight);
@@ -5111,6 +5111,9 @@ bool omx_video::alloc_map_ion_memory(int size, venc_ion *ion_info, int flag)
                 (unsigned int)ion_info->alloc_data.len,
                 ion_info->alloc_data.flags);
     }
+#ifdef HYPERVISOR
+    ion_info->alloc_data.flags &= (~ION_FLAG_CACHED);
+#endif
 
     rc = ion_alloc_fd(ion_info->dev_fd, ion_info->alloc_data.len, 0,
                       ion_info->alloc_data.heap_id_mask,

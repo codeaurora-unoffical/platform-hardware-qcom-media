@@ -52,6 +52,9 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
+#ifdef HYPERVISOR
+#include "hypv_intercept.h"
+#endif
 #include <media/hardware/HardwareAPI.h>
 #include <sys/eventfd.h>
 #include "PlatformConfig.h"
@@ -150,6 +153,10 @@ extern "C" {
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 
 using namespace android;
+
+#ifdef HYPERVISOR
+#define ioctl(x, y, z) hypv_ioctl(x, y, z)
+#endif
 
 static OMX_U32 maxSmoothStreamingWidth = 1920;
 static OMX_U32 maxSmoothStreamingHeight = 1088;
@@ -1033,7 +1040,11 @@ omx_vdec::~omx_vdec()
 
     unsubscribe_to_events(drv_ctx.video_driver_fd);
     close(m_poll_efd);
+#ifdef HYPERVISOR
+    hypv_close(drv_ctx.video_driver_fd);
+#else
     close(drv_ctx.video_driver_fd);
+#endif
     pthread_mutex_destroy(&m_lock);
     pthread_mutex_destroy(&c_lock);
     pthread_mutex_destroy(&buf_lock);
@@ -2324,7 +2335,14 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         role = (OMX_STRING)"OMX.qcom.video.decoder.vp9";
     }
 
+#ifdef HYPERVISOR
+    hvfe_callback_t hvfe_cb;
+    hvfe_cb.handler = async_message_process;
+    hvfe_cb.context = (void *)this;
+    drv_ctx.video_driver_fd = hypv_open(device_name, O_RDWR, &hvfe_cb);
+#else
     drv_ctx.video_driver_fd = open(device_name, O_RDWR);
+#endif
 
     DEBUG_PRINT_INFO("component_init: %s : fd=%d", role, drv_ctx.video_driver_fd);
 
@@ -2341,6 +2359,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         return OMX_ErrorInsufficientResources;
     }
     ret = subscribe_to_events(drv_ctx.video_driver_fd);
+#ifndef HYPERVISOR
     if (!ret) {
         async_thread_created = true;
         ret = pthread_create(&async_thread_id,0,async_message_thread,this);
@@ -2350,6 +2369,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         async_thread_created = false;
         return OMX_ErrorInsufficientResources;
     }
+#endif
 
 #ifdef OUTPUT_EXTRADATA_LOG
     outputExtradataFile = fopen (output_extradata_filename, "ab");
@@ -4483,15 +4503,15 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                     }
                                     enum vdec_output_format op_format;
                                     if (portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
-                                                     QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m ||
-                                        portFmt->eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar) {
+                                                     QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m) {
                                         op_format = (enum vdec_output_format)VDEC_YUV_FORMAT_NV12;
                                         fmt.fmt.pix_mp.pixelformat = capture_capability = V4L2_PIX_FMT_NV12;
                                         //check if the required color format is a supported flexible format
                                         is_flexible_format = check_supported_flexible_formats(portFmt->eColorFormat);
                                     } else if (portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
                                                    QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed ||
-                                               portFmt->eColorFormat == OMX_COLOR_FormatYUV420Planar) {
+                                               portFmt->eColorFormat == OMX_COLOR_FormatYUV420Planar ||
+                                        portFmt->eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar) {
                                         op_format = (enum vdec_output_format)VDEC_YUV_FORMAT_NV12_UBWC;
                                         fmt.fmt.pix_mp.pixelformat = capture_capability = V4L2_PIX_FMT_NV12_UBWC;
                                         //check if the required color format is a supported flexible format
@@ -9826,6 +9846,9 @@ bool omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size, vdec_ion *ion_info, int
         return false;
     }
 
+#ifdef HYPERVISOR
+    flag = 0;
+#endif
     ion_info->alloc_data.flags = flag;
     ion_info->alloc_data.len = buffer_size;
 
@@ -12302,14 +12325,14 @@ void omx_vdec::allocate_color_convert_buf::enable_color_conversion(bool enable) 
     }
 
     if (!omx->in_reconfig)
-        enabled = enable;
+        c2d_enabled = enable;
 
     omx->c2d_enable_pending = enable;
 }
 
 omx_vdec::allocate_color_convert_buf::allocate_color_convert_buf()
 {
-    enabled = false;
+    c2d_enabled = false;
     client_buffers_disabled = false;
     omx = NULL;
     init_members();
@@ -12371,7 +12394,7 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
         DEBUG_PRINT_ERROR("Invalid client in color convert");
         return false;
     }
-    if (!enabled) {
+    if (!is_color_conversion_enabled()) {
         DEBUG_PRINT_HIGH("No color conversion required");
         return true;
     }
@@ -12475,7 +12498,8 @@ bool omx_vdec::allocate_color_convert_buf::set_color_format(
         return false;
     }
     pthread_mutex_lock(&omx->c_lock);
-    status = get_color_format (drv_color_format);
+    enable_color_conversion(false);
+    status = get_color_format(drv_color_format);
 
     drv_colorformat_c2d_enable = (drv_color_format != dest_color_format) &&
         (drv_color_format != (OMX_COLOR_FORMATTYPE)
@@ -12512,6 +12536,8 @@ bool omx_vdec::allocate_color_convert_buf::set_color_format(
             enable_color_conversion(false);
         }
     } else {
+        DEBUG_PRINT_ERROR("Disabling C2D src_fmt = %d and dest_fmt = %d", drv_color_format,
+                    dest_color_format);
         enable_color_conversion(false);
     }
     pthread_mutex_unlock(&omx->c_lock);
@@ -12589,7 +12615,7 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
 {
     bool status = true;
     pthread_mutex_lock(&omx->c_lock);
-    if (!enabled)
+    if (!is_color_conversion_enabled())
         buffer_size = omx->drv_ctx.op_buf.buffer_size;
     else {
         buffer_size = c2dcc.getBuffSize(C2D_OUTPUT);
@@ -12600,7 +12626,7 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
 
 OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::set_buffer_req(
         OMX_U32 buffer_size, OMX_U32 actual_count) {
-    OMX_U32 expectedSize = enabled ? buffer_size_req : omx->drv_ctx.op_buf.buffer_size;
+    OMX_U32 expectedSize = is_color_conversion_enabled() ? buffer_size_req : omx->drv_ctx.op_buf.buffer_size;
 
     if (buffer_size < expectedSize) {
         DEBUG_PRINT_ERROR("OP Requirements: Client size(%u) insufficient v/s requested(%u)",
@@ -12613,7 +12639,7 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::set_buffer_req(
         return OMX_ErrorBadParameter;
     }
 
-    if (enabled) {
+    if (is_color_conversion_enabled()) {
         // disallow changing buffer size/count while we have active allocated buffers
         if (allocated_count > 0) {
             DEBUG_PRINT_ERROR("Cannot change C2D buffer size from %u to %u with %d active allocations",
@@ -12643,7 +12669,7 @@ bool omx_vdec::is_component_secure()
 bool omx_vdec::allocate_color_convert_buf::get_color_format(OMX_COLOR_FORMATTYPE &dest_color_format)
 {
     bool status = true;
-    if (!enabled) {
+    if (!is_color_conversion_enabled()) {
         for (auto& x: mMapOutput2DriverColorFormat) {
             DecColorMapping::const_iterator
                 found = mMapOutput2DriverColorFormat.find(omx->drv_ctx.output_format);
