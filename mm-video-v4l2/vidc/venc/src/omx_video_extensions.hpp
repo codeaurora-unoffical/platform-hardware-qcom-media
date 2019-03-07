@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2017, 2019 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -144,6 +144,9 @@ void omx_video::init_vendor_extensions(VendorExtensionStore &store) {
     ADD_PARAM    ("color-primaries",   OMX_AndroidVendorValueInt32)
     ADD_PARAM    ("color-transfer",   OMX_AndroidVendorValueInt32)
     ADD_PARAM_END("color-matrixcoeffs",   OMX_AndroidVendorValueInt32)
+
+    ADD_EXTENSION("qti-ext-enc-bitrate-mode", OMX_IndexParamVideoBitrate, OMX_DirOutput)
+    ADD_PARAM_END("value", OMX_AndroidVendorValueInt32)
 }
 
 OMX_ERRORTYPE omx_video::get_vendor_extension_config(
@@ -296,6 +299,17 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
                     DEBUG_PRINT_LOW("extradata string size exceeds size %d",OMX_MAX_STRINGVALUE_SIZE );
                 }
             }
+            if ((OMX_BOOL)(m_sExtraData & VENC_EXTRADATA_FRAME_QP)){
+                if (exType[0]!=0) {
+                    strlcat(exType,"|", OMX_MAX_STRINGVALUE_SIZE);
+                }
+                const char *extraDataVideoEncoderFrameQp = getStringForExtradataType(OMX_ExtraDataEncoderFrameQp);
+                if(extraDataVideoEncoderFrameQp != NULL &&
+                        (strlcat(exType, extraDataVideoEncoderFrameQp,
+                                 OMX_MAX_STRINGVALUE_SIZE)) >= OMX_MAX_STRINGVALUE_SIZE) {
+                    DEBUG_PRINT_LOW("extradata string size exceeds size %d",OMX_MAX_STRINGVALUE_SIZE );
+                }
+            }
             setStatus &= vExt.setParamString(ext, "types", exType);
             DEBUG_PRINT_LOW("VendorExt: getparam: Extradata %s",exType);
             break;
@@ -360,6 +374,11 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
             setStatus &= vExt.setParamInt32(ext, "qp-p-max", m_sSessionQPRange.maxPQP);
             setStatus &= vExt.setParamInt32(ext, "qp-b-min", m_sSessionQPRange.minBQP);
             setStatus &= vExt.setParamInt32(ext, "qp-b-max", m_sSessionQPRange.maxBQP);
+            break;
+        }
+        case OMX_IndexParamVideoBitrate:
+        {
+            setStatus &= vExt.setParamInt32(ext, "value", m_sParamBitrate.eControlRate);
             break;
         }
         case OMX_QTIIndexConfigDescribeColorAspects:
@@ -749,7 +768,8 @@ OMX_ERRORTYPE omx_video::set_vendor_extension_config(
                     continue;
                 }
                 if (extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoLTRInfo ||
-                    extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderMBInfo) {
+                    extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderMBInfo ||
+                    extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataEncoderFrameQp) {
                     extraDataParam.nPortIndex = (OMX_U32)PORT_INDEX_OUT;
                 } else if (extraDataParam.nIndex == (OMX_INDEXTYPE)OMX_ExtraDataInputROIInfo) {
                     extraDataParam.nPortIndex = (OMX_U32)PORT_INDEX_IN;
@@ -916,6 +936,25 @@ OMX_ERRORTYPE omx_video::set_vendor_extension_config(
                 DEBUG_PRINT_ERROR("set_config : OMX_QTIIndexConfigDescribeColorAspects failed");
             } else {
                 disable_color_metadata = true;
+            }
+
+            break;
+        }
+        case OMX_IndexParamVideoBitrate:
+        {
+            OMX_VIDEO_PARAM_BITRATETYPE bitRateParam;
+            memcpy(&bitRateParam, &m_sParamBitrate, sizeof(OMX_VIDEO_PARAM_BITRATETYPE));
+            valueSet |= vExt.readParamInt32(ext, "value", (OMX_S32 *)&(bitRateParam.eControlRate));
+            if (!valueSet) {
+                break;
+            }
+            DEBUG_PRINT_HIGH("VENDOR-EXT: set_param: ControlRate = %d",
+                                bitRateParam.eControlRate);
+
+            err = set_parameter(
+                   NULL, (OMX_INDEXTYPE)OMX_IndexParamVideoBitrate, &bitRateParam);
+            if (err != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("set_param: OMX_IndexParamVideoBitrate failed !");
             }
 
             break;
