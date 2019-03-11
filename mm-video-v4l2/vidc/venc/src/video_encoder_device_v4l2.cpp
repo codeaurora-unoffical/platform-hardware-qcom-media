@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -1966,7 +1966,7 @@ bool venc_dev::venc_get_buf_req(OMX_U32 *min_buff_count,
         input_extradata_info.buffer_size =  ALIGN(extra_data_size, SZ_4K);
         input_extradata_info.count = MAX_V4L2_BUFS;
         input_extradata_info.size = input_extradata_info.buffer_size * input_extradata_info.count;
-        venc_handle->m_client_in_extradata_info.set_extradata_info(extra_data_size,m_sInput_buff_property.actualcount);
+        venc_handle->m_client_in_extradata_info.set_extradata_info(input_extradata_info.buffer_size, m_sInput_buff_property.actualcount);
     } else {
         unsigned int extra_idx = 0;
         memset(&fmt, 0, sizeof(fmt));
