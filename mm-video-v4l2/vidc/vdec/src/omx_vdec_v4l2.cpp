@@ -1124,7 +1124,8 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode()
                  capture_capability = V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS;
                  capability_changed = true;
             }
-        } else  if (m_progressive == MSM_VIDC_PIC_STRUCT_PROGRESSIVE) {
+        } else  if (m_progressive == MSM_VIDC_PIC_STRUCT_PROGRESSIVE &&
+                    eCompressionFormat != OMX_VIDEO_CodingMPEG2) {
             enable_split = true;
         } else {
             // Hardware does not support NV12+interlace clips.
@@ -12518,7 +12519,8 @@ bool omx_vdec::allocate_color_convert_buf::set_color_format(
         DEBUG_PRINT_LOW("Enabling C2D");
         if (dest_color_format == OMX_COLOR_FormatYUV420Planar ||
             dest_color_format == OMX_COLOR_FormatYUV420SemiPlanar ||
-            (omx->m_progressive != MSM_VIDC_PIC_STRUCT_PROGRESSIVE &&
+            ((omx->m_progressive != MSM_VIDC_PIC_STRUCT_PROGRESSIVE ||
+            omx->eCompressionFormat == OMX_VIDEO_CodingMPEG2) &&
             dest_color_format == (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m)) {
             ColorFormat = dest_color_format;
             if (dest_color_format == OMX_COLOR_FormatYUV420Planar) {
@@ -12709,22 +12711,26 @@ void omx_vdec::send_codec_config() {
             m_etb_q.pop_entry(&p1,&p2,&ident);
             if (ident == OMX_COMPONENT_GENERATE_ETB_ARBITRARY) {
                 if (((OMX_BUFFERHEADERTYPE *)p2)->nFlags & OMX_BUFFERFLAG_CODECCONFIG) {
+                    pthread_mutex_unlock(&m_lock);
                     if (empty_this_buffer_proxy_arbitrary((OMX_HANDLETYPE)p1,\
                                 (OMX_BUFFERHEADERTYPE *)p2) != OMX_ErrorNone) {
                         DEBUG_PRINT_ERROR("\n empty_this_buffer_proxy_arbitrary failure");
                         omx_report_error();
                     }
+                    pthread_mutex_lock(&m_lock);
                 } else {
                     DEBUG_PRINT_LOW("\n Flush Input Heap Buffer %p",(OMX_BUFFERHEADERTYPE *)p2);
                     m_cb.EmptyBufferDone(&m_cmp ,m_app_data, (OMX_BUFFERHEADERTYPE *)p2);
                 }
             } else if (ident == OMX_COMPONENT_GENERATE_ETB) {
                 if (((OMX_BUFFERHEADERTYPE *)p2)->nFlags & OMX_BUFFERFLAG_CODECCONFIG) {
+                    pthread_mutex_unlock(&m_lock);
                     if (empty_this_buffer_proxy((OMX_HANDLETYPE)p1,\
                                 (OMX_BUFFERHEADERTYPE *)p2) != OMX_ErrorNone) {
                         DEBUG_PRINT_ERROR("\n empty_this_buffer_proxy failure");
                         omx_report_error ();
                     }
+                    pthread_mutex_lock(&m_lock);
                 } else {
                     pending_input_buffers++;
                     VIDC_TRACE_INT_LOW("ETB-pending", pending_input_buffers);
