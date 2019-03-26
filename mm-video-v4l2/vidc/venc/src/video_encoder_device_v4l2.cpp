@@ -1856,7 +1856,7 @@ bool venc_dev::venc_get_buf_req(OMX_U32 *min_buff_count,
         ret = ioctl(m_nDriver_fd,VIDIOC_REQBUFS, &bufreq);
 
         if (ret) {
-            DEBUG_PRINT_ERROR("VIDIOC_REQBUFS OUTPUT_MPLANE Failed");
+            DEBUG_PRINT_ERROR("VIDIOC_REQBUFS OUTPUT_MPLANE ret %d", ret);
             return false;
         }
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
