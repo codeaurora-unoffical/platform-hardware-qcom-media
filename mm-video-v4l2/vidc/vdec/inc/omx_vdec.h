@@ -964,6 +964,9 @@ class omx_vdec: public qc_omx_component
                                      ColorMetaData* color_mdata,
                                      bool& set_color_aspects_only);
         void set_colorspace_in_handle(ColorSpace_t color, unsigned int buf_index);
+#ifdef USE_GBM
+        void set_colorspace_in_bo(ColorSpace_t color, unsigned int buf_index);
+#endif
         void print_debug_color_aspects(ColorAspects *aspects, const char *prefix);
         void print_debug_hdr_color_info(HDRStaticInfo *hdr_info, const char *prefix);
         void print_debug_hdr_color_info_mdata(ColorMetaData* color_mdata);
@@ -971,6 +974,9 @@ class omx_vdec: public qc_omx_component
         bool handle_mastering_display_color_info(void* data, MasteringDisplay* mastering_display_mdata);
         void print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra);
         void set_colormetadata_in_handle(ColorMetaData *color_mdata, unsigned int buf_index);
+#ifdef USE_GBM
+        void set_colormetadata_in_bo(ColorMetaData *color_mdata, unsigned int buf_index);
+#endif
         void prepare_color_aspects_metadata(OMX_U32 primaries, OMX_U32 range,
                                             OMX_U32 transfer, OMX_U32 matrix,
                                             ColorMetaData *color_mdata);
