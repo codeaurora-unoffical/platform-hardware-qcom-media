@@ -2181,7 +2181,18 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 }
                 break;
             }
-
+        case OMX_QTIIndexConfigFrameIPBQPRange:
+        {
+            VALIDATE_OMX_PARAM_DATA(configData, OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE);
+            OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE* pParam =
+                (OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE*) configData;
+            if (!handle->venc_set_config(pParam, (OMX_INDEXTYPE)OMX_QTIIndexConfigFrameIPBQPRange)) {
+                DEBUG_PRINT_ERROR("ERROR: Setting OMX_QTIIndexConfigFrameIPBQPRange failed");
+                return OMX_ErrorUnsupportedSetting;
+            }
+            memcpy(&m_sFrameQPRange, pParam, sizeof(m_sFrameQPRange));
+            break;
+        }
         default:
             DEBUG_PRINT_ERROR("ERROR: unsupported index %d", (int) configIndex);
             break;

@@ -2866,6 +2866,20 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
 
                 break;
             }
+        case OMX_QTIIndexConfigFrameIPBQPRange:
+            {
+                OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE *session_qp_range =
+                    (OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE *)configData;
+                DEBUG_PRINT_LOW("venc_set_config:OMX_QTIIndexConfigFrameIPBQPRange");
+                if(session_qp_range->nPortIndex == (OMX_U32)PORT_INDEX_OUT) {
+                    if ( venc_set_frame_qp_range (session_qp_range) == false) {
+                        DEBUG_PRINT_ERROR("ERROR: Setting QP range failed");
+                        return false;
+                    }
+                }
+
+                break;
+            }
         case OMX_IndexConfigVideoFramerate:
             {
                 OMX_CONFIG_FRAMERATETYPE *frame_rate = (OMX_CONFIG_FRAMERATETYPE *)
@@ -4997,6 +5011,51 @@ bool venc_dev::venc_set_session_qp_range(OMX_QCOM_VIDEO_PARAM_IPB_QPRANGETYPE* q
     struct v4l2_ext_controls controls;
 
     ctrl[0].id = V4L2_CID_MPEG_VIDC_VIDEO_LAYER_ID;
+    ctrl[0].value = MSM_VIDC_ALL_LAYER_ID;
+
+    ctrl[1].id = V4L2_CID_MPEG_VIDC_VIDEO_I_FRAME_QP_MIN;
+    ctrl[1].value = qp_range->minIQP;
+
+    ctrl[2].id = V4L2_CID_MPEG_VIDC_VIDEO_I_FRAME_QP_MAX;
+    ctrl[2].value = qp_range->maxIQP;
+
+    ctrl[3].id = V4L2_CID_MPEG_VIDC_VIDEO_P_FRAME_QP_MIN;
+    ctrl[3].value = qp_range->minPQP;
+
+    ctrl[4].id = V4L2_CID_MPEG_VIDC_VIDEO_P_FRAME_QP_MAX;
+    ctrl[4].value = qp_range->maxPQP;
+
+    ctrl[5].id = V4L2_CID_MPEG_VIDC_VIDEO_B_FRAME_QP_MIN;
+    ctrl[5].value = qp_range->minBQP;
+
+    ctrl[6].id = V4L2_CID_MPEG_VIDC_VIDEO_B_FRAME_QP_MAX;
+    ctrl[6].value = qp_range->maxBQP;
+
+    controls.count = 7;
+    controls.ctrl_class = V4L2_CTRL_CLASS_MPEG;
+    controls.controls = ctrl;
+
+    if(ioctl(m_nDriver_fd, VIDIOC_S_EXT_CTRLS, &controls)) {
+        DEBUG_PRINT_ERROR("Failed to set QP range");
+            return false;
+    }
+
+    session_ipb_qp_values.min_i_qp = qp_range->minIQP;
+    session_ipb_qp_values.max_i_qp = qp_range->maxIQP;
+    session_ipb_qp_values.min_p_qp = qp_range->minPQP;
+    session_ipb_qp_values.max_p_qp = qp_range->maxPQP;
+    session_ipb_qp_values.min_b_qp = qp_range->minBQP;
+    session_ipb_qp_values.max_b_qp = qp_range->maxBQP;
+    return true;
+}
+
+bool venc_dev::venc_set_frame_qp_range(OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE* qp_range)
+{
+    int rc;
+    struct v4l2_ext_control ctrl[7];
+    struct v4l2_ext_controls controls;
+
+    ctrl[0].id = V4L2_CID_MPEG_VIDC_VIDEO_FRAME_QP;
     ctrl[0].value = MSM_VIDC_ALL_LAYER_ID;
 
     ctrl[1].id = V4L2_CID_MPEG_VIDC_VIDEO_I_FRAME_QP_MIN;
