@@ -3045,10 +3045,16 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
             if(!secure_session) {
                 munmap (m_pInput_pmem[index].buffer,m_pInput_pmem[index].size);
             } else {
-                free(m_pInput_pmem[index].buffer);
+                if (allocate_native_handle) {
+                    native_handle_t *handle = (native_handle_t *)m_pInput_pmem[index].buffer;
+                    native_handle_close(handle);
+                    native_handle_delete(handle);
+                } else {
+                    free(m_pInput_pmem[index].buffer);
+                }
             }
             m_pInput_pmem[index].buffer = NULL;
-            close (m_pInput_pmem[index].fd);
+            close(m_pInput_pmem[index].fd);
 #ifdef USE_ION
             free_ion_memory(&m_pInput_ion[index]);
 #endif
@@ -3325,10 +3331,23 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
         } else {
             //This should only be used for passing reference to source type and
             //secure handle fd struct native_handle_t*
-            m_pInput_pmem[i].buffer = malloc(sizeof(OMX_U32) + sizeof(native_handle_t*));
-            if (m_pInput_pmem[i].buffer == NULL) {
-                DEBUG_PRINT_ERROR("%s: failed to allocate native-handle", __func__);
-                return OMX_ErrorInsufficientResources;
+            if (allocate_native_handle) {
+                native_handle_t *nh = native_handle_create(1 /*numFds*/, 3 /*numInts*/);
+                if (!nh) {
+                    DEBUG_PRINT_ERROR("Native handle create failed");
+                    return OMX_ErrorInsufficientResources;
+                }
+                nh->data[0] = m_pInput_pmem[i].fd;
+                nh->data[1] = 0;
+                nh->data[2] = 0;
+                nh->data[3] = ALIGN(m_sInPortDef.nBufferSize, 4096);
+                m_pInput_pmem[i].buffer = (OMX_U8 *)nh;
+            } else {
+                m_pInput_pmem[i].buffer = malloc(sizeof(OMX_U32) + sizeof(native_handle_t*));
+                if (m_pInput_pmem[i].buffer == NULL) {
+                    DEBUG_PRINT_ERROR("%s: failed to allocate native-handle", __func__);
+                    return OMX_ErrorInsufficientResources;
+                }
             }
             (*bufferHdr)->nAllocLen = sizeof(OMX_U32) + sizeof(native_handle_t*);
         }
