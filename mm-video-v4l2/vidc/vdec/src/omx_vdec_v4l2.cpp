@@ -7706,6 +7706,8 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
             post_event(OMX_CommandPortDisable,
                     OMX_CORE_INPUT_PORT_INDEX,
                     OMX_COMPONENT_GENERATE_EVENT);
+            if (streaming[OUTPUT_PORT])
+                    stream_off(OMX_CORE_INPUT_PORT_INDEX);
         }
     } else if (port == OMX_CORE_OUTPUT_PORT_INDEX) {
         // check if the buffer is valid
