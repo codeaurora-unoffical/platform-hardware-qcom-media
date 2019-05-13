@@ -156,6 +156,7 @@ using namespace android;
 
 #ifdef HYPERVISOR
 #define ioctl(x, y, z) hypv_ioctl(x, y, z)
+#define poll(x, y, z)  hypv_poll(x, y, z)
 #endif
 
 static OMX_U32 maxSmoothStreamingWidth = 1920;
@@ -2337,10 +2338,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
     }
 
 #ifdef HYPERVISOR
-    hvfe_callback_t hvfe_cb;
-    hvfe_cb.handler = async_message_process;
-    hvfe_cb.context = (void *)this;
-    drv_ctx.video_driver_fd = hypv_open(device_name, O_RDWR, &hvfe_cb);
+    drv_ctx.video_driver_fd = hypv_open(device_name, O_RDWR);
 #else
     drv_ctx.video_driver_fd = open(device_name, O_RDWR);
 #endif
@@ -2360,7 +2358,6 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         return OMX_ErrorInsufficientResources;
     }
     ret = subscribe_to_events(drv_ctx.video_driver_fd);
-#ifndef HYPERVISOR
     if (!ret) {
         async_thread_created = true;
         ret = pthread_create(&async_thread_id,0,async_message_thread,this);
@@ -2370,7 +2367,6 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         async_thread_created = false;
         return OMX_ErrorInsufficientResources;
     }
-#endif
 
 #ifdef OUTPUT_EXTRADATA_LOG
     outputExtradataFile = fopen (output_extradata_filename, "ab");
@@ -6947,7 +6943,10 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             // of the YUVs. Output buffers are cache-invalidated in driver.
             // If color-conversion is involved, Only the C2D output buffers are cached, no
             // need to cache the decoder's output buffers
-            int cache_flag = client_buffers.is_color_conversion_enabled() ? 0 : ION_FLAG_CACHED;
+            int cache_flag = ION_FLAG_CACHED;
+            if (intermediate == true && client_buffers.is_color_conversion_enabled()) {
+                cache_flag = 0;
+            }
             bool status = alloc_map_ion_memory(drv_ctx.op_buf.buffer_size,
                                                &(*omx_op_buf_ion_info)[i],
                     (secure_mode && !secure_scaling_to_non_secure_opb) ?
@@ -10284,12 +10283,16 @@ OMX_ERRORTYPE omx_vdec::update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn)
     portDefn->eDomain    = OMX_PortDomainVideo;
     memset(&fmt, 0x0, sizeof(struct v4l2_format));
     if (0 == portDefn->nPortIndex) {
+        int ret = 0;
         if (secure_mode) {
-            eRet = get_buffer_req(&drv_ctx.ip_buf);
-            if (eRet) {
-                DEBUG_PRINT_ERROR("%s:get_buffer_req(ip_buf) failed", __func__);
-                return eRet;
+            fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+            fmt.fmt.pix_mp.pixelformat = output_capability;
+            ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
+            if (ret) {
+                DEBUG_PRINT_ERROR("Get Resolution failed");
+                return OMX_ErrorHardware;
             }
+            drv_ctx.ip_buf.buffer_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
         }
         portDefn->eDir =  OMX_DirInput;
         portDefn->nBufferCountActual = drv_ctx.ip_buf.actualcount;
