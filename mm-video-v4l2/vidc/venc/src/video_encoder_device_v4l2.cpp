@@ -3788,7 +3788,7 @@ bool venc_dev::venc_use_buf(void *buf_addr, unsigned port,unsigned index)
     int extradata_index = 0;
 
     pmem_tmp = (struct pmem *)buf_addr;
-    DEBUG_PRINT_LOW("venc_use_buf:: pmem_tmp = %p", pmem_tmp);
+    DEBUG_PRINT_LOW("venc_use_buf:: pmem_tmp = %p, pmem_tmp->buffer = %p", pmem_tmp, (void *)pmem_tmp->buffer);
 
     if (port == PORT_INDEX_IN) {
         extra_idx = EXTRADATA_IDX(num_input_planes);
@@ -4065,7 +4065,12 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                 //empty EOS buffer
                 if (!bufhdr->nFilledLen && (bufhdr->nFlags & OMX_BUFFERFLAG_EOS)) {
                     plane[0].data_offset = bufhdr->nOffset;
+#ifdef _HW_RGBA
+                    plane[0].length = (m_sVenc_cfg.inputformat == V4L2_PIX_FMT_RGB32) ?
+                        VENUS_BUFFER_SIZE(COLOR_FMT_RGBA8888, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height) : bufhdr->nAllocLen;
+#else
                     plane[0].length = bufhdr->nAllocLen;
+#endif
                     plane[0].bytesused = bufhdr->nFilledLen;
                     DEBUG_PRINT_LOW("venc_empty_buf: empty EOS buffer");
                 } else {
@@ -4365,6 +4370,10 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         }
     }
 
+    DEBUG_PRINT_LOW("venc_empty_buf: index = %d, fd = %d, num_input_planes %d "
+                ": filled %d of %d format 0x%lx, userptr %p, data_offset %d",
+                index, fd, num_input_planes, plane[0].bytesused, plane[0].length,
+                m_sVenc_cfg.inputformat, (void *)plane[0].m.userptr, plane[0].data_offset);
     buf.index = index;
     buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
     buf.memory = V4L2_MEMORY_USERPTR;
@@ -6615,7 +6624,7 @@ bool venc_dev::venc_set_vpe_rotation(OMX_S32 rotation_angle)
         DEBUG_PRINT_LOW("Rotation (%u) Flipping wxh to %lux%lu",
                 rotation_angle, m_sVenc_cfg.dvs_width, m_sVenc_cfg.dvs_height);
     }
- 
+
     fmt.fmt.pix_mp.height = m_sVenc_cfg.dvs_height;
     fmt.fmt.pix_mp.width = m_sVenc_cfg.dvs_width;
     fmt.fmt.pix_mp.pixelformat = m_sVenc_cfg.codectype;
