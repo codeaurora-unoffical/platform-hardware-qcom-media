@@ -6943,7 +6943,10 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             // of the YUVs. Output buffers are cache-invalidated in driver.
             // If color-conversion is involved, Only the C2D output buffers are cached, no
             // need to cache the decoder's output buffers
-            int cache_flag = client_buffers.is_color_conversion_enabled() ? 0 : ION_FLAG_CACHED;
+            int cache_flag = ION_FLAG_CACHED;
+            if (intermediate == true && client_buffers.is_color_conversion_enabled()) {
+                cache_flag = 0;
+            }
             bool status = alloc_map_ion_memory(drv_ctx.op_buf.buffer_size,
                                                &(*omx_op_buf_ion_info)[i],
                     (secure_mode && !secure_scaling_to_non_secure_opb) ?
@@ -11615,11 +11618,13 @@ OMX_ERRORTYPE omx_vdec::enable_extradata(OMX_U64 requested_extradata,
                 DEBUG_PRINT_HIGH("Failed to set QP extradata");
             }
         }
-        if (!secure_mode && (requested_extradata & OMX_EXTNUSER_EXTRADATA)) {
-            control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
-            control.value = V4L2_MPEG_VIDC_EXTRADATA_STREAM_USERDATA;
-            if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control)) {
-                DEBUG_PRINT_HIGH("Failed to set stream userdata extradata");
+        if (requested_extradata & OMX_EXTNUSER_EXTRADATA) {
+            if (!secure_mode || (secure_mode && output_capability == V4L2_PIX_FMT_HEVC)) {
+                control.id = V4L2_CID_MPEG_VIDC_VIDEO_EXTRADATA;
+                control.value = V4L2_MPEG_VIDC_EXTRADATA_STREAM_USERDATA;
+                if (ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control)) {
+                    DEBUG_PRINT_HIGH("Failed to set stream userdata extradata");
+                }
             }
         }
 #if NEED_TO_REVISIT
