@@ -74,8 +74,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define strlcpy g_strlcpy
 #endif
 
+#ifdef __LIBGBM__
+#include <gbm.h>
+#include <gbm_priv.h>
+#else
 #include <qdMetaData.h>
 #include <gralloc_priv.h>
+#endif
 
 #ifdef ANDROID_JELLYBEAN_MR2
 #include "QComOMXMetadata.h"
@@ -3754,10 +3759,19 @@ OMX_ERRORTYPE  omx_vdec::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                         if (nativeBuffersUsage->nPortIndex == OMX_CORE_OUTPUT_PORT_INDEX) {
 
                                             if (secure_mode && !secure_scaling_to_non_secure_opb) {
+#ifndef __LIBGBM__
                                                 nativeBuffersUsage->nUsage = (GRALLOC_USAGE_PRIVATE_MM_HEAP | GRALLOC_USAGE_PROTECTED |
                                                         GRALLOC_USAGE_PRIVATE_UNCACHED);
+#else
+                                                nativeBuffersUsage->nUsage = (GBM_BO_ALLOC_SECURE_HEAP_QTI | GBM_BO_USAGE_PROTECTED_QTI |
+                                                        GBM_BO_USAGE_UNCACHED_QTI);
+#endif
                                             } else {
+#ifndef __LIBGBM__
                                                 nativeBuffersUsage->nUsage = GRALLOC_USAGE_PRIVATE_UNCACHED;
+#else
+                                                nativeBuffersUsage->nUsage = GBM_BO_USAGE_UNCACHED_QTI;
+#endif
                                             }
                                         } else {
                                             DEBUG_PRINT_HIGH("get_parameter: OMX_GoogleAndroidIndexGetAndroidNativeBufferUsage failed!");
@@ -3960,14 +3974,23 @@ OMX_ERRORTYPE omx_vdec::use_android_native_buffer(OMX_IN OMX_HANDLETYPE hComp, O
         return OMX_ErrorBadParameter;
     m_use_android_native_buffers = OMX_TRUE;
     sp<android_native_buffer_t> nBuf = params->nativeBuffer;
+#ifdef __LIBGBM__
+    struct gbm_bo *handle = (struct gbm_bo*)nBuf->handle;
+#else
     private_handle_t *handle = (private_handle_t *)nBuf->handle;
+#endif
     if (OMX_CORE_OUTPUT_PORT_INDEX == params->nPortIndex) { //android native buffers can be used only on Output port
         OMX_U8 *buffer = NULL;
         if (!secure_mode) {
+#ifdef __LIBGBM__
+            int fd = handle->ion_fd;
+#else
+            int fd = handle->fd;
+#endif
             buffer = (OMX_U8*)mmap(0, handle->size,
-                    PROT_READ|PROT_WRITE, MAP_SHARED, handle->fd, 0);
+                    PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
             if (buffer == MAP_FAILED) {
-                DEBUG_PRINT_ERROR("Failed to mmap pmem with fd = %d, size = %d", handle->fd, handle->size);
+                DEBUG_PRINT_ERROR("Failed to mmap pmem with fd = %d, size = %d", fd, handle->size);
                 return OMX_ErrorInsufficientResources;
             }
         }
@@ -5578,7 +5601,11 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
     OMX_BUFFERHEADERTYPE       *bufHdr= NULL; // buffer header
     unsigned                         i= 0; // Temporary counter
     OMX_PTR privateAppData = NULL;
+#ifdef __LIBGBM__
+    struct gbm_bo *handle = NULL;
+#else
     private_handle_t *handle = NULL;
+#endif
     OMX_U8 *buff = buffer;
     (void) hComp;
     (void) port;
@@ -5637,10 +5664,18 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
             if (m_use_android_native_buffers) {
                 UseAndroidNativeBufferParams *params = (UseAndroidNativeBufferParams *)appData;
                 sp<android_native_buffer_t> nBuf = params->nativeBuffer;
+#ifdef __LIBGBM__
+                handle = (struct gbm_bo *)nBuf->handle;
+#else
                 handle = (private_handle_t *)nBuf->handle;
+#endif
                 privateAppData = params->pAppPrivate;
             } else {
+#ifdef __LIBGBM__
+                handle = (struct gbm_bo *)buff;
+#else
                 handle = (private_handle_t *)buff;
+#endif
                 privateAppData = appData;
             }
             if (!handle) {
@@ -5664,23 +5699,36 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
 
             if (!m_use_android_native_buffers) {
                 if (!secure_mode) {
+#ifdef __LIBGBM__
+                    int fd = handle->ion_fd;
+#else
+                    int fd = handle->fd;
+#endif
                     buff =  (OMX_U8*)mmap(0, handle->size,
-                            PROT_READ|PROT_WRITE, MAP_SHARED, handle->fd, 0);
+                            PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
                     if (buff == MAP_FAILED) {
-                        DEBUG_PRINT_ERROR("Failed to mmap pmem with fd = %d, size = %d", handle->fd, handle->size);
+                        DEBUG_PRINT_ERROR("Failed to mmap pmem with fd = %d, size = %d", fd, handle->size);
                         return OMX_ErrorInsufficientResources;
                     }
                 }
             }
 #if defined(_ANDROID_ICS_)
+#ifdef __LIBGBM__
+            native_buffer[i].gbmhandle = handle;
+#else
             native_buffer[i].nativehandle = handle;
             native_buffer[i].privatehandle = handle;
+#endif
 #endif
             if (!handle) {
                 DEBUG_PRINT_ERROR("Native Buffer handle is NULL");
                 return OMX_ErrorBadParameter;
             }
+#ifdef __LIBGBM__
+            drv_ctx.ptr_outputbuffer[i].pmem_fd = handle->ion_fd;
+#else
             drv_ctx.ptr_outputbuffer[i].pmem_fd = handle->fd;
+#endif
             drv_ctx.ptr_outputbuffer[i].offset = 0;
             drv_ctx.ptr_outputbuffer[i].bufferaddr = buff;
             drv_ctx.ptr_outputbuffer[i].buffer_len = drv_ctx.op_buf.buffer_size;
@@ -5797,7 +5845,11 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
 
         (*bufferHdr)->nAllocLen = drv_ctx.op_buf.buffer_size;
         if (m_enable_android_native_buffers) {
+#ifdef __LIBGBM__
+            DEBUG_PRINT_LOW("setting pBuffer to struct gbm_bo %p", handle);
+#else
             DEBUG_PRINT_LOW("setting pBuffer to private_handle_t %p", handle);
+#endif
             (*bufferHdr)->pBuffer = (OMX_U8 *)handle;
         } else {
             (*bufferHdr)->pBuffer = buff;
@@ -7227,7 +7279,11 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
 
     unsigned nPortIndex = 0;
     if (dynamic_buf_mode) {
+#ifdef __LIBGBM__
+        struct gbm_bo *handle = NULL;
+#else
         private_handle_t *handle = NULL;
+#endif
         struct VideoDecoderOutputMetaData *meta;
         unsigned int nPortIndex = 0;
 
@@ -7238,7 +7294,11 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
 
         //get the buffer type and fd info
         meta = (struct VideoDecoderOutputMetaData *)buffer->pBuffer;
+#ifdef __LIBGBM__
+        handle = (struct gbm_bo*)meta->pHandle;
+#else
         handle = (private_handle_t *)meta->pHandle;
+#endif
         DEBUG_PRINT_LOW("FTB: metabuf: %p buftype: %d bufhndl: %p ", meta, meta->eType, meta->pHandle);
 
         if (!handle) {
@@ -7249,12 +7309,20 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         nPortIndex = buffer-((OMX_BUFFERHEADERTYPE *)client_buffers.get_il_buf_hdr());
         if (nPortIndex < drv_ctx.op_buf.actualcount &&
             nPortIndex < MAX_NUM_INPUT_OUTPUT_BUFFERS) {
+#ifdef __LIBGBM__
+            drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd = handle->ion_fd;
+#else
             drv_ctx.ptr_outputbuffer[nPortIndex].pmem_fd = handle->fd;
+#endif
             drv_ctx.ptr_outputbuffer[nPortIndex].bufferaddr = (OMX_U8*) buffer;
 
+#ifdef __LIBGBM__
+            native_buffer[nPortIndex].gbmhandle = handle;
+#else
            //Store private handle from GraphicBuffer
             native_buffer[nPortIndex].privatehandle = handle;
             native_buffer[nPortIndex].nativehandle = handle;
+#endif
         } else {
             DEBUG_PRINT_ERROR("[FTB]Invalid native_buffer index: %d", nPortIndex);
             return OMX_ErrorBadParameter;
@@ -7266,7 +7334,11 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
         buffer->nFilledLen = 0;
         buffer->nAllocLen = handle->size;
 
+#ifdef __LIBGBM__
+        if (handle->usage_flags & GBM_BO_USAGE_HW_COMPOSER_QTI) {
+#else
         if (handle->flags & private_handle_t::PRIV_FLAGS_DISP_CONSUMER) {
+#endif
             m_is_display_session = true;
         } else {
             m_is_display_session = false;
@@ -8170,16 +8242,26 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
             }
             DEBUG_PRINT_LOW("frc set refresh_rate %f, frame %d", refresh_rate, proc_frms);
             OMX_U32 buf_index = buffer - m_out_mem_ptr;
+#ifdef __LIBGBM__
+            gbm_perform(GBM_PERFORM_SET_METADATA, (struct gbm_bo*)native_buffer[buf_index].gbmhandle,
+                        GBM_METADATA_SET_REFRESH_RATE, (void*)&refresh_rate);
+#else
             setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                          UPDATE_REFRESH_RATE, (void*)&refresh_rate);
+#endif
             m_fps_prev = refresh_rate;
         }
 
         if (buffer->nFilledLen && m_enable_android_native_buffers && m_out_mem_ptr) {
             OMX_U32 buf_index = buffer - m_out_mem_ptr;
             DEBUG_PRINT_LOW("stereo_output_mode = %d",stereo_output_mode);
+#ifdef __LIBGBM__
+            gbm_perform(GBM_PERFORM_SET_METADATA, (struct gbm_bo*)native_buffer[buf_index].gbmhandle,
+                        GBM_METADATA_SET_S3DFORMAT, (void*)&stereo_output_mode);
+#else
             setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                                S3D_FORMAT, (void*)&stereo_output_mode);
+#endif
         }
 
         if (il_buffer) {
@@ -8200,8 +8282,12 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
                 //Clear graphic buffer handles in dynamic mode
                 if (nPortIndex < drv_ctx.op_buf.actualcount &&
                     nPortIndex < MAX_NUM_INPUT_OUTPUT_BUFFERS) {
+#ifdef __LIBGBM__
+                    native_buffer[nPortIndex].gbmhandle = NULL;
+#else
                     native_buffer[nPortIndex].privatehandle = NULL;
                     native_buffer[nPortIndex].nativehandle = NULL;
+#endif
                 } else {
                     DEBUG_PRINT_ERROR("[FBD]Invalid native_buffer index: %d", nPortIndex);
                     return OMX_ErrorBadParameter;
@@ -9751,6 +9837,18 @@ bool omx_vdec::handle_mastering_display_color_info(void* data)
 
 void omx_vdec::set_colormetadata_in_handle(ColorMetaData *color_mdata, unsigned int buf_index)
 {
+#ifdef __LIBGBM__
+    struct gbm_bo *gbm_handle = NULL;
+    if (buf_index < drv_ctx.op_buf.actualcount &&
+        buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS &&
+        native_buffer[buf_index].gbmhandle) {
+        gbm_handle = native_buffer[buf_index].gbmhandle;
+    }
+    if (gbm_handle) {
+        gbm_perform(GBM_PERFORM_SET_METADATA, gbm_handle,
+                GBM_METADATA_SET_COLOR_METADATA, (void*)color_mdata);
+    }
+#else
     private_handle_t *private_handle = NULL;
     if (buf_index < drv_ctx.op_buf.actualcount &&
         buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS &&
@@ -9760,6 +9858,7 @@ void omx_vdec::set_colormetadata_in_handle(ColorMetaData *color_mdata, unsigned 
     if (private_handle) {
         setMetaData(private_handle, COLOR_METADATA, (void*)color_mdata);
     }
+#endif
 }
 
 void omx_vdec::convert_color_aspects_to_metadata(ColorAspects& aspects, ColorMetaData &color_mdata)
@@ -9990,8 +10089,13 @@ bool omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                         DEBUG_PRINT_LOW("setMetaData INTERLACED format:%d enable:%d",
                                         payload->format, enable);
 
+#ifdef __LIBGBM__
+                        gbm_perform(GBM_PERFORM_SET_METADATA, (struct gbm_bo*)native_buffer[buf_index].gbmhandle,
+                                GBM_METADATA_SET_INTERLACED, (void*)&enable);
+#else
                         setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                                PP_PARAM_INTERLACED, (void*)&enable);
+#endif
 
                     }
                     if (client_extradata & OMX_INTERLACE_EXTRADATA) {
@@ -10187,8 +10291,10 @@ bool omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                                       cr_stats_info->stats_tile_160, cr_stats_info->stats_tile_192,
                                       cr_stats_info->stats_tile_256);
                           }
+#ifndef __LIBGBM__
                           setMetaData((private_handle_t *)native_buffer[buf_index].privatehandle,
                               SET_UBWC_CR_STATS_INFO, (void*)stats);
+#endif
                     break;
                 case MSM_VIDC_EXTRADATA_STREAM_USERDATA:
                     if (client_extradata & OMX_EXTNUSER_EXTRADATA) {

@@ -48,7 +48,12 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <inttypes.h>
 #include <cstddef>
 #include <cutils/atomic.h>
+#ifdef __LIBGBM__
+#include <gbm.h>
+#include <gbm_priv.h>
+#else
 #include <qdMetaData.h>
+#endif
 #include <color_metadata.h>
 #define STRINGIFY_ENUMS
 #include "VideoAPI.h"
@@ -73,7 +78,9 @@ extern "C" {
 //#include <binder/MemoryHeapIon.h>
 //#else
 #endif
+#ifndef __LIBGBM__
 #include <ui/ANativeObjectBase.h>
+#endif
 #include <linux/videodev2.h>
 #define VALID_TS(ts)      ((ts < LLONG_MAX)? true : false)
 #include <poll.h>
@@ -89,7 +96,9 @@ extern "C" {
 #include <unistd.h>
 
 #if defined (_ANDROID_ICS_)
+#ifndef __LIBGBM__
 #include <gralloc_priv.h>
+#endif
 #endif
 
 #include <pthread.h>
@@ -246,6 +255,9 @@ extern "C" {
 #define VDEC_MSG_EVT_MAX_CLIENTS	(VDEC_MSG_BASE + 15)
 #define VDEC_MSG_EVT_HW_UNSUPPORTED	(VDEC_MSG_BASE + 16)
 
+#ifdef __LIBGBM__
+#define MAX_UBWC_STATS_LENGTH 32
+#endif
 
 //  Define next macro with required values to enable default extradata,
 //    VDEC_EXTRADATA_MB_ERROR_MAP
@@ -1008,8 +1020,12 @@ class omx_vdec: public qc_omx_component
 #endif
 #if defined (_ANDROID_ICS_)
         struct nativebuffer {
+#ifdef __LIBGBM__
+            struct gbm_bo *gbmhandle;
+#else
             native_handle_t *nativehandle;
             private_handle_t *privatehandle;
+#endif
             int inuse;
         };
         nativebuffer native_buffer[MAX_NUM_INPUT_OUTPUT_BUFFERS];
@@ -1445,4 +1461,42 @@ enum vidc_resposes_id {
     MSM_VIDC_DECODER_EVENT_CHANGE,
 };
 
+#ifdef __LIBGBM__
+enum UBWC_Version {
+    UBWC_UNUSED      = 0,
+    UBWC_1_0         = 0x1,
+    UBWC_2_0         = 0x2,
+    UBWC_MAX_VERSION = 0xFF,
+};
+
+struct UBWC_2_0_Stats {
+    uint32_t nCRStatsTile32;  /**< UBWC Stats info for  32 Byte Tile */
+    uint32_t nCRStatsTile64;  /**< UBWC Stats info for  64 Byte Tile */
+    uint32_t nCRStatsTile96;  /**< UBWC Stats info for  96 Byte Tile */
+    uint32_t nCRStatsTile128; /**< UBWC Stats info for 128 Byte Tile */
+    uint32_t nCRStatsTile160; /**< UBWC Stats info for 160 Byte Tile */
+    uint32_t nCRStatsTile192; /**< UBWC Stats info for 192 Byte Tile */
+    uint32_t nCRStatsTile256; /**< UBWC Stats info for 256 Byte Tile */
+};
+
+struct UBWCStats {
+    enum UBWC_Version version; /* Union depends on this version. */
+    uint8_t bDataValid;      /* If [non-zero], CR Stats data is valid.
+                               * Consumers may use stats data.
+                               * If [zero], CR Stats data is invalid.
+                               * Consumers *Shall* not use stats data */
+    union {
+        struct UBWC_2_0_Stats ubwc_stats;
+        uint32_t reserved[MAX_UBWC_STATS_LENGTH]; /* This is for future */
+    };
+};
+/* possible formats for 3D content*/
+enum {
+    HAL_NO_3D                      = 0x0,
+    HAL_3D_SIDE_BY_SIDE_L_R        = 0x1,
+    HAL_3D_SIDE_BY_SIDE_R_L        = 0x2,
+    HAL_3D_TOP_BOTTOM              = 0x4,
+    HAL_3D_IN_SIDE_BY_SIDE_L_R     = 0x10000, //unused legacy format
+};
+#endif
 #endif // __OMX_VDEC_H__

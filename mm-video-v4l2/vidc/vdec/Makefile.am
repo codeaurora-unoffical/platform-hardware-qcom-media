@@ -48,21 +48,27 @@ if MASTER_SIDE_CP_TARGET_LIST
 AM_CPPFLAGS += -DMASTER_SIDE_CP
 endif
 
+if TARGET_USES_LIBGBM
+AM_CPPFLAGS += -D__LIBGBM__
+endif
+
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/vdec/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/libc2dcolorconvert/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/src/common/
+AM_CPPFLAGS += -I$(top_srcdir)/libstagefrighthw/
+AM_CPPFLAGS += -I$(top_srcdir)/libplatformconfig/
 
-c_sources         := src/frameparser.cpp
-c_sources         += src/h264_utils.cpp
+c_sources         := $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_common.cpp
+c_sources         += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_vendor_extensions.cpp
+c_sources         += $(top_srcdir)/libc2dcolorconvert/C2DColorConverter.cpp
 c_sources         += src/ts_parser.cpp
-c_sources         += src/mp4_utils.cpp
-c_sources         += src/hevc_utils.cpp
 c_sources         += src/omx_vdec_v4l2.cpp
 
 lib_LTLIBRARIES = libOmxVdec.la
 libOmxVdec_la_SOURCES = $(c_sources)
-libOmxVdec_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
-libOmxVdec_la_CFLAGS += ../libc2d2colorconvert/libc2dcolorconvert.la
+libOmxVdec_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC $(GBM_CFLAGS)
+libOmxVdec_la_LIBADD = ../../../libplatformconfig/libplatformconfig.la
 libOmxVdec_la_LDFLAGS = -lglib-2.0 -shared -version-info 0
+libOmxVdec_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lbinder -lcutils -lbase -ldl $(GBM_LIBS)
