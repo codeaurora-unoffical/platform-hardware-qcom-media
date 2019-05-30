@@ -81,11 +81,6 @@ AC_ARG_ENABLE([target-uses-ion],
                 [Enable conditional compile for target target-uses-ion [default=no]]),
         [target_uses_ion="${enableval}"])
 
-AC_ARG_ENABLE([target-uses-gbm],
-        AC_HELP_STRING([--enable-target-uses-gbm],
-                [Enable conditional compile for target target-uses-gbm [default=no]]),
-        [target_uses_gbm="${enableval}"])
-
 AC_ARG_ENABLE([targets-that-use-flag-msm8226],
         AC_HELP_STRING([--enable-targets-that-use-flag-msm8226],
                 [Enable conditional compile for target targets_that_use_flag_msm8226 [default=no]]),
@@ -203,7 +198,6 @@ AM_CONDITIONAL(TARGETS_THAT_SUPPORT_PQ, [test "x$targets_that_support_pq" = "xye
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_ADSP_PQ, [test "x$targets_that_support_adsp_pq" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_VQZIP, [test "x$targets_that_support_vqzip" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_ION, [test "x$target_uses_ion" = "xyes"])
-AM_CONDITIONAL(TARGET_USES_GBM, [test "x$target_uses_gbm" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_USE_FLAG_MSM8226, [test "x$targets_that_use_flag_msm8226" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_MEDIA_EXTENSIONS, [test "x$target_uses_media_extensions" = "xyes"])
 AM_CONDITIONAL(MASTER_SIDE_CP_TARGET_LIST, [test "x$master_side_cp_target_list" = "xyes"])
@@ -220,6 +214,18 @@ if (test "x${with_glib}" = "xyes"); then
 
         AC_SUBST(GLIB_CFLAGS)
         AC_SUBST(GLIB_LIBS)
+fi
+
+if [ test ${STAGING_INCDIR} ]; then
+save_cross_compiling=$cross_compiling
+cross_compiling=no
+AC_CHECK_FILE(${STAGING_INCDIR}/gbm.h,
+  [AC_SUBST(GBM_CPPFLAG, -DUSE_GBM)
+   AC_SUBST(GBM_LDFLAG, -lgbm)
+  ],[])
+cross_compiling=$save_cross_compiling
+else
+  AC_MSG_RESULT([without sysroot, may cause check result not credible])
 fi
 
 AC_SUBST([CPPFLAGS])
