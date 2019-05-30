@@ -55,13 +55,11 @@ if TARGET_USES_ION
 AM_CPPFLAGS += -DUSE_ION
 endif
 
-if TARGET_USES_GBM
-AM_CPPFLAGS += -DUSE_GBM
-endif
-
 if MASTER_SIDE_CP_TARGET_LIST
 AM_CPPFLAGS += -DMASTER_SIDE_CP
 endif
+
+AM_CPPFLAGS += $(GBM_CPPFLAG)
 
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/vdec/inc/
@@ -88,9 +86,7 @@ libOmxVdec_la_SOURCES = $(c_sources)
 libOmxVdec_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVdec_la_CXXFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVdec_la_LIBADD = -llog -lbinder -lcutils -lqdMetaData -lglib-2.0
-if TARGET_USES_GBM
-libOmxVdec_la_LIBADD +=  -lgbm
-endif
+libOmxVdec_la_LIBADD += $(GBM_LDFLAG)
 libOmxVdec_la_LDFLAGS = -module -shared -avoid-version $(GLIB_LIBS)
 libOmxVdec_la_LDFLAGS += -L$(top_builddir)/hypv-intercept
 libOmxVdec_la_LDFLAGS += -lhypv_intercept
