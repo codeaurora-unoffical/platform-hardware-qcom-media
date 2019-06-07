@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2017, 2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2017, 2019, 2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -45,6 +45,10 @@ void omx_vdec::init_vendor_extensions (VendorExtensionStore &store) {
 
     ADD_EXTENSION("qti-ext-dec-output-frame-rate", OMX_QTIIndexParamVideoDecoderOutputFrameRate, OMX_DirOutput)
     ADD_PARAM_END("value", OMX_AndroidVendorValueInt32)
+
+    ADD_EXTENSION("qti-ext-dec-custom-bufferSize", OMX_QcomIndexParamVideoCustomBufferSize, OMX_DirInput)
+    ADD_PARAM_END("value", OMX_AndroidVendorValueInt32)
+
 }
 
 
@@ -101,6 +105,10 @@ OMX_ERRORTYPE omx_vdec::get_vendor_extension_config(
         case OMX_QTIIndexParamVideoDecoderOutputFrameRate:
         {
             setStatus &= vExt.setParamInt32(ext, "value", m_dec_hfr_fps);
+            break;
+        }
+        case OMX_QcomIndexParamVideoCustomBufferSize:
+        {
             break;
         }
         default:
@@ -224,6 +232,27 @@ OMX_ERRORTYPE omx_vdec::set_vendor_extension_config(
                     NULL, (OMX_INDEXTYPE)OMX_QTIIndexParamVideoDecoderOutputFrameRate, &decOutputFrameRateParam);
             if (err != OMX_ErrorNone) {
                 DEBUG_PRINT_ERROR("set_param: OMX_QTIIndexParamVideoDecoderOutputFrameRate failed !");
+            }
+            break;
+        }
+        case OMX_QcomIndexParamVideoCustomBufferSize:
+        {
+            OMX_S32 BufferSize = 0;
+            valueSet |= vExt.readParamInt32(ext, "value", &BufferSize);
+            if (!valueSet) {
+                break;
+            }
+            DEBUG_PRINT_HIGH("VENDOR-EXT: set_config: OMX_QcomIndexParamVideoCustomBufferSize : %d",
+                    BufferSize);
+
+            QOMX_VIDEO_CUSTOM_BUFFERSIZE sCustomBufferSize;
+            OMX_INIT_STRUCT(&sCustomBufferSize, QOMX_VIDEO_CUSTOM_BUFFERSIZE);
+            sCustomBufferSize.nPortIndex  = 0;
+            sCustomBufferSize.nBufferSize = BufferSize;
+            err = set_parameter(
+                    NULL, (OMX_INDEXTYPE)OMX_QcomIndexParamVideoCustomBufferSize, &sCustomBufferSize);
+            if (err != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("set_config: OMX_QcomIndexParamVideoCustomBufferSize failed !");
             }
             break;
         }
