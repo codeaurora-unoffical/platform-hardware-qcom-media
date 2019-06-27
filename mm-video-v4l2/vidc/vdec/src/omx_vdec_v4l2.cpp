@@ -10970,7 +10970,8 @@ bool omx_vdec::handle_color_space_info(void *data)
             m_internal_color_space.sAspects.mTransfer != aspects->mTransfer ||
             m_internal_color_space.sAspects.mMatrixCoeffs != aspects->mMatrixCoeffs ||
             m_internal_color_space.sAspects.mRange != aspects->mRange) {
-        if (aspects->mPrimaries == ColorAspects::PrimariesUnspecified) {
+        if (aspects->mPrimaries == ColorAspects::PrimariesUnspecified &&
+            aspects->mRange == ColorAspects::RangeFull) {
             DEBUG_PRINT_LOW("ColorPrimaries is unspecified, defaulting to ColorPrimaries_BT601_6_525 before copying");
             aspects->mPrimaries = ColorAspects::PrimariesBT601_6_525;
         }
