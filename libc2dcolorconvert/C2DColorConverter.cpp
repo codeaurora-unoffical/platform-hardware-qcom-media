@@ -220,7 +220,25 @@ bool C2DColorConverter::setResolution(size_t srcWidth, size_t srcHeight,
     return retval == 0? true:false;
 }
 
-
+int C2DColorConverter::SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight)
+{
+    mBlit.source_rect.x = x << 16;
+    mBlit.source_rect.y = y << 16;
+    mBlit.source_rect.width = srcWidth << 16;
+    mBlit.source_rect.height = srcHeight << 16;
+    mBlit.config_mask |= C2D_SOURCE_RECT_BIT;
+    ALOGV("C2D library: source rect x = %d, y = %d, width = %d, height = %d",
+         mBlit.source_rect.x >> 16,
+         mBlit.source_rect.y >> 16,
+         mBlit.source_rect.width >> 16,
+         mBlit.source_rect.height >> 16);
+    return 0;
+}
+int C2DColorConverter::SetSourceConfigFlags(int flags)
+{
+   mBlit.config_mask |= flags;
+   return 0;
+}
 bool C2DColorConverter::convertC2D(int srcFd, void *srcBase, void * srcData,
                                    int dstFd, void *dstBase, void * dstData)
 {
