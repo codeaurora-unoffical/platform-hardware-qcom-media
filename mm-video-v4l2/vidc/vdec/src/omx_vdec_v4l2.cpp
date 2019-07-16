@@ -9506,6 +9506,14 @@ int omx_vdec::async_message_process (void *context, void* message)
             DEBUG_PRINT_HIGH("Port settings changed");
             omx->m_reconfig_width = vdec_msg->msgdata.output_frame.picsize.frame_width;
             omx->m_reconfig_height = vdec_msg->msgdata.output_frame.picsize.frame_height;
+            if ((vdec_msg->msgdata.output_frame.interlaced_format == VDEC_InterlaceInterleaveFrameTopFieldFirst) ||
+                (vdec_msg->msgdata.output_frame.interlaced_format == VDEC_InterlaceInterleaveFrameBottomFieldFirst)) {
+                if (omx->drv_ctx.output_format != VDEC_YUV_FORMAT_NV12) {
+                    // if interlace mode, output buffer format must be NV12 linear
+                    omx->drv_ctx.output_format = VDEC_YUV_FORMAT_NV12;
+                    omx->capture_capability = V4L2_PIX_FMT_NV12;
+                }
+            }
             omx->post_event (OMX_CORE_OUTPUT_PORT_INDEX, OMX_IndexParamPortDefinition,
                     OMX_COMPONENT_GENERATE_PORT_RECONFIG);
             if (!omx->m_need_turbo) {
@@ -11299,7 +11307,8 @@ bool omx_vdec::handle_color_space_info(void *data)
             m_internal_color_space.sAspects.mTransfer != aspects->mTransfer ||
             m_internal_color_space.sAspects.mMatrixCoeffs != aspects->mMatrixCoeffs ||
             m_internal_color_space.sAspects.mRange != aspects->mRange) {
-        if (aspects->mPrimaries == ColorAspects::PrimariesUnspecified) {
+        if (aspects->mPrimaries == ColorAspects::PrimariesUnspecified &&
+            aspects->mRange == ColorAspects::RangeFull) {
             DEBUG_PRINT_LOW("ColorPrimaries is unspecified, defaulting to ColorPrimaries_BT601_6_525 before copying");
             aspects->mPrimaries = ColorAspects::PrimariesBT601_6_525;
         }
