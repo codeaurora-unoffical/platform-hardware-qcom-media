@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2018, Linux Foundation. All rights reserved.
+Copyright (c) 2010-2019, Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -4527,7 +4527,8 @@ OMX_ERRORTYPE  omx_video::component_role_enum(OMX_IN OMX_HANDLETYPE hComp,
             eRet = OMX_ErrorNoMore;
         }
     } else if (!strncmp((char*)m_nkind, "OMX.qcom.video.encoder.hevc", OMX_MAX_STRINGNAME_SIZE) ||
-                !strncmp((char*)m_nkind, "OMX.qcom.video.encoder.heic", OMX_MAX_STRINGNAME_SIZE)) {
+              !strncmp((char*)m_nkind, "OMX.qcom.video.encoder.hevc.cq", OMX_MAX_STRINGNAME_SIZE) ||
+              !strncmp((char*)m_nkind, "OMX.qcom.video.encoder.heic", OMX_MAX_STRINGNAME_SIZE)) {
         if ((0 == index) && role) {
             strlcpy((char *)role, "video_encoder.hevc", OMX_MAX_STRINGNAME_SIZE);
             DEBUG_PRINT_LOW("component_role_enum: role %s", role);
@@ -5115,6 +5116,9 @@ bool omx_video::alloc_map_ion_memory(int size, venc_ion *ion_info, int flag)
                 (unsigned int)ion_info->alloc_data.len,
                 ion_info->alloc_data.flags);
     }
+#ifdef HYPERVISOR
+    ion_info->alloc_data.flags &= (~ION_FLAG_CACHED);
+#endif
 
     rc = ion_alloc_fd(ion_info->dev_fd, ion_info->alloc_data.len, 0,
                       ion_info->alloc_data.heap_id_mask,
