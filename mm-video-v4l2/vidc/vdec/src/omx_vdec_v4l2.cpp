@@ -1632,9 +1632,9 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                         break;
 
                 case OMX_COMPONENT_GENERATE_EVENT_INPUT_FLUSH:
-                                        DEBUG_PRINT_HIGH("Driver flush i/p Port complete");
+                                        DEBUG_PRINT_INFO("Driver flush i/p Port complete");
                                         if (!pThis->input_flush_progress) {
-                                            DEBUG_PRINT_HIGH("WARNING: Unexpected flush from driver");
+                                            DEBUG_PRINT_INFO("WARNING: Unexpected flush from driver");
                                         } else {
                                             pThis->execute_input_flush();
                                             if (pThis->m_cb.EventHandler) {
@@ -1647,14 +1647,16 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
 
                                                     if (BITMASK_PRESENT(&pThis->m_flags,
                                                                 OMX_COMPONENT_IDLE_PENDING)) {
+                                                        DEBUG_PRINT_INFO("Streaming off input port");
                                                         if (pThis->stream_off(OMX_CORE_INPUT_PORT_INDEX)) {
                                                             DEBUG_PRINT_ERROR("Failed to call streamoff on OUTPUT Port");
                                                             pThis->omx_report_error ();
                                                         } else {
                                                             pThis->streaming[OUTPUT_PORT] = false;
                                                         }
+                                                        DEBUG_PRINT_INFO("output_flush_progress %d", pThis->output_flush_progress);
                                                         if (!pThis->output_flush_progress) {
-                                                            DEBUG_PRINT_LOW("Input flush done hence issue stop");
+                                                            DEBUG_PRINT_INFO("Input flush done hence issue stop");
                                                             pThis->post_event ((unsigned int)NULL, VDEC_S_SUCCESS,\
                                                                     OMX_COMPONENT_GENERATE_STOP_DONE);
                                                         }
@@ -1667,9 +1669,9 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                         break;
 
                 case OMX_COMPONENT_GENERATE_EVENT_OUTPUT_FLUSH:
-                                        DEBUG_PRINT_HIGH("Driver flush o/p Port complete");
+                                        DEBUG_PRINT_INFO("Driver flush o/p Port complete");
                                         if (!pThis->output_flush_progress) {
-                                            DEBUG_PRINT_HIGH("WARNING: Unexpected flush from driver");
+                                            DEBUG_PRINT_INFO("WARNING: Unexpected flush from driver");
                                         } else {
                                             pThis->execute_output_flush();
                                             if (pThis->m_cb.EventHandler) {
@@ -1682,7 +1684,7 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
 
                                                     if (BITMASK_PRESENT(&pThis->m_flags,
                                                                 OMX_COMPONENT_OUTPUT_FLUSH_IN_DISABLE_PENDING)) {
-                                                        DEBUG_PRINT_LOW("Internal flush complete");
+                                                        DEBUG_PRINT_INFO("Internal flush complete");
                                                         BITMASK_CLEAR (&pThis->m_flags,
                                                                 OMX_COMPONENT_OUTPUT_FLUSH_IN_DISABLE_PENDING);
                                                         if (BITMASK_PRESENT(&pThis->m_flags,
@@ -1705,8 +1707,9 @@ void omx_vdec::process_event_cb(void *ctxt, unsigned char id)
                                                             break;
                                                         }
                                                         pThis->streaming[CAPTURE_PORT] = false;
+                                                        DEBUG_PRINT_INFO("input_flush_progress %d", pThis->input_flush_progress);
                                                         if (!pThis->input_flush_progress) {
-                                                            DEBUG_PRINT_LOW("Output flush done hence issue stop");
+                                                            DEBUG_PRINT_INFO("Output flush done hence issue stop");
                                                             pThis->post_event ((unsigned int)NULL, VDEC_S_SUCCESS,\
                                                                     OMX_COMPONENT_GENERATE_STOP_DONE);
                                                         }
@@ -3435,7 +3438,7 @@ bool omx_vdec::execute_output_flush()
 
     /*Generate FBD for all Buffers in the FTBq*/
     pthread_mutex_lock(&m_lock);
-    DEBUG_PRINT_LOW("Initiate Output Flush");
+    DEBUG_PRINT_INFO("Initiate Output Flush");
 
     //reset last render TS
     if(m_last_rendered_TS > 0) {
@@ -3460,7 +3463,7 @@ bool omx_vdec::execute_output_flush()
         prev_ts = LLONG_MAX;
         rst_prev_ts = true;
     }
-    DEBUG_PRINT_HIGH("OMX flush o/p Port complete PenBuf(%d)", pending_output_buffers);
+    DEBUG_PRINT_INFO("OMX flush o/p Port complete PenBuf(%d)", pending_output_buffers);
     return bRet;
 }
 /*=========================================================================
@@ -3484,7 +3487,7 @@ bool omx_vdec::execute_input_flush()
     bool bRet = true;
 
     /*Generate EBD for all Buffers in the ETBq*/
-    DEBUG_PRINT_LOW("Initiate Input Flush");
+    DEBUG_PRINT_INFO("Initiate Input Flush");
 
     pthread_mutex_lock(&m_lock);
     DEBUG_PRINT_LOW("Check if the Queue is empty");
@@ -3555,7 +3558,7 @@ bool omx_vdec::execute_input_flush()
         m_timestamp_list.reset_ts_list();
     }
 #endif
-    DEBUG_PRINT_HIGH("OMX flush i/p Port complete PenBuf(%d)", pending_input_buffers);
+    DEBUG_PRINT_INFO("OMX flush i/p Port complete PenBuf(%d)", pending_input_buffers);
     return bRet;
 }
 
@@ -3578,7 +3581,7 @@ void omx_vdec::notify_flush_done(void *ctxt) {
     if (!pThis->input_flush_progress && !pThis->output_flush_progress) {
         if (BITMASK_PRESENT(&pThis->m_flags,
                 OMX_COMPONENT_OUTPUT_FLUSH_PENDING)) {
-            DEBUG_PRINT_LOW("Notify Output Flush done");
+            DEBUG_PRINT_INFO("Notify Output Flush done");
             BITMASK_CLEAR (&pThis->m_flags,OMX_COMPONENT_OUTPUT_FLUSH_PENDING);
             pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
                 OMX_EventCmdComplete,OMX_CommandFlush,
@@ -3588,7 +3591,7 @@ void omx_vdec::notify_flush_done(void *ctxt) {
         if (BITMASK_PRESENT(&pThis->m_flags,
                 OMX_COMPONENT_INPUT_FLUSH_PENDING)) {
             BITMASK_CLEAR (&pThis->m_flags,OMX_COMPONENT_INPUT_FLUSH_PENDING);
-            DEBUG_PRINT_LOW("Input Flush completed - Notify Client");
+            DEBUG_PRINT_INFO("Input Flush completed - Notify Client");
             pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
                     OMX_EventCmdComplete,OMX_CommandFlush,
                     OMX_CORE_INPUT_PORT_INDEX,NULL );
