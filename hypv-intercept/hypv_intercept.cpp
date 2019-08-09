@@ -39,6 +39,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #include <sys/mman.h>
 #include "hypv_intercept.h"
+#include "hypv_debug.h"
 #ifdef _ANDROID_
 #include <cutils/properties.h>
 #endif
@@ -141,7 +142,7 @@ static int hypv_init(void)
 
     hvfe_lib_handle = dlopen("libhyp_video_fe.so", RTLD_NOW);
     if (hvfe_lib_handle == NULL) {
-        HYP_VIDEO_MSG_ERROR("failed to open libhyp_video_fe");
+        HYP_VIDEO_MSG_ERROR("failed to open libhyp_video_fe error:%s", dlerror());
         rc = -1;
     } else {
         video_fe_open = (video_fe_open_func)dlsym(hvfe_lib_handle, "video_fe_open");
