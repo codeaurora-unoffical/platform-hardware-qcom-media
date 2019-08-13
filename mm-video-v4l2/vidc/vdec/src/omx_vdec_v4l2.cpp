@@ -761,7 +761,11 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 
     property_value[0] = '\0';
     property_get("vendor.vidc.dec.debug.dyn.disabled", property_value, "0");
+#ifdef DYN_MODE
     m_disable_dynamic_buf_mode = atoi(property_value);
+#else
+    m_disable_dynamic_buf_mode = 1;
+#endif
     DEBUG_PRINT_HIGH("vidc.dec.debug.dyn.disabled value is %d",m_disable_dynamic_buf_mode);
 
     property_value[0] = '\0';
@@ -5262,12 +5266,16 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
         case OMX_QTIIndexParamVideoPreferAdaptivePlayback:
         {
+#ifdef DYN_MODE
             VALIDATE_OMX_PARAM_DATA(paramData, QOMX_ENABLETYPE);
             DEBUG_PRINT_LOW("set_parameter: OMX_QTIIndexParamVideoPreferAdaptivePlayback");
             m_disable_dynamic_buf_mode = ((QOMX_ENABLETYPE *)paramData)->bEnable;
             if (m_disable_dynamic_buf_mode) {
                 DEBUG_PRINT_HIGH("Prefer Adaptive Playback is set");
             }
+#else
+            eRet = OMX_ErrorUnsupportedSetting;
+#endif
             break;
         }
 #endif
