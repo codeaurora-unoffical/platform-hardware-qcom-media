@@ -345,12 +345,6 @@ omx_video::omx_video():
 omx_video::~omx_video()
 {
     DEBUG_PRINT_HIGH("~omx_video(): Inside Destructor()");
-    if (msg_thread_created) {
-        msg_thread_stop = true;
-        post_message(this, OMX_COMPONENT_CLOSE_MSG);
-        DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
-        pthread_join(msg_thread_id,NULL);
-    }
     close(m_pipe_in);
     close(m_pipe_out);
     m_pipe_in = -1;
