@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -2037,6 +2037,13 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     DEBUG_PRINT_HIGH("Calling swvenc_deinit()");
     swvenc_deinit(m_hSwVenc);
 
+    if (msg_thread_created) {
+        msg_thread_created = false;
+        msg_thread_stop = true;
+        post_message(this, OMX_COMPONENT_CLOSE_MSG);
+        DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
+        pthread_join(msg_thread_id,NULL);
+    }
     DEBUG_PRINT_HIGH("OMX_Venc:Component Deinit");
 
     RETURN(OMX_ErrorNone);
