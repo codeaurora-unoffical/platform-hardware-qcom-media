@@ -106,6 +106,11 @@ AC_ARG_ENABLE([build-mm-video],
                 [Enable conditional compile for use glib [default=no]]),
         [build_mm_video="${enableval}"])
 
+AC_ARG_ENABLE([is-vidc-vdec-supported],
+          AC_HELP_STRING([--enable-is-vidc-vdec-supported],
+                [Enable compile for target which support vdec [default=no]]),
+        [target_support_vidc_vdec="${enableval}"])
+
 AC_ARG_WITH([sanitized-headers],
         [AS_HELP_STRING([--with-sanitized-headers=DIR],[location of the sanitized Linux kernel headers])],
         [CPPFLAGS="$CPPFLAGS -I $withval"])
@@ -205,6 +210,7 @@ AM_CONDITIONAL(MASTER_SIDE_CP_TARGET_LIST, [test "x$master_side_cp_target_list" 
 AM_CONDITIONAL(USE_GLIB, [test "x$use_glib" = "xyes"])
 AM_CONDITIONAL(BUILD_MM_VIDEO, [test "x$build_mm_video" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_LIBGBM, [test "x$HAVE_GBM" = "xyes"])
+AM_CONDITIONAL(TARGET_SUPPORT_VDEC, [test "x$target_support_vidc_vdec" = "xyes"])
 
 AC_ARG_WITH([glib],
       AC_HELP_STRING([--with-glib],
@@ -227,6 +233,7 @@ AC_CONFIG_FILES([ \
         mm-video-v4l2/Makefile \
         mm-video-v4l2/vidc/Makefile \
         mm-video-v4l2/vidc/venc/Makefile \
+        mm-video-v4l2/vidc/vdec/Makefile \
         libplatformconfig/Makefile \
         ])
 AC_OUTPUT
