@@ -12,7 +12,7 @@ AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc
 # -----------------------------------------------------------------------------
 #           Make the Shared library (libhypv_intercept)
 # -----------------------------------------------------------------------------
-h_sources = hypv_intercept.h
+h_sources = hypv_intercept.h hypv_debug.h
 c_sources = hypv_intercept.cpp
 
 include_HEADERS = $(h_sources)
