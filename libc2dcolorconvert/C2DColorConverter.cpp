@@ -676,9 +676,13 @@ void * C2DColorConverter::getMappedGPUAddr(int bufFD, void *bufPtr, size_t bufLe
 {
     C2D_STATUS status;
     void *gpuaddr = NULL;
-
+#ifdef _HYPERVISOR_
+    status = mC2DMapAddr(-1, bufPtr, bufLen, 0, KGSL_USER_MEM_TYPE_ION,
+            &gpuaddr);
+#else
     status = mC2DMapAddr(bufFD, bufPtr, bufLen, 0, KGSL_USER_MEM_TYPE_ION,
             &gpuaddr);
+#endif
     if (status != C2D_STATUS_OK) {
         ALOGE("c2dMapAddr failed: status %d fd %d ptr %p len %zu flags %d\n",
                 status, bufFD, bufPtr, bufLen, KGSL_USER_MEM_TYPE_ION);
