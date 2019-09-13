@@ -9779,15 +9779,23 @@ bool omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,int dev_fd,
     } else {
        DEBUG_PRINT_LOW( "Successfully created gbm device");
     }
-    if (drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_UBWC)
+    if (drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_UBWC ||
+           drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_TP10_UBWC)
        flags |= GBM_BO_USAGE_UBWC_ALIGNED_QTI;
 
-    DEBUG_PRINT_LOW("create NV12 gbm_bo with width=%d, height=%d", w, h);
-    bo = gbm_bo_create(gbm, w, h,GBM_FORMAT_NV12,
-              flags);
+    DEBUG_PRINT_LOW("create NV12 gbm_bo with width=%d, height=%d foramt %x",
+       drv_ctx.output_format, w, h);
 
+    if (drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_TP10_UBWC) {
+       bo = gbm_bo_create(gbm, w, h,GBM_FORMAT_YCbCr_420_TP10_UBWC,
+              flags);
+    } else if(drv_ctx.output_format == VDEC_YUV_FORMAT_NV12 ||
+              drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_UBWC){
+       bo = gbm_bo_create(gbm, w, h,GBM_FORMAT_NV12,
+              flags);
+    }
     if (bo == NULL) {
-      DEBUG_PRINT_ERROR("Create bo failed");
+      DEBUG_PRINT_ERROR("no supported gbm bo for format %x", drv_ctx.output_format);
       gbm_device_destroy(gbm);
       return FALSE;
     }
