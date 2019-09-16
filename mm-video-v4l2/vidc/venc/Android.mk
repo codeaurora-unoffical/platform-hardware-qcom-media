@@ -21,9 +21,10 @@ libmm-venc-def += -Werror
 libmm-venc-def += -D_ANDROID_ICS_
 libmm-venc-def += -D_MSM8974_
 
-#ifeq ($(TARGET_BOARD_AUTO),true)
+ifeq ($(TARGET_BOARD_AUTO),true)
 #libmm-venc-def += -D_HW_RGBA
-#endif
+libmm-venc-def += -DSUPPORT_SECURE_C2D
+endif
 
 TARGETS_THAT_USE_FLAG_MSM8226 := msm8226 msm8916 msm8909
 TARGETS_THAT_NEED_SW_VENC_MPEG4 := msm8909 msm8937
