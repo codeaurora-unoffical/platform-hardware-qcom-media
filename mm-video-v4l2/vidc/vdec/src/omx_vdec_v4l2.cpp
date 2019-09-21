@@ -133,6 +133,9 @@ extern "C" {
 #define EXTRADATA_IDX(__num_planes) ((__num_planes) ? (__num_planes) - 1 : 0)
 #define ALIGN(x, to_align) ((((unsigned) x) + (to_align - 1)) & ~(to_align - 1))
 
+#define ALIGN128 128
+#define ALIGN32 32
+
 #define DEFAULT_EXTRADATA (OMX_INTERLACE_EXTRADATA | OMX_FRAMEPACK_EXTRADATA | OMX_OUTPUTCROP_EXTRADATA \
                            | OMX_DISPLAY_INFO_EXTRADATA | OMX_HDR_COLOR_INFO_EXTRADATA)
 #define DEFAULT_CONCEAL_COLOR "32784" //0x8010, black by default
@@ -10780,8 +10783,8 @@ OMX_ERRORTYPE omx_vdec::update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn)
 
     if ((portDefn->format.video.eColorFormat == OMX_COLOR_FormatYUV420Planar) ||
        (portDefn->format.video.eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar)) {
-           portDefn->format.video.nStride = ALIGN(drv_ctx.video_resolution.frame_width, 16);
-           portDefn->format.video.nSliceHeight = drv_ctx.video_resolution.frame_height;
+           portDefn->format.video.nStride = ALIGN(drv_ctx.video_resolution.frame_width, ALIGN128);
+           portDefn->format.video.nSliceHeight = ALIGN(drv_ctx.video_resolution.frame_height, ALIGN32);
     }
     DEBUG_PRINT_HIGH("update_portdef(%u): Width = %u Height = %u Stride = %d "
             "SliceHeight = %u eColorFormat = %d nBufSize %u nBufCnt %u",
@@ -12797,9 +12800,9 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
         goto fail_update_buf_req;
     }
     c2d.close();
-    status = c2d.open(height,
-            width,
-            NV12_128m,dest_format);
+    status = c2d.open(ALIGN(height, ALIGN32),
+            ALIGN(width, ALIGN128),
+            NV12_128m, dest_format);
     if (status) {
         status = c2d.get_buffer_size(C2D_INPUT,src_size);
         if (status)
@@ -12885,9 +12888,9 @@ bool omx_vdec::allocate_color_convert_buf::set_color_format(
             dest_format = (dest_color_format == OMX_COLOR_FormatYUV420Planar) ?
                     YCbCr420P : YCbCr420SP;
             c2d.close();
-            status = c2d.open(omx->drv_ctx.video_resolution.frame_height,
-                       omx->drv_ctx.video_resolution.frame_width,
-                       NV12_128m,dest_format);
+            status = c2d.open(ALIGN(omx->drv_ctx.video_resolution.frame_height, ALIGN32),
+                       ALIGN(omx->drv_ctx.video_resolution.frame_width, ALIGN128),
+                       NV12_128m, dest_format);
             if (status)
                 enabled = true;
             else
