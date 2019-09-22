@@ -542,12 +542,21 @@ struct reconfig_client_crop_data {
     bool isPortReconfigInsufficient;
 };
 
+struct EnumClassHash
+{
+    template <typename T>
+    std::size_t operator()(T t) const
+    {
+        return static_cast<std::size_t>(t);
+    }
+};
+
 typedef std::unordered_map <int, int> ColorSubMapping;
 typedef std::unordered_map <int, ColorSubMapping> DecColorMapping;
-typedef std::unordered_map <enum ColorAspects::Primaries, ColorPrimaries> PrimariesMap;
-typedef std::unordered_map <enum ColorAspects::Transfer, GammaTransfer> TransferMap;
-typedef std::unordered_map <enum ColorAspects::MatrixCoeffs, MatrixCoEfficients> MatrixCoeffMap;
-typedef std::unordered_map <enum ColorAspects::Range, ColorRange> RangeMap;
+typedef std::unordered_map <enum ColorAspects::Primaries, ColorPrimaries, EnumClassHash> PrimariesMap;
+typedef std::unordered_map <enum ColorAspects::Transfer, GammaTransfer, EnumClassHash> TransferMap;
+typedef std::unordered_map <enum ColorAspects::MatrixCoeffs, MatrixCoEfficients, EnumClassHash> MatrixCoeffMap;
+typedef std::unordered_map <enum ColorAspects::Range, ColorRange, EnumClassHash> RangeMap;
 
 // OMX video decoder class
 class omx_vdec: public qc_omx_component
