@@ -112,6 +112,21 @@ AC_ARG_ENABLE([target-hypervisor],
 	[target_hypervisor="${enableval}"],
 	target_hypervisor=no)
 
+AC_ARG_ENABLE([targets-use-libgbm],
+        AC_HELP_STRING([--enable-targets-use-libgbm],
+                [Enable conditional compile for target targets_use_libgbm [default=no]]),
+        [targets_use_libgbm="${enableval}"])
+
+AC_ARG_ENABLE([vdec-build],
+        AC_HELP_STRING([--enable-vdec-build],
+                [Enable conditional compile for video decoder [default=yes]]),
+        [skip_vdec_build="${enableval}"])
+
+AC_ARG_ENABLE([target-kernel-version],
+        AC_HELP_STRING([--enable-target-kernel-version],
+                [Enable conditional compile for target target_kernel_version [default=no]]),
+        [target_kernel_version="${enableval}"])
+
 AM_CONDITIONAL(TARGET_HYPERVISOR, test "x$target_hypervisor" = "xyes")
 
 AC_ARG_WITH([sanitized-headers],
@@ -193,6 +208,9 @@ AM_CONDITIONAL(TARGET_USES_MEDIA_EXTENSIONS, [test "x$target_uses_media_extensio
 AM_CONDITIONAL(MASTER_SIDE_CP_TARGET_LIST, [test "x$master_side_cp_target_list" = "xyes"])
 AM_CONDITIONAL(USE_GLIB, [test "x$use_glib" = "xyes"])
 AM_CONDITIONAL(BUILD_MM_VIDEO, [test "x$build_mm_video" = "xyes"])
+AM_CONDITIONAL(TARGET_USES_LIBGBM, [test "x$targets_use_libgbm" = "xyes"])
+AM_CONDITIONAL(IS_KERNEL_VERSION_49, [test "x$target_kernel_version" = "x4.9"])
+AM_CONDITIONAL(SKIP_VDEC_BUILD, [test "x$skip_vdec_build" = "xno"])
 
 AC_ARG_WITH([glib],
       AC_HELP_STRING([--with-glib],

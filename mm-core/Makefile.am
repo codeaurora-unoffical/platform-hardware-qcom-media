@@ -62,6 +62,11 @@ if TARGET_MSM8937
 TARGET_REGISTRY = 8937
 endif
 
+if TARGET_USES_LIBGBM
+AM_CPPFLAGS += -D__LIBGBM__
+AM_CPPFLAGS += -D__USE_GBM__
+endif
+
 c_sources +=src/${TARGET_REGISTRY}/registry_table_android.c
 
 lib_LTLIBRARIES = libOmxCore.la

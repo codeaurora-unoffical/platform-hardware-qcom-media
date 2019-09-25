@@ -28,8 +28,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <inttypes.h>
 #include <cstddef>
+#ifndef __LIBGBM__
 #include <qdMetaData.h>
 #include <gralloc_priv.h>
+#endif
 #include "extra_data_handler.h"
 
 int debug_level = PRIO_ERROR;
