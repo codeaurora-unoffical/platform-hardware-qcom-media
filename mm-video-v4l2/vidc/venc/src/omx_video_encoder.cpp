@@ -2783,7 +2783,7 @@ int omx_venc::async_message_process (void *context, void* message)
                         native_handle_t *nh = (native_handle_t *)(omxhdr->pBuffer);
                         nh->data[1] = m_sVenc_msg->buf.offset;
                         nh->data[2] = m_sVenc_msg->buf.len;
-#ifdef _HW_RGBA
+#ifdef SUPPORT_SECURE_C2D
                         omxhdr->nFilledLen = sizeof(int) * 3 + sizeof(int) * (nh->numFds+nh->numInts);
 #else
                         omxhdr->nFilledLen = m_sVenc_msg->buf.len;
