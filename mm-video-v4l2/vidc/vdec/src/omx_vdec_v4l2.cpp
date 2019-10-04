@@ -256,6 +256,11 @@ void* async_message_thread (void *input)
                 }
                 if(ptr[2] & V4L2_EVENT_PICSTRUCT_FLAG) {
                     omx->m_progressive = ptr[4];
+#ifdef _MSM8996_AUTO_
+                    vdec_msg.msgdata.output_frame.interlaced_format =
+                      omx->m_progressive ? VDEC_InterlaceFrameProgressive : VDEC_InterlaceInterleaveFrameTopFieldFirst;
+#endif
+
                     DEBUG_PRINT_HIGH("VIDC Port Reconfig PicStruct change - %d", ptr[4]);
                 }
                 if(ptr[2] & V4L2_EVENT_COLOUR_SPACE_FLAG) {
@@ -2781,6 +2786,18 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
     if (eRet != OMX_ErrorNone) {
         DEBUG_PRINT_ERROR("Component Init Failed");
     } else {
+#ifdef _MSM8996_AUTO_
+        /* allow ubwc linear event setting to support interlaced clips
+         * playback for linux and just print warning log to show the
+         * setting fail for non-linux PVM hypervisor case for playback
+         * doesn't depend on this */
+        control.id = V4L2_CID_MPEG_VIDC_VIDEO_ALLOW_UBWC_LINEAR_EVENT;
+        control.value = V4L2_MPEG_VIDC_VIDEO_ALLOW_UBWC_LINEAR_EVENT_ENABLE;
+        ret = ioctl(drv_ctx.video_driver_fd, VIDIOC_S_CTRL, &control);
+        if (ret)
+          DEBUG_PRINT_HIGH("Failed to set control for id=%d, value=%d\n",
+                  control.id, control.value);
+#endif
         DEBUG_PRINT_INFO("omx_vdec::component_init() success : fd=%d",
                 drv_ctx.video_driver_fd);
     }

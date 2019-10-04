@@ -124,6 +124,11 @@ endif
 ifneq (,$(filter $(MACHINE), "8x96autogvmquin" "8x96autogvmred"))
 libmm-vdec-def += -D_HYPERVISOR_
 endif
+
+ifeq ($(TARGET_BOARD_AUTO),true)
+libmm-vdec-def += -D_MSM8996_AUTO_
+endif
+
 # ---------------------------------------------------------------------------------
 # 			Make the Shared library (libOmxVdec)
 # ---------------------------------------------------------------------------------

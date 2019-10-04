@@ -41,7 +41,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //////////////////////////////////////////////////////////////////////////////
 //                             Include Files
 //////////////////////////////////////////////////////////////////////////////
-
 #define LOG_TAG "OMX-VENC"
 #include <stdlib.h>
 #include <stdio.h>
@@ -315,7 +314,7 @@ class omx_video: public qc_omx_component
                 bool init();
                 bool open(unsigned int height,unsigned int width,
                         ColorConvertFormat src, ColorConvertFormat dest,
-                        unsigned int src_stride, unsigned int flags);
+                        unsigned int src_stride, unsigned int flags, bool secure=false);
                 bool convert(int src_fd, void *src_base, void *src_viraddr,
                         int dest_fd, void *dest_base, void *dest_viraddr);
                 bool get_buffer_size(int port,unsigned int &buf_size);
