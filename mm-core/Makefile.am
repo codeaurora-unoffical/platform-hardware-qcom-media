@@ -27,6 +27,7 @@ h_sources +=inc/OMX_Index.h
 h_sources +=inc/OMX_IVCommon.h
 h_sources +=inc/OMX_Other.h
 h_sources +=inc/OMX_QCOMExtns.h
+h_sources +=inc/OMX_VideoExt.h
 h_sources +=inc/OMX_Types.h
 h_sources +=inc/OMX_Video.h
 h_sources +=inc/qc_omx_common.h
