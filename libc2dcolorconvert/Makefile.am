@@ -7,6 +7,11 @@ AM_CPPFLAGS += -g -O3
 AM_CPPFLAGS += "-std=c++11"
 AM_CPPFLAGS += -fPIC
 
+#Hypervisor
+if TARGET_HYPERVISOR
+AM_CPPFLAGS += -D_HYPERVISOR_
+endif
+
 c_sources = C2DColorConverter.cpp
 h_sources = C2DColorConverter.h
 
