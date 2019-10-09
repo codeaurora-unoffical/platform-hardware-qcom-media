@@ -110,6 +110,9 @@ libOmxVenc_la_LDFLAGS = -lstdc++ -lpthread -llog -lutils -lbinder -lcutils -lgli
 if !TARGET_USES_LIBGBM
 libOmxVenc_la_LDFLAGS += -lion
 endif
+if TARGET_USES_LIBGBM
+libOmxVenc_la_LDFLAGS += -lgbm
+endif
 libOmxVenc_la_LDFLAGS += -version-info 0
 libOmxVenc_la_LDFLAGS += -L$(top_builddir)/hypv-intercept
 libOmxVenc_la_LDFLAGS += -lhypv_intercept
