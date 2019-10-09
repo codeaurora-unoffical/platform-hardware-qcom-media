@@ -951,6 +951,9 @@ class omx_vdec: public qc_omx_component
         bool handle_mastering_display_color_info(void* data);
         void print_debug_extradata(OMX_OTHER_EXTRADATATYPE *extra);
         void set_colormetadata_in_handle(ColorMetaData *color_mdata, unsigned int buf_index);
+#ifdef USE_GBM
+        void set_colormetadata_in_bo(ColorMetaData *color_mdata, unsigned int buf_index);
+#endif
         void prepare_color_aspects_metadata(OMX_U32 primaries, OMX_U32 range,
                                             OMX_U32 transfer, OMX_U32 matrix,
                                             ColorMetaData *color_mdata);
