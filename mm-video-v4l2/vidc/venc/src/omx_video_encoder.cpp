@@ -2679,7 +2679,7 @@ int omx_venc::async_message_process (void *context, void* message)
     struct venc_msg *m_sVenc_msg = NULL;
     OMX_BUFFERHEADERTYPE* omxhdr = NULL;
     struct venc_buffer *temp_buff = NULL;
-#ifdef __LIBGBM__
+#ifdef USE_GBM
     struct gbm_bo *nh = NULL;
 #else
     native_handle_t *nh = NULL;
@@ -2786,7 +2786,7 @@ int omx_venc::async_message_process (void *context, void* message)
                     }
                 } else if (omx->is_secure_session()) {
                     if (omx->allocate_native_handle) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         struct gbm_bo *gb = (struct gbm_bo *)(omxhdr->pBuffer);
                         gb->size = m_sVenc_msg->buf.len;
 #else
@@ -2803,7 +2803,7 @@ int omx_venc::async_message_process (void *context, void* message)
                         omxhdr->nFlags = m_sVenc_msg->buf.flags;
                     } else {
                         output_metabuffer *meta_buf = (output_metabuffer *)(omxhdr->pBuffer);
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         struct gbm_bo *gb = (struct gbm_bo *)(omxhdr->pBuffer);
                         gb->size = m_sVenc_msg->buf.len;
 #else

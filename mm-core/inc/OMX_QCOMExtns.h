@@ -48,7 +48,7 @@ extern "C" {
 #include "string.h"
 #include "OMX_VideoExt.h"
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
 #include <gbm_priv.h>
 #endif
 #define OMX_VIDEO_MAX_HP_LAYERS 6
@@ -2166,7 +2166,7 @@ struct MetaBufferUtil {
     static int getNumIntsForBatch(int batchSize) {
         return batchSize * INT_TOTAL;
     }
-#ifdef __LIBGBM__
+#ifdef USE_GBM
     static int getBatchSize(const struct gbm_bo *hnd) {
         return MetaBufferUtil::isHandleSane(hnd) ? 1 : -1;
     }
@@ -2234,7 +2234,7 @@ private:
         int idx = index + type * MetaBufferUtil::getBatchSize(hnd);
         return (MetaBufferUtil::isHandleSane(hnd) && (idx < (hnd->numInts + hnd->numFds))) ? idx : -1;
     }
-#endif  // __LIBGBM__
+#endif  // USE_GBM
 };
 
 #endif // __cplusplus

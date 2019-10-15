@@ -63,8 +63,7 @@ TARGET_REGISTRY = 8937
 endif
 
 if TARGET_USES_LIBGBM
-AM_CPPFLAGS += -D__LIBGBM__
-AM_CPPFLAGS += -D__USE_GBM__
+AM_CPPFLAGS += -DUSE_GBM
 endif
 
 c_sources +=src/${TARGET_REGISTRY}/registry_table_android.c

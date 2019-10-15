@@ -56,7 +56,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef _TARGET_KERNEL_VERSION_49_
 #include <linux/msm_vidc_enc.h>
 #endif
-#ifdef __LIBGBM__
+#ifdef USE_GBM
 #include <gbm.h>
 #include <gbm_priv.h>
 #endif
@@ -233,7 +233,7 @@ enum omx_venc_extradata_types {
 
 struct output_metabuffer {
     OMX_U32 type;
-#ifndef __LIBGBM__
+#ifndef USE_GBM
     native_handle_t *nh;
 #else
     struct gbm_bo *nh;
@@ -341,7 +341,7 @@ class omx_video: public qc_omx_component
 #endif
     public:
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         OMX_S32 deviceFd;
         struct gbm_device *gbmDevice;
 #endif
@@ -713,7 +713,7 @@ class omx_video: public qc_omx_component
         }
 
         void complete_pending_buffer_done_cbs();
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         bool is_conv_needed(struct gbm_bo *handle);
 #else
         bool is_conv_needed(int, int);

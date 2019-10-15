@@ -28,7 +28,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <inttypes.h>
 #include <cstddef>
-#ifndef __LIBGBM__
+#ifndef USE_GBM
 #include <qdMetaData.h>
 #include <gralloc_priv.h>
 #endif
