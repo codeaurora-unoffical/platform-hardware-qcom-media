@@ -33,12 +33,20 @@ AM_CPPFLAGS += "-Dstrlcat=g_strlcat"
 AM_CPPFLAGS += "-std=c++11"
 AM_CPPFLAGS += -Wno-undef
 AM_CPPFLAGS += -Wno-multichar
+AM_CPPFLAGS += -Wno-unused-result
+AM_CPPFLAGS += -Wformat-truncation=0
 AM_CPPFLAGS += -g -O3
 AM_CPPFLAGS += "-DHAVE_ANDROID_OS"
 AM_CPPFLAGS += "-DUSE_CAMERA_METABUFFER_UTILS"
+AM_CPPFLAGS += -D_VENDOR_EXT_
 
 if USE_GLIB
 AM_CPPFLAGS += -D_USE_GLIB_
+endif
+
+if TARGET_USES_LIBGBM
+AM_CPPFLAGS += -D__LIBGBM__
+AM_CPPFLAGS += -D__USE_GBM__
 endif
 
 if TARGET_MSM8610
@@ -78,6 +86,10 @@ if MASTER_SIDE_CP_TARGET_LIST
 AM_CPPFLAGS += -DMASTER_SIDE_CP
 endif
 
+if IS_KERNEL_VERSION_49
+AM_CPPFLAGS += -D_TARGET_KERNEL_VERSION_49_
+endif
+
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/common/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-video-v4l2/vidc/venc/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/libc2dcolorconvert/
@@ -95,10 +107,10 @@ sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_color_converter.cpp
 lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
 libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
-#libOmxVenc_la_LDLIBS = ../libc2d2colorconvert/libc2dcolorconvert.la
-#libOmxVenc_la_LIBADD  = ../../../mm-core/libOmxCore.la
-libOmxVenc_la_LDFLAGS = -lstdc++ -lpthread -llog -lutils -lbinder -lcutils -lglib-2.0 -lbase -ldl -lpthread -shared -lqdMetaData
-#  -lc2d2 -lgui -lOmxCore -lgpustats -ldl -lpthread
+libOmxVenc_la_LDFLAGS = -lstdc++ -lpthread -llog -lutils -lbinder -lcutils -lglib-2.0 -lbase -ldl -lpthread -shared
+if !TARGET_USES_LIBGBM
+libOmxVenc_la_LDFLAGS += -lion
+endif
 libOmxVenc_la_LDFLAGS += -version-info 0
 libOmxVenc_la_LDFLAGS += -L$(top_builddir)/hypv-intercept
 libOmxVenc_la_LDFLAGS += -lhypv_intercept

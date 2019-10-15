@@ -18,8 +18,18 @@
 #ifndef QCOM_OMX_METADATA_H_
 #define QCOM_OMX_METADATA_H_
 
+#ifdef __LIBGBM__
+#include <gbm.h>
+#include <gbm_priv.h>
+#else
+#include <system/window.h>
 #include "cutils/native_handle.h"
+#endif
 #include <media/hardware/MetadataBufferType.h>
+
+#ifdef __LIBGBM__
+typedef const gbm_bo* buffer_handle_t;
+#endif
 
 namespace android {
 
@@ -30,7 +40,7 @@ namespace android {
     } encoder_nativehandle_buffer_type;
 #endif
 
-    typedef struct encoder_media_buffer_type {
+typedef struct encoder_media_buffer_type {
         MetadataBufferType buffer_type;
         buffer_handle_t meta_handle;
     } encoder_media_buffer_type;

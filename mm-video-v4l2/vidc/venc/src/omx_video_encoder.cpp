@@ -632,13 +632,13 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
         }
     }
     DEBUG_PRINT_INFO("Component_init : %s : return = 0x%x", m_nkind, eRet);
-
+#ifndef _VENDOR_EXT_
     {
         VendorExtensionStore *extStore = const_cast<VendorExtensionStore *>(&mVendorExtensionStore);
         init_vendor_extensions(*extStore);
         mVendorExtensionStore.dumpExtensions((const char *)m_nkind);
     }
-
+#endif
     return eRet;
 init_error:
     handle->venc_close();
@@ -2334,6 +2334,7 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                     return OMX_ErrorUnsupportedSetting;
                 }
             }
+#ifndef _VENDOR_EXT_
         case OMX_IndexConfigAndroidVendorExtension:
             {
                 VALIDATE_OMX_PARAM_DATA(configData, OMX_CONFIG_ANDROID_VENDOR_EXTENSIONTYPE);
@@ -2344,6 +2345,7 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
 
                 return set_vendor_extension_config(ext);
             }
+#endif
         case OMX_IndexConfigVideoNalSize:
             {
                 return OMX_ErrorUnsupportedIndex;
@@ -2677,7 +2679,11 @@ int omx_venc::async_message_process (void *context, void* message)
     struct venc_msg *m_sVenc_msg = NULL;
     OMX_BUFFERHEADERTYPE* omxhdr = NULL;
     struct venc_buffer *temp_buff = NULL;
+#ifdef __LIBGBM__
+    struct gbm_bo *nh = NULL;
+#else
     native_handle_t *nh = NULL;
+#endif
 
     if (context == NULL || message == NULL) {
         DEBUG_PRINT_ERROR("ERROR: omx_venc::async_message_process invalid i/p params");
@@ -2724,7 +2730,7 @@ int omx_venc::async_message_process (void *context, void* message)
                     OMX_COMPONENT_GENERATE_EVENT_INPUT_FLUSH);
             break;
 #ifndef _TARGET_KERNEL_VERSION_49_
-        case VEN_MSG_FLUSH_OUPUT_DONE:
+        case VEN_MSG_FLUSH_OUTPUT_DONE:
             omx->post_event (0,m_sVenc_msg->statuscode,\
                     OMX_COMPONENT_GENERATE_EVENT_OUTPUT_FLUSH);
             break;
@@ -2780,9 +2786,14 @@ int omx_venc::async_message_process (void *context, void* message)
                     }
                 } else if (omx->is_secure_session()) {
                     if (omx->allocate_native_handle) {
+#ifdef __LIBGBM__
+                        struct gbm_bo *gb = (struct gbm_bo *)(omxhdr->pBuffer);
+                        gb->size = m_sVenc_msg->buf.len;
+#else
                         native_handle_t *nh = (native_handle_t *)(omxhdr->pBuffer);
                         nh->data[1] = m_sVenc_msg->buf.offset;
                         nh->data[2] = m_sVenc_msg->buf.len;
+#endif
 #ifdef _HW_RGBA
                         omxhdr->nFilledLen = sizeof(int) * 3 + sizeof(int) * (nh->numFds+nh->numInts);
 #else
@@ -2792,9 +2803,14 @@ int omx_venc::async_message_process (void *context, void* message)
                         omxhdr->nFlags = m_sVenc_msg->buf.flags;
                     } else {
                         output_metabuffer *meta_buf = (output_metabuffer *)(omxhdr->pBuffer);
+#ifdef __LIBGBM__
+                        struct gbm_bo *gb = (struct gbm_bo *)(omxhdr->pBuffer);
+                        gb->size = m_sVenc_msg->buf.len;
+#else
                         native_handle_t *nh = meta_buf->nh;
                         nh->data[1] = m_sVenc_msg->buf.offset;
                         nh->data[2] = m_sVenc_msg->buf.len;
+#endif
                         omxhdr->nFilledLen = sizeof(output_metabuffer);
                         omxhdr->nTimeStamp = m_sVenc_msg->buf.timestamp;
                         omxhdr->nFlags = m_sVenc_msg->buf.flags;

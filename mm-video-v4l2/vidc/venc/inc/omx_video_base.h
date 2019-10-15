@@ -56,6 +56,10 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef _TARGET_KERNEL_VERSION_49_
 #include <linux/msm_vidc_enc.h>
 #endif
+#ifdef __LIBGBM__
+#include <gbm.h>
+#include <gbm_priv.h>
+#endif
 #include <media/hardware/HardwareAPI.h>
 #include "OMX_Core.h"
 #include "OMX_QCOMExtns.h"
@@ -229,7 +233,11 @@ enum omx_venc_extradata_types {
 
 struct output_metabuffer {
     OMX_U32 type;
+#ifndef __LIBGBM__
     native_handle_t *nh;
+#else
+    struct gbm_bo *nh;
+#endif
 };
 
 #ifdef _TARGET_KERNEL_VERSION_49_
@@ -333,6 +341,10 @@ class omx_video: public qc_omx_component
 #endif
     public:
 
+#ifdef __LIBGBM__
+        OMX_S32 deviceFd;
+        struct gbm_device *gbmDevice;
+#endif
         bool mUseProxyColorFormat;
         //RGB or non-native input, and we have pre-allocated conversion buffers
         bool mUsesColorConversion;
@@ -701,17 +713,23 @@ class omx_video: public qc_omx_component
         }
 
         void complete_pending_buffer_done_cbs();
+#ifdef __LIBGBM__
+        bool is_conv_needed(struct gbm_bo *handle);
+#else
         bool is_conv_needed(int, int);
+#endif
         void print_debug_color_aspects(ColorAspects *aspects, const char *prefix);
 
         OMX_ERRORTYPE get_vendor_extension_config(
                 OMX_CONFIG_ANDROID_VENDOR_EXTENSIONTYPE *ext);
         OMX_ERRORTYPE set_vendor_extension_config(
                 OMX_CONFIG_ANDROID_VENDOR_EXTENSIONTYPE *ext);
+#ifndef _VENDOR_EXT_
         void init_vendor_extensions(VendorExtensionStore&);
         // Extensions-store is immutable after initialization (i.e cannot add/remove/change
         //  extensions once added !)
         const VendorExtensionStore mVendorExtensionStore;
+#endif
 
 #ifdef USE_ION
         int alloc_map_ion_memory(int size,
