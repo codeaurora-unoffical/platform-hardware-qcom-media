@@ -25,6 +25,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
+#ifdef _USE_GLIB_
+#include <glib.h>
+#define strlcpy g_strlcpy
+#endif
 #include "omx_swvenc_mpeg4.h"
 
 /* def: StoreMetaDataInBuffersParams */
@@ -40,7 +44,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /* use GraphicBuffer for rotation */
 #include <ui/GraphicBufferAllocator.h>
-#include <gralloc.h>
+#include <hardware/gralloc.h>
 
 /* def: GET_VT_TIMESTAMP */
 #include <qdMetaData.h>
@@ -61,6 +65,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define ALIGN(value,alignment) (((value) + (alignment-1)) & (~(alignment-1)))
 
 #define BUFFER_LOG_LOC "/data/vendor/media"
+int debug_level = PRIO_ERROR;
 
 /* factory function executed by the core to create instances */
 void *get_omx_component_factory_fn(void)
@@ -1970,9 +1975,13 @@ bool omx_venc::swvenc_do_rotate(int fd, SWVENC_IPBUFFER & ipbuffer, OMX_U32 inde
         DEBUG_PRINT_ERROR("failed to create private handle");
         return false;
     }
-
+#ifdef _LINUX_
+    sp<GraphicBuffer> srcBuffer = new GraphicBuffer(s_width, s_height, format, usage,
+            src_stride, (native_handle_t *)privateHandle, false);
+#else
     sp<GraphicBuffer> srcBuffer = new GraphicBuffer(s_width, s_height, format, 1, usage,
             src_stride, (native_handle_t *)privateHandle, false);
+#endif
     if (srcBuffer.get() == NULL) {
         DEBUG_PRINT_ERROR("create source buffer failed");
         swvenc_delete_pointer(privateHandle);
@@ -2085,6 +2094,13 @@ OMX_ERRORTYPE  omx_venc::component_deinit(OMX_IN OMX_HANDLETYPE hComp)
     DEBUG_PRINT_HIGH("Calling swvenc_deinit()");
     swvenc_deinit(m_hSwVenc);
 
+    if (msg_thread_created) {
+        msg_thread_created = false;
+        msg_thread_stop = true;
+        post_message(this, OMX_COMPONENT_CLOSE_MSG);
+        DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
+        pthread_join(msg_thread_id,NULL);
+    }
     DEBUG_PRINT_HIGH("OMX_Venc:Component Deinit");
 
     RETURN(OMX_ErrorNone);
@@ -3162,13 +3178,14 @@ SWVENC_STATUS omx_venc::swvenc_empty_buffer_done
                   size = handle->size;
               }
            }
-           int status = munmap(p_ipbuffer->p_buffer, size);
-           DEBUG_PRINT_HIGH("Unmapped pBuffer <%p> size <%d> status <%d>", p_ipbuffer->p_buffer, size, status);
+
+           DEBUG_PRINT_HIGH("Unmapping pBuffer <%p> size <%d>", p_ipbuffer->p_buffer, size);
+           if (-1 == munmap(p_ipbuffer->p_buffer, size))
+               DEBUG_PRINT_HIGH("Unmap failed");
         }
 #endif
         post_event ((unsigned long)omxhdr,error,OMX_COMPONENT_GENERATE_EBD);
     }
-
     RETURN(eRet);
 }
 
@@ -3448,6 +3465,9 @@ SWVENC_STATUS omx_venc::swvenc_set_profile_level
              break;
           case OMX_VIDEO_H263Level40:
              Level.h263 = SWVENC_LEVEL_H263_40;
+             break;
+          case OMX_VIDEO_H263Level45:
+             Level.h263 = SWVENC_LEVEL_H263_45;
              break;
           case OMX_VIDEO_H263Level50:
              Level.h263 = SWVENC_LEVEL_H263_50;

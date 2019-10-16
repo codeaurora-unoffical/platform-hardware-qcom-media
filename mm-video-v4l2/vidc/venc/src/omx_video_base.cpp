@@ -346,13 +346,6 @@ omx_video::omx_video():
 omx_video::~omx_video()
 {
     DEBUG_PRINT_HIGH("~omx_video(): Inside Destructor()");
-    if (msg_thread_created) {
-        msg_thread_stop = true;
-        post_message(this, OMX_COMPONENT_CLOSE_MSG);
-        DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
-        pthread_join(msg_thread_id,NULL);
-    }
-    DEBUG_PRINT_HIGH("omx_video: Waiting on Async Thread exit");
     /*For V4L2 based drivers, pthread_join is done in device_close
      * so no need to do it here*/
     pthread_mutex_destroy(&m_lock);
@@ -1464,12 +1457,16 @@ bool omx_video::post_event(unsigned long p1,
     pthread_mutex_lock(&m_lock);
 
     if ((id == OMX_COMPONENT_GENERATE_FTB) ||
-            (id == OMX_COMPONENT_GENERATE_FBD) ||
-            (id == OMX_COMPONENT_GENERATE_EVENT_OUTPUT_FLUSH)) {
+#ifndef _LINUX_
+            (id == OMX_COMPONENT_GENERATE_EVENT_OUTPUT_FLUSH) ||
+#endif
+            (id == OMX_COMPONENT_GENERATE_FBD)) {
         m_ftb_q.insert_entry(p1,p2,id);
     } else if ((id == OMX_COMPONENT_GENERATE_ETB) ||
-            (id == OMX_COMPONENT_GENERATE_EBD) ||
-            (id == OMX_COMPONENT_GENERATE_EVENT_INPUT_FLUSH)) {
+#ifndef _LINUX_
+            (id == OMX_COMPONENT_GENERATE_EVENT_INPUT_FLUSH) ||
+#endif
+            (id == OMX_COMPONENT_GENERATE_EBD)) {
         m_etb_q.insert_entry(p1,p2,id);
     } else {
         m_cmd_q.insert_entry(p1,p2,id);
