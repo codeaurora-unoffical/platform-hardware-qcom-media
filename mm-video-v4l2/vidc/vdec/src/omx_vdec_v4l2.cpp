@@ -13402,7 +13402,7 @@ omx_vdec::perf_control::perf_control()
 
 omx_vdec::perf_control::~perf_control()
 {
-    if (m_perf_handle != 0 && m_perf_lock_release) {
+    if (m_perf_handle > 0 && m_perf_lock_release) {
         DEBUG_PRINT_LOW("NOTE2: release perf lock");
         m_perf_lock_release(m_perf_handle);
     }
@@ -13427,21 +13427,28 @@ void omx_vdec::perf_control::send_hint_to_mpctl(bool state)
      */
     int arg = 0x4401;
 
+    if (state == true && m_perf_lock_acquire && mpctl_obj.vid_inst_count == 0 && mpctl_obj.vid_acquired == false) {
+        mpctl_obj.vid_disp_handle = m_perf_lock_acquire(0, 0, &arg, sizeof(arg) / sizeof(int));
+        if (mpctl_obj.vid_disp_handle <= 0) {
+            DEBUG_PRINT_ERROR("Video slvp perflock acquire failed, vid_disp_handle %d", mpctl_obj.vid_disp_handle);
+            m_perf_lock.unlock();
+            return;
+        }
+        mpctl_obj.vid_acquired = true;
+        DEBUG_PRINT_INFO("Video slvp perflock acquired, mpctl_obj.vid_disp_handle %d", mpctl_obj.vid_disp_handle);
+    } else if (state == false && m_perf_lock_release && mpctl_obj.vid_inst_count == 1 && mpctl_obj.vid_acquired == true) {
+        m_perf_lock_release(mpctl_obj.vid_disp_handle);
+        mpctl_obj.vid_acquired = false;
+        mpctl_obj.vid_disp_handle = 0;
+        DEBUG_PRINT_INFO("Video slvp perflock released, mpctl_obj.vid_disp_handle %d", mpctl_obj.vid_disp_handle);
+    }
+
     if (state == true) {
         mpctl_obj.vid_inst_count++;
-    } else if (state == false) {
+    } else if (state == false && mpctl_obj.vid_acquired == true) {
         mpctl_obj.vid_inst_count--;
     }
 
-    if (m_perf_lock_acquire && mpctl_obj.vid_inst_count == 1 && mpctl_obj.vid_acquired == false) {
-        mpctl_obj.vid_disp_handle = m_perf_lock_acquire(0, 0, &arg, sizeof(arg) / sizeof(int));
-        mpctl_obj.vid_acquired = true;
-        DEBUG_PRINT_INFO("Video slvp perflock acquired");
-    } else if (m_perf_lock_release && (mpctl_obj.vid_inst_count == 0 || mpctl_obj.vid_inst_count > 1) && mpctl_obj.vid_acquired == true) {
-        m_perf_lock_release(mpctl_obj.vid_disp_handle);
-        mpctl_obj.vid_acquired = false;
-        DEBUG_PRINT_INFO("Video slvp perflock released");
-    }
     m_perf_lock.unlock();
 }
 
@@ -13454,8 +13461,10 @@ void omx_vdec::perf_control::request_cores(int frame_duration_us)
     if (retVal && m_perf_lock_acquire && m_perf_handle == 0) {
         int arg = 0x700 /*base value*/ + 2 /*cores*/;
         m_perf_handle = m_perf_lock_acquire(m_perf_handle, 0, &arg, sizeof(arg)/sizeof(int));
-        if (m_perf_handle) {
+        if (m_perf_handle > 0) {
             DEBUG_PRINT_HIGH("perf lock acquired");
+        } else {
+            DEBUG_PRINT_ERROR("perf lock acquire error: m_perf_handle %d", m_perf_handle);
         }
     }
 }
