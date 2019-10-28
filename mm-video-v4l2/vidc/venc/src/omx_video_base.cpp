@@ -5091,19 +5091,13 @@ bool omx_video::omx_c2d_conv::convert(int src_fd, void *src_base, void *src_vira
 
 bool omx_video::omx_c2d_conv::open(unsigned int height,unsigned int width,
         ColorConvertFormat src, ColorConvertFormat dest, unsigned int src_stride,
-        unsigned int flags, bool secure)
+        unsigned int flags)
 {
     bool status = false;
     pthread_mutex_lock(&c_lock);
     if (!c2dcc) {
-#ifdef SUPPORT_SECURE_C2D
-        c2dcc = mConvertOpen(width, height, width, height,
-                src, dest, flags, src_stride, secure);
-#else
-        (void)secure;
         c2dcc = mConvertOpen(width, height, width, height,
                 src, dest, flags, src_stride);
-#endif
         if (c2dcc) {
             src_format = src;
             status = true;
@@ -5263,8 +5257,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
                         (unsigned int)m_sInPortDef.format.video.nFrameHeight);
                 if (!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
                             m_sInPortDef.format.video.nFrameWidth,
-                            RGBA8888, NV12_128m, handle->width, handle->flags,
-                            secure_session)) {
+                            RGBA8888, NV12_128m, handle->width, handle->flags)) {
                     m_pCallbacks.EmptyBufferDone(hComp,m_app_data,buffer);
                     DEBUG_PRINT_ERROR("Color conv open failed");
                     return OMX_ErrorBadParameter;
@@ -5343,26 +5336,19 @@ OMX_ERRORTYPE omx_video::convert_queue_buffer(OMX_HANDLETYPE hComp,
         struct pmem &Input_pmem_info,unsigned long &index)
 {
 
+    unsigned char *uva;
     OMX_ERRORTYPE ret = OMX_ErrorNone;
     unsigned long address = 0,p2,id;
-#ifdef SUPPORT_SECURE_C2D
-    unsigned long dummy_address = 0;
-    unsigned char *uva = (unsigned char *)&dummy_address;
-#else
-    unsigned char *uva = NULL;
-#endif
 
     DEBUG_PRINT_LOW("In Convert and queue Meta Buffer");
     if (!psource_frame || !pdest_frame) {
         DEBUG_PRINT_ERROR("convert_queue_buffer invalid params");
         return OMX_ErrorBadParameter;
     }
-#ifndef SUPPORT_SECURE_C2D
     if (secure_session) {
         DEBUG_PRINT_ERROR("cannot convert buffer during secure session");
         return OMX_ErrorInvalidState;
     }
-#endif
 
     if (!psource_frame->nFilledLen) {
         if(psource_frame->nFlags & OMX_BUFFERFLAG_EOS) {
@@ -5389,38 +5375,31 @@ OMX_ERRORTYPE omx_video::convert_queue_buffer(OMX_HANDLETYPE hComp,
                     Input_pmem_info.size, input_buf_size);
             return OMX_ErrorBadParameter;
         }
-        // Cannot mmap if secure buffer
-        if (!secure_session) {
-            uva = (unsigned char *)mmap(NULL, Input_pmem_info.size,
-                    PROT_READ|PROT_WRITE,
-                    MAP_SHARED,Input_pmem_info.fd,0);
-            if (uva == MAP_FAILED) {
-                DEBUG_PRINT_ERROR("convert_queue_buffer: failed to map handle fd(%d) size(%u)",
-                        Input_pmem_info.fd, Input_pmem_info.size);
-                ret = OMX_ErrorBadParameter;
-            }
-        }
-        DEBUG_PRINT_HIGH("c2d_conv.convert: Input_pmem_info.fd %d, m_pInput_pmem[index].fd %d, input_buf_size %d", Input_pmem_info.fd, m_pInput_pmem[index].fd, input_buf_size);
-        if (!c2d_conv.convert(Input_pmem_info.fd, uva, uva,
-                    m_pInput_pmem[index].fd, pdest_frame->pBuffer, pdest_frame->pBuffer)) {
-            DEBUG_PRINT_ERROR("Color Conversion failed");
+        uva = (unsigned char *)mmap(NULL, Input_pmem_info.size,
+                PROT_READ|PROT_WRITE,
+                MAP_SHARED,Input_pmem_info.fd,0);
+        if (uva == MAP_FAILED) {
+            DEBUG_PRINT_ERROR("convert_queue_buffer: failed to map handle fd(%d) size(%u)",
+                    Input_pmem_info.fd, Input_pmem_info.size);
             ret = OMX_ErrorBadParameter;
         } else {
-            unsigned int buf_size = 0;
-            if (!c2d_conv.get_buffer_size(C2D_OUTPUT,buf_size))
+            if (!c2d_conv.convert(Input_pmem_info.fd, uva, uva,
+                        m_pInput_pmem[index].fd, pdest_frame->pBuffer, pdest_frame->pBuffer)) {
+                DEBUG_PRINT_ERROR("Color Conversion failed");
                 ret = OMX_ErrorBadParameter;
-            else {
-                DEBUG_PRINT_HIGH("c2d_conv.convert: %d, %d, %d, %d", Input_pmem_info.fd, m_pInput_pmem[index].fd, input_buf_size, buf_size);
-                pdest_frame->nOffset = 0;
-                pdest_frame->nFilledLen = buf_size;
-                pdest_frame->nTimeStamp = psource_frame->nTimeStamp;
-                pdest_frame->nFlags = psource_frame->nFlags;
-                DEBUG_PRINT_LOW("Buffer header %p Filled len size %u",
-                        pdest_frame, (unsigned int)pdest_frame->nFilledLen);
+            } else {
+                unsigned int buf_size = 0;
+                if (!c2d_conv.get_buffer_size(C2D_OUTPUT,buf_size))
+                    ret = OMX_ErrorBadParameter;
+                else {
+                    pdest_frame->nOffset = 0;
+                    pdest_frame->nFilledLen = buf_size;
+                    pdest_frame->nTimeStamp = psource_frame->nTimeStamp;
+                    pdest_frame->nFlags = psource_frame->nFlags;
+                    DEBUG_PRINT_LOW("Buffer header %p Filled len size %u",
+                            pdest_frame, (unsigned int)pdest_frame->nFilledLen);
+                }
             }
-        }
-        // No munmap if secure buffer
-        if (!secure_session) {
             munmap(uva,Input_pmem_info.size);
         }
     }

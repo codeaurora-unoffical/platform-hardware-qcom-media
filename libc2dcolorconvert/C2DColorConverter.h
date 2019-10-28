@@ -34,10 +34,6 @@
 #include <c2d2.h>
 #include <sys/types.h>
 
-typedef C2D_STATUS (*LINK_c2dDriverInit)(C2D_DRIVER_SETUP_INFO *set_driver_op);
-
-typedef C2D_STATUS (*LINK_c2dDriverDeInit)(void);
-
 typedef C2D_STATUS (*LINK_c2dCreateSurface)( uint32 *surface_id,
         uint32 surface_bits,
         C2D_SURFACE_TYPE surface_type,
@@ -119,11 +115,7 @@ public:
     virtual int32_t dumpOutput(char * filename, char mode) = 0;
 };
 
-#ifdef SUPPORT_SECURE_C2D
-typedef C2DColorConverterBase* createC2DColorConverter_t(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags, size_t srcStride, bool secure);
-#else
 typedef C2DColorConverterBase* createC2DColorConverter_t(size_t srcWidth, size_t srcHeight, size_t dstWidth, size_t dstHeight, ColorConvertFormat srcFormat, ColorConvertFormat dstFormat, int32_t flags, size_t srcStride);
-#endif
 typedef void destroyC2DColorConverter_t(C2DColorConverterBase*);
 
 }

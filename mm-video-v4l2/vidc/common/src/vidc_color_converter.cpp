@@ -98,13 +98,8 @@ bool omx_c2d_conv::open(unsigned int height,unsigned int width,
     bool status = false;
 
     if (!c2dcc) {
-#ifdef SUPPORT_SECURE_C2D
-        c2dcc = mConvertOpen(width, height, width, height,
-                src,dest,0,0,0);
-#else
         c2dcc = mConvertOpen(width, height, width, height,
                 src,dest,0,0);
-#endif
 
         if (c2dcc) {
             src_format = src;

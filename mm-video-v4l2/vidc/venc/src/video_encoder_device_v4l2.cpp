@@ -4074,18 +4074,10 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     plane[0].data_offset = bufhdr->nOffset;
 #ifdef _HW_RGBA
                     plane[0].length = (m_sVenc_cfg.inputformat == V4L2_PIX_FMT_RGB32) ?
-                        VENUS_BUFFER_SIZE(COLOR_FMT_RGBA8888, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height) :
-                        bufhdr->nAllocLen;
-#else // _HW_RGBA
-#ifdef SUPPORT_SECURE_C2D
-                    if (venc_handle->is_secure_session()) {
-                        plane[0].length = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
-                    } else
+                        VENUS_BUFFER_SIZE(COLOR_FMT_RGBA8888, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height) : bufhdr->nAllocLen;
+#else
+                    plane[0].length = bufhdr->nAllocLen;
 #endif
-                    {
-                        plane[0].length = bufhdr->nAllocLen;
-                    }
-#endif //_HW_RGBA
                     plane[0].bytesused = bufhdr->nFilledLen;
                     DEBUG_PRINT_LOW("venc_empty_buf: empty EOS buffer");
                 } else {
@@ -4305,16 +4297,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 #ifdef _HW_RGBA
                     plane[0].length = (m_sVenc_cfg.inputformat == V4L2_PIX_FMT_RGB32) ?
                           VENUS_BUFFER_SIZE(COLOR_FMT_RGBA8888, handle->width, handle->height) : handle->size;
-#else // _HW_RGBA
-#ifdef SUPPORT_SECURE_C2D
-                    if (venc_handle->is_secure_session()) {
-                        plane[0].length = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, handle->width, handle->height);
-                    } else
+#else
+                    plane[0].length = handle->size;
 #endif
-                    {
-                        plane[0].length = handle->size;
-                    }
-#endif //_HW_RGBA
                     plane[0].bytesused = handle->size;
                     DEBUG_PRINT_LOW("venc_empty_buf: Opaque camera buf: fd = %d "
                                 ": filled %d of %d format 0x%lx", fd, plane[0].bytesused, plane[0].length, m_sVenc_cfg.inputformat);
@@ -4322,20 +4307,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
             } else {
                 plane[0].m.userptr = (unsigned long) bufhdr->pBuffer;
                 plane[0].data_offset = bufhdr->nOffset;
-#ifdef _HW_RGBA
-                plane[0].length = (m_sVenc_cfg.inputformat == V4L2_PIX_FMT_RGB32) ?
-                    VENUS_BUFFER_SIZE(COLOR_FMT_RGBA8888, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height) :
-                    bufhdr->nAllocLen;
-#else // _HW_RGBA
-#ifdef SUPPORT_SECURE_C2D
-                if (venc_handle->is_secure_session()) {
-                    plane[0].length = VENUS_BUFFER_SIZE(COLOR_FMT_NV12, m_sVenc_cfg.input_width, m_sVenc_cfg.input_height);
-                } else
-#endif
-                {
-                    plane[0].length = bufhdr->nAllocLen;
-                }
-#endif //_HW_RGBA
+                plane[0].length = bufhdr->nAllocLen;
                 plane[0].bytesused = bufhdr->nFilledLen;
                 DEBUG_PRINT_LOW("venc_empty_buf: Opaque non-camera buf: fd = %d filled %d of %d",
                         fd, plane[0].bytesused, plane[0].length);
