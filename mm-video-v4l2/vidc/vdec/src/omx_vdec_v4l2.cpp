@@ -10754,7 +10754,8 @@ void omx_vdec::convert_color_space_info(OMX_U32 primaries, OMX_U32 range,
             aspects->mPrimaries = ColorAspects::PrimariesBT2020;
             break;
         case MSM_VIDC_UNSPECIFIED:
-            //Client does not expect ColorAspects::PrimariesUnspecified, but rather the supplied default
+            aspects->mPrimaries = ColorAspects::PrimariesUnspecified;
+            break;
         default:
             //aspects->mPrimaries = ColorAspects::PrimariesOther;
             aspects->mPrimaries = m_client_color_space.sAspects.mPrimaries;
@@ -10840,6 +10841,10 @@ bool omx_vdec::handle_color_space_info(void *data)
     ColorAspects tempAspects;
     memset(&tempAspects, 0x0, sizeof(ColorAspects));
     ColorAspects *aspects = &tempAspects;
+    aspects->mRange =  ColorAspects::RangeUnspecified;
+    aspects->mPrimaries = ColorAspects::PrimariesUnspecified;
+    aspects->mMatrixCoeffs = ColorAspects::MatrixUnspecified;
+    aspects->mTransfer = ColorAspects::TransferUnspecified;
 
     switch(output_capability) {
         case V4L2_PIX_FMT_MPEG2:
@@ -10870,7 +10875,8 @@ bool omx_vdec::handle_color_space_info(void *data)
                 display_info_payload = (struct msm_vidc_vui_display_info_payload*)data;
 
                 /* Refer H264 Spec @ Rec. ITU-T H.264 (02/2014) to understand this code */
-
+                aspects->mRange = display_info_payload->video_full_range_flag ?
+                    ColorAspects::RangeFull : ColorAspects::RangeLimited;
                 if (display_info_payload->video_signal_present_flag &&
                         display_info_payload->color_description_present_flag) {
                     convert_color_space_info(display_info_payload->color_primaries,
@@ -10964,6 +10970,11 @@ bool omx_vdec::handle_color_space_info(void *data)
             m_internal_color_space.sAspects.mTransfer != aspects->mTransfer ||
             m_internal_color_space.sAspects.mMatrixCoeffs != aspects->mMatrixCoeffs ||
             m_internal_color_space.sAspects.mRange != aspects->mRange) {
+        if (aspects->mPrimaries == ColorAspects::PrimariesUnspecified &&
+            aspects->mRange == ColorAspects::RangeFull) {
+            DEBUG_PRINT_LOW("ColorPrimaries is unspecified, defaulting to ColorPrimaries_BT601_6_525 before copying");
+            aspects->mPrimaries = ColorAspects::PrimariesBT601_6_525;
+        }
         memcpy(&(m_internal_color_space.sAspects), aspects, sizeof(ColorAspects));
 
         DEBUG_PRINT_HIGH("Initiating PORT Reconfig due to Color Aspects Change");
@@ -11083,6 +11094,10 @@ bool omx_vdec::handle_mastering_display_color_info(void* data)
 void omx_vdec::set_colormetadata_in_handle(ColorMetaData *color_mdata, unsigned int buf_index)
 {
     private_handle_t *private_handle = NULL;
+    if (color_mdata->colorPrimaries == (ColorPrimaries)2) {
+        DEBUG_PRINT_LOW("ColorPrimaries is unspecified, defaulting to ColorPrimaries_BT601_6_525 before setting");
+        color_mdata->colorPrimaries = ColorPrimaries_BT601_6_525;
+    }
     if (buf_index < drv_ctx.op_buf.actualcount &&
         buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS &&
         native_buffer[buf_index].privatehandle) {
@@ -11092,6 +11107,25 @@ void omx_vdec::set_colormetadata_in_handle(ColorMetaData *color_mdata, unsigned 
         setMetaData(private_handle, COLOR_METADATA, (void*)color_mdata);
     }
 }
+
+#ifdef USE_GBM
+void omx_vdec::set_colormetadata_in_bo(ColorMetaData *color_mdata, unsigned int buf_index)
+{
+    if (buf_index < drv_ctx.op_buf.actualcount &&
+        buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS &&
+        drv_ctx.op_buf_gbm_info[buf_index].bo_fd) {
+        int ret;
+        DEBUG_PRINT_LOW("set color meta for bo  %p %d",color_mdata,
+            drv_ctx.op_buf_gbm_info[buf_index].bo_fd);
+        ret = gbm_perform(GBM_PERFORM_SET_METADATA, drv_ctx.op_buf_gbm_info[buf_index].bo,
+                  GBM_METADATA_SET_COLOR_METADATA, (void *)color_mdata);
+        if (ret == GBM_ERROR_NONE)
+           DEBUG_PRINT_LOW(" GBM_METADATA_SET_COLOR_META Success");
+        else
+           DEBUG_PRINT_ERROR(" GBM_METADATA_SET_COLOR_META Failed");
+    }
+}
+#endif
 
 void omx_vdec::convert_color_aspects_to_metadata(ColorAspects& aspects, ColorMetaData &color_mdata)
 {
@@ -11553,8 +11587,29 @@ bool omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                 print_debug_hdr_color_info_mdata(&color_mdata);
                 print_debug_hdr10plus_metadata(color_mdata);
                 set_colormetadata_in_handle(&color_mdata, buf_index);
-        }
+        } else {
+#ifdef USE_GBM
+            ColorAspects final_color_aspects;
+            HDRStaticInfo final_hdr_info;
+            memset(&final_color_aspects, 0, sizeof(final_color_aspects));
+            memset(&final_hdr_info, 0, sizeof(final_hdr_info));
+            get_preferred_color_aspects(final_color_aspects);
 
+            /* For VP8, always set the metadata on gralloc handle to 601-LR */
+            if (output_capability == V4L2_PIX_FMT_VP8) {
+                final_color_aspects.mPrimaries = ColorAspects::PrimariesBT601_6_525;
+                final_color_aspects.mRange = ColorAspects::RangeLimited;
+                final_color_aspects.mTransfer = ColorAspects::TransferSMPTE170M;
+                final_color_aspects.mMatrixCoeffs = ColorAspects::MatrixBT601_6;
+            }
+            get_preferred_hdr_info(final_hdr_info);
+            convert_color_aspects_to_metadata(final_color_aspects, color_mdata);
+            convert_hdr_info_to_metadata(final_hdr_info, color_mdata);
+            print_debug_hdr_color_info_mdata(&color_mdata);
+            print_debug_hdr10plus_metadata(color_mdata);
+            set_colormetadata_in_bo(&color_mdata, buf_index);
+#endif
+        }
     }
 unrecognized_extradata:
     if (client_extradata) {
