@@ -11209,7 +11209,7 @@ bool omx_vdec::handle_color_space_info(void *data)
 
                 /* Refer H264 Spec @ Rec. ITU-T H.264 (02/2014) to understand this code */
                 aspects->mRange = display_info_payload->video_full_range_flag ?
-                    ColorAspects::RangeFull : ColorAspects::RangeLimited;
+                    ColorAspects::RangeFull : aspects->mRange;
                 if (display_info_payload->video_signal_present_flag &&
                         display_info_payload->color_description_present_flag) {
                     convert_color_space_info(display_info_payload->color_primaries,
@@ -13111,7 +13111,7 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::free_output_buffer(
         return OMX_ErrorBadParameter;
     }
     if (pmem_fd[index] >= 0) {
-        munmap(pmem_baseaddress[index], buffer_size_req);
+        munmap(pmem_baseaddress[index], m_out_mem_ptr_client[index].nAllocLen);
         close(pmem_fd[index]);
     }
     pmem_fd[index] = -1;
