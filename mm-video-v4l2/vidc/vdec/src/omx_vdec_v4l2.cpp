@@ -9770,7 +9770,7 @@ bool omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,int dev_fd,
     struct gbm_bo *bo = NULL;
     int bo_fd = -1, meta_fd = -1;
     if (!op_buf_gbm_info || dev_fd < 0 ) {
-        DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_ion_memory");
+        DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_gbm_memory");
         return FALSE;
     }
 
@@ -9788,7 +9788,7 @@ bool omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,int dev_fd,
        flags |= GBM_BO_USAGE_UBWC_ALIGNED_QTI;
 
     DEBUG_PRINT_LOW("create NV12 gbm_bo with width=%d, height=%d foramt %x",
-       drv_ctx.output_format, w, h);
+       w, h, drv_ctx.output_format);
 
     if (drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_TP10_UBWC) {
        bo = gbm_bo_create(gbm, w, h,GBM_FORMAT_YCbCr_420_TP10_UBWC,
