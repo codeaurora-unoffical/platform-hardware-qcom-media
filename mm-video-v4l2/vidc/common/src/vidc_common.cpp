@@ -328,6 +328,7 @@ void get_gralloc_format_as_string(char * buf, int buf_len, int format) {
     switch (format) {
 #ifdef __LIBGBM__
         case GBM_FORMAT_NV12_ENCODEABLE:
+        case GBM_FORMAT_YCbCr_420_SP_VENUS:
 #else
         case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
 #endif
