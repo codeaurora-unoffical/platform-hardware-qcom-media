@@ -7449,6 +7449,8 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     OMX_ERRORTYPE ret = OMX_ErrorNone;
     struct vdec_bufferpayload *temp_buffer;
     bool port_setting_changed = true;
+    native_handle_t *native_handle;
+    int fd=0, offset=0;
 
     /*Should we generate a Aync error event*/
     if (buffer == NULL || buffer->pInputPortPrivate == NULL) {
@@ -7491,6 +7493,19 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     }
 
     auto_lock l(buf_lock);
+
+    if (allocate_native_handle) {
+        native_handle = (native_handle_t*)buffer->pBuffer;
+        if (!native_handle) {
+          DEBUG_PRINT_ERROR("ERROR: vdec_etb: native handle is NULL");
+          return OMX_ErrorBadParameter;
+        }
+
+        fd     = native_handle->data[0];
+        offset = buffer->nOffset;
+        DEBUG_PRINT_LOW("vdec_empty_buf: native handle fd:%d offset:%d filledlen:%d",
+            fd, offset, buffer->nFilledLen);
+    }
     temp_buffer = (struct vdec_bufferpayload *)buffer->pInputPortPrivate;
 
     if (!temp_buffer || (temp_buffer -  drv_ctx.ptr_inputbuffer) > (int)drv_ctx.ip_buf.actualcount) {
@@ -7603,8 +7618,13 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     plane.length = drv_ctx.ip_buf.buffer_size;
     plane.m.userptr = (unsigned long)temp_buffer->bufferaddr -
         (unsigned long)temp_buffer->offset;
-    plane.reserved[0] = temp_buffer->pmem_fd;
-    plane.reserved[1] = temp_buffer->offset;
+    if (allocate_native_handle) {
+      plane.reserved[0] = fd;
+      plane.reserved[1] = offset;
+    } else {
+      plane.reserved[0] = temp_buffer->pmem_fd;
+      plane.reserved[1] = temp_buffer->offset;
+    }
     plane.reserved[3] = (unsigned long)buffer->pMarkData;
     plane.reserved[4] = (unsigned long)buffer->hMarkTargetComponent;
     plane.data_offset = 0;
