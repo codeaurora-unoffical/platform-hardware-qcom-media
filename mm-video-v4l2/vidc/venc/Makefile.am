@@ -19,6 +19,7 @@ AM_CPPFLAGS += -UINPUT_BUFFER_LOG
 AM_CPPFLAGS += -UOUTPUT_BUFFER_LOG
 AM_CPPFLAGS += -D_ANDROID_ICS_
 AM_CPPFLAGS += -D_LINUX_
+AM_CPPFLAGS += -DSWENC_ROTATION_DISABLED
 
 if TARGET_HYPERVISOR
 AM_CPPFLAGS += -DHYPERVISOR
@@ -85,7 +86,7 @@ lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
 libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVenc_la_LDFLAGS = -module -shared -avoid-version
-libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -lbase -ldl -lpthread
+libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -ldl -lpthread
 
 if !TARGET_USES_LIBGBM
 libOmxVenc_la_LDFLAGS += -lion
@@ -108,7 +109,7 @@ c1_sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_vendor_extensions
 libOmxSwVencMpeg4_la_SOURCES = $(c1_sources)
 libOmxSwVencMpeg4_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxSwVencMpeg4_la_LDFLAGS = -module -shared -avoid-version
-libOmxSwVencMpeg4_la_LDFLAGS += -llog  -lcutils -lui -lglib-2.0 -lion -lqdMetaData -lMpeg4SwEncoder
+libOmxSwVencMpeg4_la_LDFLAGS += -llog  -lcutils  -lglib-2.0 -lion -lqdMetaData -lMpeg4SwEncoder
 libOmxSwVencMpeg4_la_LDFLAGS += -L$(top_builddir)/libplatformconfig -L$(top_builddir)/libc2dcolorconvert
 libOmxSwVencMpeg4_la_LDFLAGS += -lplatformconfig  -lc2dcolorconvert
 endif
