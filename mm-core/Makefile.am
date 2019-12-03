@@ -27,6 +27,7 @@ h_sources +=inc/OMX_Index.h
 h_sources +=inc/OMX_IVCommon.h
 h_sources +=inc/OMX_Other.h
 h_sources +=inc/OMX_QCOMExtns.h
+h_sources +=inc/OMX_VideoExt.h
 h_sources +=inc/OMX_Types.h
 h_sources +=inc/OMX_Video.h
 h_sources +=inc/qc_omx_common.h
@@ -63,8 +64,7 @@ TARGET_REGISTRY = 8937
 endif
 
 if TARGET_USES_LIBGBM
-AM_CPPFLAGS += -D__LIBGBM__
-AM_CPPFLAGS += -D__USE_GBM__
+AM_CPPFLAGS += -DUSE_GBM
 endif
 
 c_sources +=src/${TARGET_REGISTRY}/registry_table_android.c

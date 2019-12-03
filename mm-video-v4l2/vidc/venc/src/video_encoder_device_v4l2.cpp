@@ -46,12 +46,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _ANDROID_
 #include <media/hardware/HardwareAPI.h>
-#ifndef __LIBGBM__
+#ifndef USE_GBM
 #include <gralloc_priv.h>
 #endif
 #endif
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
 #include <gbm.h>
 #include <gbm_priv.h>
 #endif
@@ -63,7 +63,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #undef MAX
 #endif
 
-#ifndef __LIBGBM__
+#ifndef USE_GBM
 #include <qdMetaData.h>
 #endif
 
@@ -1687,6 +1687,13 @@ void venc_dev::venc_close()
                 pthread_join(m_tid,NULL);
         }
 
+        if (venc_handle->msg_thread_created) {
+            venc_handle->msg_thread_created = false;
+            venc_handle->msg_thread_stop = true;
+            post_message(venc_handle, omx_video::OMX_COMPONENT_CLOSE_MSG);
+            DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
+            pthread_join(venc_handle->msg_thread_id, NULL);
+        }
         DEBUG_PRINT_HIGH("venc_close X");
         unsubscribe_to_events(m_nDriver_fd);
         close(m_poll_efd);
@@ -4095,8 +4102,8 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
             } else if (!color_format) {
 
                 if (meta_buf->buffer_type == LEGACY_CAM_SOURCE) {
-#ifdef __LIBGBM__
-                    struct gbm_bo *hnd = (struct gbm_bo*)meta_buf->meta_handle;
+#ifdef USE_GBM
+                    struct gbm_bo *hnd = meta_buf->meta_handle;
 #else
                     native_handle_t *hnd = (native_handle_t*)meta_buf->meta_handle;
 #endif
@@ -4108,7 +4115,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                     usage = MetaBufferUtil::getIntAt(hnd, 0, MetaBufferUtil::INT_USAGE);
                     usage = usage > 0 ? usage : 0;
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                     if ((usage & GBM_METADATA_COLOR_SPACE_ITU_R_601_FR)
 #else
                     if ((usage & private_handle_t::PRIV_FLAGS_ITU_R_601_FR)
@@ -4126,7 +4133,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         color_format = (OMX_COLOR_FORMATTYPE)MetaBufferUtil::getIntAt(hnd, 0, MetaBufferUtil::INT_COLORFORMAT);
 
                         memset(&fmt, 0, sizeof(fmt));
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         if (usage & GBM_METADATA_COLOR_SPACE_ITU_R_709 ||
                                 usage & GBM_METADATA_COLOR_SPACE_ITU_R_601) {
 #else
@@ -4136,7 +4143,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             DEBUG_PRINT_ERROR("Camera buffer color format is not 601_FR.");
                             DEBUG_PRINT_ERROR(" This leads to unknown color space");
                         }
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         if (usage & GBM_METADATA_COLOR_SPACE_ITU_R_601_FR) {
 #else
                         if (usage & private_handle_t::PRIV_FLAGS_ITU_R_601_FR) {
@@ -4163,7 +4170,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
                         fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
                         fmt.fmt.pix_mp.width = m_sVenc_cfg.input_width;
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         if (usage & GBM_BO_USAGE_UBWC_ALIGNED_QTI) {
 #else
                         if (usage & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) {
@@ -4207,8 +4214,8 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             fd, plane[0].bytesused, plane[0].length, buf.flags, m_sVenc_cfg.inputformat);
                 } else if (meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
                     VideoGrallocMetadata *meta_buf = (VideoGrallocMetadata *)bufhdr->pBuffer;
-#ifdef __LIBGBM__
-                    struct gbm_bo *handle = (struct gbm_bo *)meta_buf->pHandle;
+#ifdef USE_GBM
+                    struct gbm_bo *handle = meta_buf->pHandle;
 #else
                     private_handle_t *handle = (private_handle_t *)meta_buf->pHandle;
 #endif
@@ -4220,7 +4227,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
                     if (mUseAVTimerTimestamps) {
                         uint64_t avTimerTimestampNs = bufhdr->nTimeStamp * 1000;
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         if (gbm_perform(GBM_PERFORM_GET_METADATA, handle, GBM_METADATA_SET_VT_TIMESTAMP, \
                                 &avTimerTimestampNs) == 0 && avTimerTimestampNs > 0) {
 #else
@@ -4236,7 +4243,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         int color_space = 0;
                         // Moment of truth... actual colorspace is known here..
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         struct meta_data_t colorspace;
                         colorspace.color_space = GBM_METADATA_COLOR_SPACE_ITU_R_709;
                         if (gbm_perform(GBM_PERFORM_GET_METADATA, handle, GBM_METADATA_GET_COLOR_SPACE, \
@@ -4255,24 +4262,24 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         struct v4l2_format fmt;
                         memset(&fmt, 0, sizeof(fmt));
                         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         bool isUBWC = (handle->usage_flags & GBM_BO_USAGE_UBWC_ALIGNED_QTI) && is_gralloc_source_ubwc;
 #else
                         bool isUBWC = (handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) && is_gralloc_source_ubwc;
 #endif
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         if (handle->format == GBM_FORMAT_NV12_ENCODEABLE) {
 #else
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
 #endif
                             m_sVenc_cfg.inputformat = isUBWC ? V4L2_PIX_FMT_NV12_UBWC : V4L2_PIX_FMT_NV12;
                             DEBUG_PRINT_HIGH("ENC_CONFIG: Input Color = NV12 %s", isUBWC ? "UBWC" : "Linear");
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         } else if (handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS_UBWC ) {
                             m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_UBWC;
                             DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12_UBWC");
 #endif
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         } else if (handle->format == GBM_FORMAT_RGBA8888) {
 #else
                         } else if (handle->format == HAL_PIXEL_FORMAT_RGBA_8888) {
@@ -4281,7 +4288,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             // Disregard the Colorspace in gralloc-handle in case of RGB and use
                             //   [a] 601 for non-UBWC case : C2D output is (apparently) 601-LR
                             //   [b] 601 for UBWC case     : Venus can convert to 601-LR or FR. use LR for now.
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                             color_space = GBM_METADATA_COLOR_SPACE_ITU_R_601;
 #else
                             colorSpace = ITU_R_601;
@@ -4294,7 +4301,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         }
 
                         // If device recommendation (persist.vidc.enc.csc.enable) is to use 709, force CSC
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         if (color_space == GBM_METADATA_COLOR_SPACE_ITU_R_601_FR && is_csc_enabled) {
 #else
                         if (colorSpace == ITU_R_601_FR && is_csc_enabled) {
@@ -4307,7 +4314,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             } else {
                                 DEBUG_PRINT_INFO("venc_empty_buf: Will convert 601-FR to 709");
                                 buf.flags = V4L2_MSM_BUF_FLAG_YUV_601_709_CLAMP;
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                                 color_space = GBM_METADATA_COLOR_SPACE_ITU_R_709;
 #else
                                 colorSpace = ITU_R_709;
@@ -4320,7 +4327,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         msm_vidc_h264_matrix_coeff_values matrix;
                         OMX_U32 range;
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         switch (color_space) {
                             case GBM_METADATA_COLOR_SPACE_ITU_R_601_FR:
 #else
@@ -4336,7 +4343,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                                 fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_470_SYSTEM_BG;
                                 break;
                             }
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                             case GBM_METADATA_COLOR_SPACE_ITU_R_709:
 #else
                             case ITU_R_709:
@@ -4362,7 +4369,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                                 break;
                             }
                         }
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         DEBUG_PRINT_HIGH("ENC_CONFIG: selected ColorSpace = %d (601=%d 601_FR=%d 709=%d)",
                                     color_space, GBM_METADATA_COLOR_SPACE_ITU_R_601, GBM_METADATA_COLOR_SPACE_ITU_R_601_FR,
                                     GBM_METADATA_COLOR_SPACE_ITU_R_709);
@@ -4385,7 +4392,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         }
                     }
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                     fd = handle->ion_fd;
 #else
                     fd = handle->fd;
@@ -4525,7 +4532,7 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
     int rc = 0, extra_idx, numBufs;
     struct v4l2_control control;
     LEGACY_CAM_METADATA_TYPE * meta_buf = NULL;
-#ifdef __LIBGBM__
+#ifdef USE_GBM
     struct gbm_bo *hnd = NULL;
 #else
     native_handle_t *hnd = NULL;
@@ -4543,8 +4550,8 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
 
         if (!color_format) {
             if (meta_buf->buffer_type == LEGACY_CAM_SOURCE) {
-#ifdef __LIBGBM__
-                hnd = (struct gbm_bo*)meta_buf->meta_handle;
+#ifdef USE_GBM
+                hnd = meta_buf->meta_handle;
 #else
                 hnd = (native_handle_t*)meta_buf->meta_handle;
 #endif
@@ -4605,7 +4612,7 @@ bool venc_dev::venc_empty_batch(OMX_BUFFERHEADERTYPE *bufhdr, unsigned index)
             usage = MetaBufferUtil::getIntAt(hnd, i, MetaBufferUtil::INT_USAGE);
             usage = usage > 0 ? usage : 0;
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
             if ((usage & GBM_METADATA_COLOR_SPACE_ITU_R_601_FR)
 #else
             if ((usage & private_handle_t::PRIV_FLAGS_ITU_R_601_FR)
@@ -4742,7 +4749,7 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
 
     if (venc_handle->is_secure_session()) {
         if (venc_handle->allocate_native_handle) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
             struct gbm_bo *handle_t = (struct gbm_bo *)(bufhdr->pBuffer);
             plane[0].length = handle_t->size;
 #else
@@ -4751,7 +4758,7 @@ bool venc_dev::venc_fill_buf(void *buffer, void *pmem_data_buf,unsigned index,un
 #endif
         } else {
             output_metabuffer *meta_buf = (output_metabuffer *)(bufhdr->pBuffer);
-#ifdef __LIBGBM__
+#ifdef USE_GBM
             struct gbm_bo *handle_t = meta_buf->nh;
             plane[0].length = handle_t->size;
 #else

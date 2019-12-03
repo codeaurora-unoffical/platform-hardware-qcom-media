@@ -57,7 +57,7 @@ AC_ARG_ENABLE([target-msm8937],
         [target_msm8937="${enableval}"])
 
 AC_ARG_ENABLE([is-ubwc-supported],
-        AC_HELP_STRING([--enable-ubwc-supported],
+        AC_HELP_STRING([--enable-is-ubwc-supported],
                 [Enable conditional compile for target msm8953 [default=no]]),
         [targets_that_support_ubwc="${enableval}"])
 
@@ -91,20 +91,20 @@ AC_ARG_ENABLE([master-side-cp-target-list],
                 [Enable conditional compile for target master_side_cp_target_list [default=no]]),
         [master_side_cp_target_list="${enableval}"])
 
-AC_ARG_ENABLE([targets-that-use-hevc-adsp-heap],
-        AC_HELP_STRING([-targets-that-use-hevc-adsp-heap],
-                [Enable conditional compile for target target-uses-ion [default=no]]),
-        [targets_that_use_hevc_adsp_heap="${enableval}"])
-
 AC_ARG_ENABLE([use-glib],
         AC_HELP_STRING([--enable-use-glib],
                 [Enable conditional compile for use glib [default=no]]),
         [use_glib="${enableval}"])
 
-AC_ARG_ENABLE([build-mm-video],
-        AC_HELP_STRING([--enable-use-glib],
-                [Enable conditional compile for use glib [default=no]]),
-        [build_mm_video="${enableval}"])
+AC_ARG_ENABLE([venc],
+        AC_HELP_STRING([--enable-venc], [Build video encoder modules]), [venc="${enableval}"], [venc="no"])
+
+AM_CONDITIONAL([WITH_VENC], [ test "x$venc" = "xyes"])
+
+AC_ARG_ENABLE([vdec],
+        AC_HELP_STRING([--enable-vdec], [Build video decoder modules]), [vdec="${enableval}"], [vdec="no"])
+
+AM_CONDITIONAL([WITH_VDEC], [ test "x$vdec" = "xyes"])
 
 AC_ARG_ENABLE([target-hypervisor],
 	AC_HELP_STRING([--enable-target-hypervisor],
@@ -117,10 +117,6 @@ AC_ARG_ENABLE([targets-use-libgbm],
                 [Enable conditional compile for target targets_use_libgbm [default=no]]),
         [targets_use_libgbm="${enableval}"])
 
-AC_ARG_ENABLE([vdec-build],
-        AC_HELP_STRING([--enable-vdec-build],
-                [Enable conditional compile for video decoder [default=yes]]),
-        [skip_vdec_build="${enableval}"])
 
 AC_ARG_ENABLE([target-kernel-version],
         AC_HELP_STRING([--enable-target-kernel-version],
@@ -134,27 +130,27 @@ AC_ARG_WITH([sanitized-headers],
         [CPPFLAGS="$CPPFLAGS -I $withval"])
 
 AC_ARG_WITH([glib-headers],
-        [AS_HELP_STRING([--with-binder-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-glib-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([utils-headers],
-        [AS_HELP_STRING([--with-utils-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-utils-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([cutils-headers],
-        [AS_HELP_STRING([--with-cutils-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-cutils-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([kernel-headers],
-        [AS_HELP_STRING([--with-kernel-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-kernel-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([kernel-uapi-headers],
-        [AS_HELP_STRING([--with-kernel-uapi-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-kernel-uapi-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([adreno-headers],
-        [AS_HELP_STRING([--with-adreno-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-adreno-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([libgpustats-headers],
@@ -166,32 +162,35 @@ AC_ARG_WITH([libpqstats-headers],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([ui-headers],
-        [AS_HELP_STRING([--with-ui-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-ui-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([android-headers],
-        [AS_HELP_STRING([--with-gralloc-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-android-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([gralloc-headers],
-        [AS_HELP_STRING([--with-strcpyincludes-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-gralloc-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([binder-headers],
-        [AS_HELP_STRING([--with-binder-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-binder-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([display-headers],
-        [AS_HELP_STRING([--with-binder-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-display-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([qdutils-headers],
-        [AS_HELP_STRING([--with-binder-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-qdutils-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_WITH([glib-lib-dir],
-        [AS_HELP_STRING([--with-binder-inc=DIR],[location of common headers])],
+        [AS_HELP_STRING([--with-glib-lib-dir=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
+
+AC_ARG_WITH([libvqzipstats-headers], [AC_HELP_STRING([--with-libvqzipstats-headers=DIR],
+             [Location of vqzipstats headers])], [CPPFLAGS="${CPPFLAGS} -I${withval}"])
 
 AM_CONDITIONAL(TARGET_MSM8953, [test "x$target_msm8953" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8909, [test "x$target_msm8909" = "xyes"])
@@ -207,10 +206,8 @@ AM_CONDITIONAL(TARGETS_THAT_USE_FLAG_MSM8226, [test "x$targets_that_use_flag_msm
 AM_CONDITIONAL(TARGET_USES_MEDIA_EXTENSIONS, [test "x$target_uses_media_extensions" = "xyes"])
 AM_CONDITIONAL(MASTER_SIDE_CP_TARGET_LIST, [test "x$master_side_cp_target_list" = "xyes"])
 AM_CONDITIONAL(USE_GLIB, [test "x$use_glib" = "xyes"])
-AM_CONDITIONAL(BUILD_MM_VIDEO, [test "x$build_mm_video" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_LIBGBM, [test "x$targets_use_libgbm" = "xyes"])
 AM_CONDITIONAL(IS_KERNEL_VERSION_49, [test "x$target_kernel_version" = "x4.9"])
-AM_CONDITIONAL(SKIP_VDEC_BUILD, [test "x$skip_vdec_build" = "xno"])
 
 AC_ARG_WITH([glib],
       AC_HELP_STRING([--with-glib],

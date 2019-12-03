@@ -2,9 +2,13 @@
 #
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = venc
+SUBDIRS :=
+
+if WITH_VENC
+SUBDIRS += venc
+endif
 
 # Enable video decoder compilation for other targets not for APQ8009
-if !SKIP_VDEC_BUILD
+if WITH_VDEC
 SUBDIRS += vdec
 endif

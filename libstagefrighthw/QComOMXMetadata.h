@@ -18,7 +18,7 @@
 #ifndef QCOM_OMX_METADATA_H_
 #define QCOM_OMX_METADATA_H_
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
 #include <gbm.h>
 #include <gbm_priv.h>
 #else
@@ -26,10 +26,6 @@
 #include "cutils/native_handle.h"
 #endif
 #include <media/hardware/MetadataBufferType.h>
-
-#ifdef __LIBGBM__
-typedef const gbm_bo* buffer_handle_t;
-#endif
 
 namespace android {
 
@@ -40,10 +36,17 @@ namespace android {
     } encoder_nativehandle_buffer_type;
 #endif
 
+#ifdef USE_GBM
+typedef struct encoder_media_buffer_type {
+        MetadataBufferType buffer_type;
+        struct gbm_bo* meta_handle;
+    } encoder_media_buffer_type;
+#else
 typedef struct encoder_media_buffer_type {
         MetadataBufferType buffer_type;
         buffer_handle_t meta_handle;
     } encoder_media_buffer_type;
+#endif
 
 #ifdef ANDROID_JELLYBEAN_MR2
     // Meta data buffer layout used to transport output frames to the decoder for

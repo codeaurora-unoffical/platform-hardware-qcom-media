@@ -41,7 +41,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define __STDC_FORMAT_MACROS //enables the format specifiers in inttypes.h
 #include <inttypes.h>
 #include <string.h>
-#ifndef __LIBGBM__
+#ifndef USE_GBM
 #include <qdMetaData.h>
 #endif
 #include "omx_video_base.h"
@@ -53,7 +53,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/ioctl.h>
 #ifdef _ANDROID_ICS_
 #include <media/hardware/HardwareAPI.h>
-#ifdef __LIBGBM__
+#ifdef USE_GBM
 #include <gbm.h>
 #include <gbm_priv.h>
 #else
@@ -338,13 +338,6 @@ omx_video::omx_video():
 omx_video::~omx_video()
 {
     DEBUG_PRINT_HIGH("~omx_video(): Inside Destructor()");
-    if (msg_thread_created) {
-        msg_thread_stop = true;
-        post_message(this, OMX_COMPONENT_CLOSE_MSG);
-        DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
-        pthread_join(msg_thread_id,NULL);
-    }
-    DEBUG_PRINT_HIGH("omx_video: Waiting on Async Thread exit");
     /*For V4L2 based drivers, pthread_join is done in device_close
      * so no need to do it here*/
 #ifndef _MSM8974_
@@ -1585,7 +1578,7 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
                     memcpy(portDefn, &m_sOutPortDef, sizeof(m_sOutPortDef));
                     if (secure_session || allocate_native_handle) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                         portDefn->nBufferSize = sizeof(struct gbm_bo);
 #else
                         portDefn->nBufferSize =
@@ -2178,7 +2171,7 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
                 if (pParam)
                 {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                    *pParam = GBM_BO_USAGE_VIDEO_ENCODER_QTI;
                    if (secure_session)
                      *pParam |= GBM_BO_USAGE_PROTECTED_QTI;
@@ -2382,7 +2375,7 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                     print_debug_color_aspects(&(pParam->sAspects), "get_config (dataspace changed) Client says");
                     // If the dataspace says RGB, recommend 601-limited;
                     // since that is the destination colorspace that C2D or Venus will convert to.
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                     if (pParam->nPixelFormat == GBM_FORMAT_RGBA8888) {
 #else
                     if (pParam->nPixelFormat == HAL_PIXEL_FORMAT_RGBA_8888) {
@@ -3095,7 +3088,7 @@ OMX_ERRORTYPE omx_video::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
                 munmap (m_pInput_pmem[index].buffer,m_pInput_pmem[index].size);
             } else {
                 if (allocate_native_handle) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                     struct gbm_bo *handle = (struct gbm_bo *)m_pInput_pmem[index].buffer;
                     if (handle != NULL) {
                         gbm_bo_destroy(handle);
@@ -3163,7 +3156,7 @@ OMX_ERRORTYPE omx_video::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
                         m_pOutput_pmem[index].size);
                 close (m_pOutput_pmem[index].fd);
             } 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         else if (m_pOutput_pmem[index].buffer) {
                 struct gbm_bo *handle;
                 if (allocate_native_handle) {
@@ -3403,7 +3396,7 @@ OMX_ERRORTYPE  omx_video::allocate_input_buffer(
                 return OMX_ErrorInsufficientResources;
             }
         } else {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
             if (allocate_native_handle) {
                 struct gbm_bo *nh = gbm_bo_create(gbmDevice, m_sInPortDef.format.video.nFrameWidth,
                                         m_sInPortDef.format.video.nFrameHeight,
@@ -3618,7 +3611,7 @@ OMX_ERRORTYPE  omx_video::allocate_output_buffer(
                 //This should only be used for passing reference to source type and
                 //secure handle fd struct native_handle_t*
                 if (allocate_native_handle) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                     struct gbm_bo *nh = gbm_bo_create(gbmDevice, m_sOutPortDef.format.video.nFrameWidth,
                                             m_sOutPortDef.format.video.nFrameHeight,
                                                 m_sOutPortDef.format.video.eColorFormat,
@@ -4080,7 +4073,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
                 if (media_buffer->buffer_type == LEGACY_CAM_SOURCE) {
                     if (media_buffer->meta_handle == NULL)
                         met_error = true;
-#ifndef __LIBGBM__
+#ifndef USE_GBM
                     else {
                         // TBD: revisit this check !
                         int nFds = media_buffer->meta_handle->numFds,
@@ -4163,8 +4156,8 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
                     Input_pmem_info.size);
         } else {
             VideoGrallocMetadata *media_buffer = (VideoGrallocMetadata *)meta_buffer_hdr[nBufIndex].pBuffer;
-#ifdef __LIBGBM__
-            struct gbm_bo *handle = (struct gbm_bo *)media_buffer->pHandle;
+#ifdef USE_GBM
+            struct gbm_bo *handle = media_buffer->pHandle;
             Input_pmem_info.buffer = media_buffer;
             Input_pmem_info.fd = handle->ion_fd;
 #else
@@ -5160,8 +5153,8 @@ void omx_video::omx_release_meta_buffer(OMX_BUFFERHEADERTYPE *buffer)
                             Input_pmem.size);
                 } else if (media_ptr->buffer_type == kMetadataBufferTypeGrallocSource) {
                     VideoGrallocMetadata *media_ptr = (VideoGrallocMetadata *)buffer->pBuffer;
-#ifdef __LIBGBM__
-                    struct gbm_bo *handle = (struct gbm_bo *)media_ptr->pHandle;
+#ifdef USE_GBM
+                    struct gbm_bo *handle = media_ptr->pHandle;
                     Input_pmem.buffer = media_ptr;
                     Input_pmem.fd = handle->ion_fd;
 #else
@@ -5290,13 +5283,13 @@ int omx_video::omx_c2d_conv::get_src_format()
 {
     int format = -1;
     if (src_format == NV12_128m) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         format = GBM_FORMAT_NV12_ENCODEABLE;
 #else
         format = HAL_PIXEL_FORMAT_NV12_ENCODEABLE;
 #endif
     } else if (src_format == RGBA8888) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         format = GBM_FORMAT_RGBA8888;
 #else
         format = HAL_PIXEL_FORMAT_RGBA_8888;
@@ -5322,7 +5315,7 @@ bool omx_video::omx_c2d_conv::get_buffer_size(int port,unsigned int &buf_size)
     return ret;
 }
 
-#ifdef __LIBGBM__
+#ifdef USE_GBM
 bool omx_video::is_conv_needed(struct gbm_bo *handle)
 {
 #else
@@ -5332,7 +5325,7 @@ bool omx_video::is_conv_needed(private_handle_t *handle)
     bool bRet = false;
 
     if (!strncmp(m_platform, "msm8996", 7)) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         bRet = handle->format == GBM_FORMAT_RGBA8888 &&
             !(handle->usage_flags & GBM_BO_USAGE_UBWC_ALIGNED_QTI);
     } else {
@@ -5365,7 +5358,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
     unsigned nBufIndex = 0;
     OMX_ERRORTYPE ret = OMX_ErrorNone;
     VideoGrallocMetadata *media_buffer; // This method primarily assumes gralloc-metadata
-#ifdef __LIBGBM__
+#ifdef USE_GBM
     struct gbm_bo *handle = NULL;
 #else
     private_handle_t *handle = NULL;
@@ -5412,8 +5405,8 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         m_pCallbacks.EmptyBufferDone(hComp, m_app_data, buffer);
         return OMX_ErrorBadParameter;
     } else if (media_buffer) {
-#ifdef __LIBGBM__
-        handle = (struct gbm_bo *)media_buffer->pHandle;
+#ifdef USE_GBM
+        handle = media_buffer->pHandle;
 #else
         handle = (private_handle_t *)media_buffer->pHandle;
 #endif
@@ -5436,7 +5429,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
                         (unsigned int)m_sInPortDef.format.video.nFrameHeight);
                 if (!c2d_conv.open(m_sInPortDef.format.video.nFrameHeight,
                             m_sInPortDef.format.video.nFrameWidth,
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                             RGBA8888, NV12_128m, handle->width, handle->usage_flags)) {
 #else
                             RGBA8888, NV12_128m, handle->width, handle->flags)) {
@@ -5659,8 +5652,8 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
             ret = queue_meta_buffer(hComp,Input_pmem_info);
         } else {
             VideoGrallocMetadata *media_buffer = (VideoGrallocMetadata *)psource_frame->pBuffer;
-#ifdef __LIBGBM__
-            struct gbm_bo *handle = (struct gbm_bo *)media_buffer->pHandle;
+#ifdef USE_GBM
+            struct gbm_bo *handle = media_buffer->pHandle;
             Input_pmem_info.buffer = media_buffer;
             Input_pmem_info.fd = handle->ion_fd;
 #else
@@ -5673,14 +5666,14 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
             m_graphicbuffer_size = Input_pmem_info.size;
             if (is_conv_needed(handle))
                 ret = convert_queue_buffer(hComp,Input_pmem_info,index);
-#ifdef __LIBGBM__
+#ifdef USE_GBM
             else if (handle->format == GBM_FORMAT_NV12_ENCODEABLE ||
 #else
             else if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE ||
 #endif
                     handle->format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m ||
                     handle->format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed ||
-#ifdef __LIBGBM__
+#ifdef USE_GBM
                     handle->format == GBM_FORMAT_RGBA8888 ||
 #else
                     handle->format == HAL_PIXEL_FORMAT_RGBA_8888 ||

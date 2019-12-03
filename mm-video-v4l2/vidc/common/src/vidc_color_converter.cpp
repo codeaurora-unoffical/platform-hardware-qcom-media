@@ -29,7 +29,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define LOG_TAG "OMX_C2D"
 
 #include <utils/Log.h>
-#ifndef __LIBGBM__
+#ifndef USE_GBM
 #include <gralloc_priv.h>
 #else
 #include <gbm_priv.h>
@@ -151,13 +151,13 @@ int omx_c2d_conv::get_src_format()
     int format = -1;
 
     if (src_format == NV12_2K) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         format = GBM_FORMAT_NV12_ENCODEABLE;
 #else
         format = HAL_PIXEL_FORMAT_NV12_ENCODEABLE;
 #endif
     } else if (src_format == RGBA8888) {
-#ifdef __LIBGBM__
+#ifdef USE_GBM
         format = GBM_FORMAT_RGBA8888;
 #else
         format = HAL_PIXEL_FORMAT_RGBA_8888;
