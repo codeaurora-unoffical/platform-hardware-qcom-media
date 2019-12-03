@@ -5977,7 +5977,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                        drv_ctx.video_resolution.frame_height,
                        drv_ctx.gbm_device_fd,
                        &drv_ctx.op_buf_gbm_info[i],
-                       secure_mode ? SECURE_FLAGS_OUTPUT_BUFFER : 0);
+                       secure_mode ? GBM_BO_USAGE_PROTECTED_QTI : 0);
                 if (status == false) {
                     DEBUG_PRINT_ERROR("ION device fd is bad %d",
                                       (int) drv_ctx.op_buf_ion_info[i].data_fd);
@@ -6952,7 +6952,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
                                drv_ctx.gbm_device_fd,
                                &(*omx_op_buf_gbm_info)[i],
                                (secure_mode && !secure_scaling_to_non_secure_opb) ?
-                                      SECURE_FLAGS_OUTPUT_BUFFER : cache_flag);
+                                      GBM_BO_USAGE_PROTECTED_QTI : 0);
             if (status == false) {
                 return OMX_ErrorInsufficientResources;
             }
@@ -7236,6 +7236,8 @@ OMX_ERRORTYPE  omx_vdec::free_buffer(OMX_IN OMX_HANDLETYPE         hComp,
             post_event(OMX_CommandPortDisable,
                     OMX_CORE_INPUT_PORT_INDEX,
                     OMX_COMPONENT_GENERATE_EVENT);
+            if (streaming[OUTPUT_PORT])
+                    stream_off(OMX_CORE_INPUT_PORT_INDEX);
         }
     } else if (port == OMX_CORE_OUTPUT_PORT_INDEX) {
         // check if the buffer is valid
@@ -7397,6 +7399,16 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
     /* The client should not set this when codec is in arbitrary bytes mode */
     if (m_input_pass_buffer_fd) {
         buffer->pBuffer = (OMX_U8*)drv_ctx.ptr_inputbuffer[nBufferIndex].bufferaddr;
+    }
+
+    /* Check if the input timestamp in seconds is greater than LONG_MAX
+       or lesser than LONG_MIN. */
+    if (buffer->nTimeStamp / 1000000 > LONG_MAX ||
+       buffer->nTimeStamp / 1000000 < LONG_MIN) {
+        /* This timestamp cannot be contained in driver timestamp field */
+        DEBUG_PRINT_ERROR("[ETB] BHdr(%p) pBuf(%p) nTS(%lld) nFL(%u) >> Invalid timestamp",
+            buffer, buffer->pBuffer, buffer->nTimeStamp, (unsigned int)buffer->nFilledLen);
+        return OMX_ErrorBadParameter;
     }
 
     DEBUG_PRINT_LOW("[ETB] BHdr(%p) pBuf(%p) nTS(%lld) nFL(%u)",
@@ -8567,11 +8579,6 @@ OMX_ERRORTYPE omx_vdec::fill_buffer_done(OMX_HANDLETYPE hComp,
             time_stamp_dts.get_next_timestamp(buffer,
                     is_interlaced && is_duplicate_ts_valid && !is_mbaff);
         }
-    }
-
-    if (buffer->nTimeStamp < 0) {
-        DEBUG_PRINT_ERROR("[FBD] Invalid buffer timestamp %lld", (long long)buffer->nTimeStamp);
-        return OMX_ErrorBadParameter;
     }
 
     VIDC_TRACE_INT_LOW("FBD-TS", buffer->nTimeStamp / 1000);
@@ -9768,9 +9775,11 @@ bool omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,int dev_fd,
     struct gbm_bo *bo = NULL;
     int bo_fd = -1, meta_fd = -1;
     if (!op_buf_gbm_info || dev_fd < 0 ) {
-        DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_ion_memory");
+        DEBUG_PRINT_ERROR("Invalid arguments to alloc_map_gbm_memory");
         return FALSE;
     }
+
+    flags |= (flag & GBM_BO_USAGE_PROTECTED_QTI);
 
     gbm = gbm_create_device(dev_fd);
     if (gbm == NULL) {
@@ -9784,7 +9793,7 @@ bool omx_vdec::alloc_map_gbm_memory(OMX_U32 w,OMX_U32 h,int dev_fd,
        flags |= GBM_BO_USAGE_UBWC_ALIGNED_QTI;
 
     DEBUG_PRINT_LOW("create NV12 gbm_bo with width=%d, height=%d foramt %x",
-       drv_ctx.output_format, w, h);
+       w, h, drv_ctx.output_format);
 
     if (drv_ctx.output_format == VDEC_YUV_FORMAT_NV12_TP10_UBWC) {
        bo = gbm_bo_create(gbm, w, h,GBM_FORMAT_YCbCr_420_TP10_UBWC,
@@ -12724,8 +12733,13 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
 {
     bool status = true;
     pthread_mutex_lock(&omx->c_lock);
+     /* Whenever port mode is set to kPortModeDynamicANWBuffer, Video Frameworks
+        always uses VideoNativeMetadata and OMX recives buffer type as
+        grallocsource via storeMetaDataInBuffers_l API. The buffer_size
+        will be communicated to frameworks via IndexParamPortdefinition. */
     if (!is_color_conversion_enabled())
-        buffer_size = omx->drv_ctx.op_buf.buffer_size;
+        buffer_size = omx->dynamic_buf_mode ? sizeof(struct VideoNativeMetadata) :
+                      omx->drv_ctx.op_buf.buffer_size;
     else {
         buffer_size = c2dcc.getBuffSize(C2D_OUTPUT);
     }
@@ -12734,9 +12748,10 @@ OMX_BUFFERHEADERTYPE* omx_vdec::allocate_color_convert_buf::get_il_buf_hdr
 }
 
 OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::set_buffer_req(
-        OMX_U32 buffer_size, OMX_U32 actual_count) {
-    OMX_U32 expectedSize = is_color_conversion_enabled() ? buffer_size_req : omx->drv_ctx.op_buf.buffer_size;
-
+        OMX_U32 buffer_size, OMX_U32 actual_count)
+{
+    OMX_U32 expectedSize = is_color_conversion_enabled() ? buffer_size_req : omx->dynamic_buf_mode ?
+            sizeof(struct VideoDecoderOutputMetaData) : omx->drv_ctx.op_buf.buffer_size;
     if (buffer_size < expectedSize) {
         DEBUG_PRINT_ERROR("OP Requirements: Client size(%u) insufficient v/s requested(%u)",
                 buffer_size, expectedSize);
