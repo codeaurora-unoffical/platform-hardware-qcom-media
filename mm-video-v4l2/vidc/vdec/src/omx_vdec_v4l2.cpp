@@ -7736,6 +7736,16 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         buffer->pBuffer = (OMX_U8*)drv_ctx.ptr_inputbuffer[nBufferIndex].bufferaddr;
     }
 
+    /* Check if the input timestamp in seconds is greater than LONG_MAX
+       or lesser than LONG_MIN. */
+    if (buffer->nTimeStamp / 1000000 > LONG_MAX ||
+       buffer->nTimeStamp / 1000000 < LONG_MIN) {
+        /* This timestamp cannot be contained in driver timestamp field */
+        DEBUG_PRINT_ERROR("[ETB] BHdr(%p) pBuf(%p) nTS(%lld) nFL(%u) >> Invalid timestamp",
+            buffer, buffer->pBuffer, buffer->nTimeStamp, (unsigned int)buffer->nFilledLen);
+        return OMX_ErrorBadParameter;
+    }
+
     DEBUG_PRINT_LOW("[ETB] BHdr(%p) pBuf(%p) nTS(%lld) nFL(%u)",
             buffer, buffer->pBuffer, buffer->nTimeStamp, (unsigned int)buffer->nFilledLen);
     if (arbitrary_bytes) {
@@ -11209,7 +11219,7 @@ bool omx_vdec::handle_color_space_info(void *data)
 
                 /* Refer H264 Spec @ Rec. ITU-T H.264 (02/2014) to understand this code */
                 aspects->mRange = display_info_payload->video_full_range_flag ?
-                    ColorAspects::RangeFull : ColorAspects::RangeLimited;
+                    ColorAspects::RangeFull : aspects->mRange;
                 if (display_info_payload->video_signal_present_flag &&
                         display_info_payload->color_description_present_flag) {
                     convert_color_space_info(display_info_payload->color_primaries,
@@ -13111,7 +13121,7 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::free_output_buffer(
         return OMX_ErrorBadParameter;
     }
     if (pmem_fd[index] >= 0) {
-        munmap(pmem_baseaddress[index], buffer_size_req);
+        munmap(pmem_baseaddress[index], m_out_mem_ptr_client[index].nAllocLen);
         close(pmem_fd[index]);
     }
     pmem_fd[index] = -1;
