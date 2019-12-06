@@ -521,6 +521,12 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     m_sConfigQP.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
     m_sConfigQP.nQP = 30;
 
+    OMX_INIT_STRUCT(&m_sConfigPackedQP, OMX_QCOM_VIDEO_CONFIG_PACKED_QP);
+    m_sConfigPackedQP.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
+    m_sConfigPackedQP.nQpI = 30;
+    m_sConfigPackedQP.nQpP = 30;
+    m_sConfigPackedQP.nQpB = 30;
+
     OMX_INIT_STRUCT(&m_sParamControlInputQueue , QOMX_ENABLETYPE);
     m_sParamControlInputQueue.bEnable = OMX_FALSE;
 
@@ -2043,6 +2049,18 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 return OMX_ErrorUnsupportedSetting;
             }
             memcpy(&m_sConfigQP, pParam, sizeof(m_sConfigQP));
+            break;
+        }
+        case OMX_QcomIndexConfigPackedQp:
+        {
+            VALIDATE_OMX_PARAM_DATA(configData, OMX_SKYPE_VIDEO_CONFIG_PACKED_QP);
+            OMX_SKYPE_VIDEO_CONFIG_PACKED_QP* pParam =
+                (OMX_SKYPE_VIDEO_CONFIG_PACKED_QP*) configData;
+            if (!handle->venc_set_config(pParam, (OMX_INDEXTYPE)OMX_QcomIndexConfigPackedQp)) {
+                DEBUG_PRINT_ERROR("ERROR: Setting OMX_QcomIndexConfigPackedQp failed");
+                return OMX_ErrorUnsupportedSetting;
+            }
+            memcpy(&m_sConfigPackedQP, pParam, sizeof(m_sConfigPackedQP));
             break;
         }
         case OMX_IndexConfigPriority:
