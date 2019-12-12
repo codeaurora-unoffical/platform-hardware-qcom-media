@@ -311,9 +311,10 @@ void* async_message_thread (void *input)
                  * When FBD comes, component updates the clients with actual
                  * resolution through set_buffer_geometry.
                  */
-
+#ifndef __LINUX__
                  event_fields_changed |= (omx->drv_ctx.video_resolution.frame_height != ptr[0]);
                  event_fields_changed |= (omx->drv_ctx.video_resolution.frame_width != ptr[1]);
+#endif
 
                  if ((codec == V4L2_PIX_FMT_H264) ||
                      (codec  == V4L2_PIX_FMT_HEVC)) {
