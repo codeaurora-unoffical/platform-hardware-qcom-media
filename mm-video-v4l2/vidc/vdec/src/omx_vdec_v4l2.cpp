@@ -2494,6 +2494,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         m_extradata_info.output_crop_rect.nHeight = 240;
         update_resolution(320, 240, 320, 240);
 
+        memset(&fmt, 0x0, sizeof(struct v4l2_format));
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
         fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
@@ -13016,6 +13017,7 @@ OMX_ERRORTYPE omx_vdec::enable_adaptive_playback(unsigned long nMaxFrameWidth,
 
      //Get upper limit buffer count for min supported resolution
      struct v4l2_format fmt;
+     memset(&fmt, 0x0, sizeof(struct v4l2_format));
      fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
      fmt.fmt.pix_mp.height = m_decoder_capability.min_height;
      fmt.fmt.pix_mp.width = m_decoder_capability.min_width;
@@ -13048,6 +13050,7 @@ OMX_ERRORTYPE omx_vdec::enable_adaptive_playback(unsigned long nMaxFrameWidth,
                        m_smoothstreaming_width, m_smoothstreaming_height);
 
      //Get upper limit buffer size for max smooth streaming resolution set
+     memset(&fmt, 0x0, sizeof(struct v4l2_format));
      fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
      fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
      fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
