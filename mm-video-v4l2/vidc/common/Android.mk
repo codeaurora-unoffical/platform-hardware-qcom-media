@@ -35,6 +35,10 @@ LOCAL_VENDOR_MODULE             := true
 LOCAL_CFLAGS                    := $(libmm-vidc-def)
 LOCAL_C_INCLUDES                := $(libmm-vidc-inc)
 
+ifeq ($(TARGET_BOARD_AUTO),true)
+LOCAL_CFLAGS += -DSUPPORT_SECURE_C2D
+endif
+
 LOCAL_PRELINK_MODULE      := false
 LOCAL_SHARED_LIBRARIES    := liblog libcutils libdl
 
