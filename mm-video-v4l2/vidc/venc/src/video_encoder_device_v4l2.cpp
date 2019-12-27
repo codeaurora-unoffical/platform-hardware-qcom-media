@@ -3180,6 +3180,23 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                 }
                 break;
             }
+        case OMX_QcomIndexConfigPackedQp:
+            {
+                OMX_QCOM_VIDEO_CONFIG_PACKED_QP* pParam =
+                    (OMX_QCOM_VIDEO_CONFIG_PACKED_QP*) configData;
+                DEBUG_PRINT_LOW("Set_config: nQpI %d, nQpP %d, nQpB %d",
+                                pParam->nQpI,
+                                pParam->nQpP,
+                                pParam->nQpB);
+                if (venc_set_qp(pParam->nQpI,
+                                pParam->nQpP,
+                                pParam->nQpB,
+                                ENABLE_I_QP | ENABLE_P_QP | ENABLE_B_QP ) == false) {
+                    DEBUG_PRINT_ERROR("Failed to set OMX_QcomIndexConfigPackedQp failed");
+                    return false;
+                }
+                break;
+            }
         case OMX_IndexConfigPriority:
             {
                 OMX_PARAM_U32TYPE *priority = (OMX_PARAM_U32TYPE *)configData;

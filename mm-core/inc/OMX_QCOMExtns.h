@@ -223,6 +223,15 @@ typedef struct OMX_QCOM_VIDEO_CONFIG_QP {
     OMX_U32 nQP;
 } OMX_QCOM_VIDEO_CONFIG_QP;
 
+typedef struct OMX_QCOM_VIDEO_CONFIG_PACKED_QP {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_U32 nPortIndex;
+    OMX_U32 nQpI;
+    OMX_U32 nQpP;
+    OMX_U32 nQpB;
+} OMX_QCOM_VIDEO_CONFIG_PACKED_QP;
+
 typedef struct OMX_QCOM_VIDEO_PARAM_IPB_QPRANGETYPE {
     OMX_U32 nSize;
     OMX_VERSIONTYPE nVersion;
@@ -684,6 +693,8 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /* Set Color Aspects */
     OMX_QcomIndexColorAspects = 0x7F000079,
+
+    OMX_QcomIndexConfigPackedQp = 0x7F000080,
 
     /* Capabilities */
     OMX_QTIIndexParamCapabilitiesVTDriverVersion = 0x7F100000,

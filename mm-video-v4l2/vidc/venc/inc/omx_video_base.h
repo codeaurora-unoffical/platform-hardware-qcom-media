@@ -728,6 +728,7 @@ class omx_video: public qc_omx_component
         OMX_SKYPE_VIDEO_CONFIG_BASELAYERPID m_sBaseLayerID;
         OMX_SKYPE_VIDEO_PARAM_DRIVERVER m_sDriverVer;
         OMX_QCOM_VIDEO_CONFIG_QP m_sConfigQP;
+        OMX_QCOM_VIDEO_CONFIG_PACKED_QP m_sConfigPackedQP;
         QOMX_EXTNINDEX_VIDEO_VENC_SAR m_sSar;
         QOMX_VIDEO_H264ENTROPYCODINGTYPE m_sParamEntropy;
         QOMX_INDEXDOWNSCALAR m_sParamDownScalar;
