@@ -39,8 +39,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "swvenc_api.h"
 #include "swvenc_types.h"
 
+#ifndef SWENC_ROTATION_DISABLED
 #include <ui/GraphicBuffer.h>
-
+#endif
 extern "C" {
     OMX_API void * get_omx_component_factory_fn(void);
 }
@@ -121,9 +122,10 @@ class omx_venc: public omx_video
         bool m_bIsOutFlipDone;
         bool m_bUseAVTimerTimestamps;
         bool m_bIsIntraperiodSet;
+#ifndef SWENC_ROTATION_DISABLED
         sp<GraphicBuffer> dstBuffer;
         SWVENC_IPBUFFER *m_pIpbuffers;
-
+#endif
         enum color_format
         {
             COLOR_FMT_NV12,
@@ -172,8 +174,9 @@ class omx_venc: public omx_video
                                 OMX_U32 height);
         OMX_ERRORTYPE swvenc_do_flip_inport();
         OMX_ERRORTYPE swvenc_do_flip_outport();
+#ifndef SWENC_ROTATION_DISABLED
         bool swvenc_do_rotate(int, SWVENC_IPBUFFER &, OMX_U32);
-
+#endif
         template<typename T>
         inline void swvenc_delete_pointer(T * &ptr) {
             if (ptr != nullptr) {
