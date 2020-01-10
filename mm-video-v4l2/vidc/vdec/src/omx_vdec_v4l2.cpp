@@ -6344,16 +6344,16 @@ OMX_ERRORTYPE omx_vdec::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
             }
 
             if (allocate_native_handle){
-#ifndef __LINUX__
                 native_handle_t *nh = (native_handle_t *)bufferHdr->pBuffer;
+#ifndef __LINUX__
                 native_handle_close(nh);
-                native_handle_delete(nh);
 #else
                 /* close fd of input buffer in dynamic input buffer mode
                  * since the fd in native handle will be overwrite by omx client.
                  */
                 close(drv_ctx.ptr_inputbuffer[index].pmem_fd);
 #endif
+                native_handle_delete(nh);
             } else {
 #ifndef USE_ION
                 // Close fd for non-secure and secure non-native-handle case
