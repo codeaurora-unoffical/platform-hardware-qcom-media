@@ -226,9 +226,6 @@ void* async_message_thread (void *input)
                     DEBUG_PRINT_HIGH("async_message_thread Exited");
                     break;
                 }
-            } else if (dqevent.type == V4L2_EVENT_MSM_VIDC_CLOSE_DONE) {
-                DEBUG_PRINT_HIGH("VIDC Close Done Recieved and async_message_thread Exited");
-                break;
             } else if (dqevent.type == V4L2_EVENT_MSM_VIDC_HW_OVERLOAD) {
                 struct vdec_msginfo vdec_msg;
                 vdec_msg.msgcode=VDEC_MSG_EVT_HW_OVERLOAD;
@@ -713,7 +710,6 @@ static const int event_type[] = {
     V4L2_EVENT_MSM_VIDC_PORT_SETTINGS_CHANGED_INSUFFICIENT,
     V4L2_EVENT_MSM_VIDC_RELEASE_BUFFER_REFERENCE,
     V4L2_EVENT_MSM_VIDC_RELEASE_UNQUEUED_BUFFER,
-    V4L2_EVENT_MSM_VIDC_CLOSE_DONE,
     V4L2_EVENT_MSM_VIDC_SYS_ERROR,
     V4L2_EVENT_MSM_VIDC_HW_OVERLOAD,
     V4L2_EVENT_MSM_VIDC_HW_UNSUPPORTED
@@ -2608,13 +2604,21 @@ bool omx_vdec::execute_omx_flush(OMX_U32 flushType)
     struct v4l2_decoder_cmd dec;
     DEBUG_PRINT_LOW("in %s, flushing %u", __func__, (unsigned int)flushType);
     memset((void *)&v4l2_buf,0,sizeof(v4l2_buf));
+#ifndef _TARGET_KERNEL_VERSION_49_
     dec.cmd = V4L2_DEC_QCOM_CMD_FLUSH;
+#else
+    dec.cmd = V4L2_QCOM_CMD_FLUSH;
+#endif
 
     DEBUG_PRINT_HIGH("in %s: reconfig? %d", __func__, in_reconfig);
 
     if (in_reconfig && flushType == OMX_CORE_OUTPUT_PORT_INDEX) {
         output_flush_progress = true;
+#ifndef _TARGET_KERNEL_VERSION_49_
         dec.flags = V4L2_DEC_QCOM_CMD_FLUSH_CAPTURE;
+#else
+	dec.flags = V4L2_QCOM_CMD_FLUSH_CAPTURE;
+#endif
     } else {
         /* XXX: The driver/hardware does not support flushing of individual ports
          * in all states. So we pretty much need to flush both ports internally,
@@ -2623,7 +2627,11 @@ bool omx_vdec::execute_omx_flush(OMX_U32 flushType)
          * we automatically omit sending the FLUSH done for the "opposite" port. */
         input_flush_progress = true;
         output_flush_progress = true;
+#ifndef _TARGET_KERNEL_VERSION_49_
         dec.flags = V4L2_DEC_QCOM_CMD_FLUSH_OUTPUT | V4L2_DEC_QCOM_CMD_FLUSH_CAPTURE;
+#else
+	dec.flags = V4L2_QCOM_CMD_FLUSH_OUTPUT | V4L2_QCOM_CMD_FLUSH_CAPTURE;
+#endif
     }
 
     if (ioctl(drv_ctx.video_driver_fd, VIDIOC_DECODER_CMD, &dec)) {
@@ -3551,14 +3559,22 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                     fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
                                     fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
                                     fmt.fmt.pix_mp.pixelformat = capture_capability;
+#ifndef _TARGET_KERNEL_VERSION_49_
                                     enum vdec_output_fromat op_format;
+#else
+				    enum vdec_output_format op_format;
+#endif
                                     if (portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
                                                 QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m ||
                                             portFmt->eColorFormat == (OMX_COLOR_FORMATTYPE)
                                                 QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mMultiView ||
                                             portFmt->eColorFormat == OMX_COLOR_FormatYUV420Planar ||
                                             portFmt->eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar)
+#ifndef _TARGET_KERNEL_VERSION_49_
                                         op_format = (enum vdec_output_fromat)VDEC_YUV_FORMAT_NV12;
+#else
+				        op_format = (enum vdec_output_format)VDEC_YUV_FORMAT_NV12;
+#endif
                                     else
                                         eRet = OMX_ErrorBadParameter;
 
@@ -3807,11 +3823,13 @@ OMX_ERRORTYPE  omx_vdec::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                                      }
                                      break;
                                  }
+#ifndef _TARGET_KERNEL_VERSION_49_
         case OMX_QcomIndexParamConcealMBMapExtraData:
                                VALIDATE_OMX_PARAM_DATA(paramData, QOMX_ENABLETYPE);
                                eRet = enable_extradata(VDEC_EXTRADATA_MB_ERROR_MAP, false,
                                        ((QOMX_ENABLETYPE *)paramData)->bEnable);
                                break;
+#endif
         case OMX_QcomIndexParamFrameInfoExtraData:
                                VALIDATE_OMX_PARAM_DATA(paramData, QOMX_ENABLETYPE);
                                eRet = enable_extradata(OMX_FRAMEINFO_EXTRADATA, false,

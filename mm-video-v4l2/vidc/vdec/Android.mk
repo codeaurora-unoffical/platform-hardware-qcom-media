@@ -25,7 +25,9 @@ libmm-vdec-def += -D_MSM8974_
 libmm-vdec-def += -DPROCESS_EXTRADATA_IN_OUTPUT_PORT
 libmm-vdec-def += -DMAX_RES_1080P
 libmm-vdec-def += -DMAX_RES_1080P_EBI
-
+ifeq ($(TARGET_ROARING_LIONUS), true)
+    libmm-vdec-def += -D_TARGET_KERNEL_VERSION_49_
+endif
 TARGETS_THAT_USE_HEVC_ADSP_HEAP := msm8226 msm8974
 TARGETS_THAT_HAVE_VENUS_HEVC := apq8084 msm8994
 TARGETS_THAT_NEED_HEVC_LIB := msm8974 msm8610 msm8226 msm8916

@@ -1240,7 +1240,11 @@ OMX_ERRORTYPE  omx_venc::set_parameter
             {
                 if (pParam->nPortIndex == PORT_INDEX_OUT)
                 {
-                    mask = VEN_EXTRADATA_SLICEINFO;
+#ifndef _TARGET_KERNEL_VERSION_49_
+                     mask = VEN_EXTRADATA_SLICEINFO;
+#else
+                     mask = VENC_EXTRADATA_SLICEINFO;
+#endif
 
                     DEBUG_PRINT_HIGH("SliceInfo extradata %s",
                             ((pParam->bEnabled == OMX_TRUE) ? "enabled" : "disabled"));
@@ -1257,7 +1261,11 @@ OMX_ERRORTYPE  omx_venc::set_parameter
             {
                 if (pParam->nPortIndex == PORT_INDEX_OUT)
                 {
-                    mask = VEN_EXTRADATA_MBINFO;
+#ifndef _TARGET_KERNEL_VERSION_49_
+                      mask = VEN_EXTRADATA_MBINFO;
+#else
+                      mask = VENC_EXTRADATA_MBINFO;
+#endif
 
                     DEBUG_PRINT_HIGH("MBInfo extradata %s",
                             ((pParam->bEnabled == OMX_TRUE) ? "enabled" : "disabled"));
