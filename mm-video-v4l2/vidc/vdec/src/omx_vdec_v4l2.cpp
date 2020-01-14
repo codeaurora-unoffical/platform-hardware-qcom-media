@@ -30,7 +30,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                             O p e n M A X   w r a p p e r s
                              O p e n  M A X   C o r e
 
-*//** @file omx_vdec.cpp
   This module contains the implementation of the OpenMAX core & component.
 
 *//*========================================================================*/
@@ -1436,38 +1435,38 @@ int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len)
 {
     if (m_debug.in_buffer_log && !m_debug.infile) {
         if(!strncmp(drv_ctx.kind,"OMX.qcom.video.decoder.mpeg4", OMX_MAX_STRINGNAME_SIZE)) {
-           snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.m4v",
+           snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.m4v",
                    m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         else if(!strncmp(drv_ctx.kind,"OMX.qcom.video.decoder.mpeg2", OMX_MAX_STRINGNAME_SIZE)) {
-                snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.mpg", m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this); }
+                snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.mpg", m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this); }
         else if(!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.h263", OMX_MAX_STRINGNAME_SIZE)) {
-                snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.263",
+                snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.263",
                         m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         else if(!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.avc", OMX_MAX_STRINGNAME_SIZE) ||
                     !strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.mvc", OMX_MAX_STRINGNAME_SIZE)) {
-                snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.264",
+                snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.264",
                         m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         else if(!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.hevc", OMX_MAX_STRINGNAME_SIZE)) {
-                snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.265",
+                snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.265",
                         m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         else if(!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vc1", OMX_MAX_STRINGNAME_SIZE)) {
-                snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.vc1",
+                snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.vc1",
                         m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         else if(!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.wmv", OMX_MAX_STRINGNAME_SIZE)) {
-                snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.vc1",
+                snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.vc1",
                         m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         else if(!strncmp(drv_ctx.kind, "OMX.qcom.video.decoder.vp8", OMX_MAX_STRINGNAME_SIZE)) {
-                snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.ivf",
+                snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.ivf",
                         m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         else {
-               snprintf(m_debug.infile_name, PROPERTY_FILENAME_MAX, "%s/input_dec_%d_%d_%p.divx",
+               snprintf(m_debug.infile_name, OMX_MAX_STRINGNAME_SIZE, "%s/input_dec_%d_%d_%p.divx",
                         m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         }
         m_debug.infile = fopen (m_debug.infile_name, "ab");
@@ -1523,7 +1522,7 @@ int omx_vdec::log_input_buffers(const char *buffer_addr, int buffer_len)
 
 int omx_vdec::log_output_buffers(OMX_BUFFERHEADERTYPE *buffer) {
     if (m_debug.out_buffer_log && !m_debug.outfile && buffer->nFilledLen) {
-        snprintf(m_debug.outfile_name, PROPERTY_FILENAME_MAX, "%s/output_%d_%d_%p.yuv",
+        snprintf(m_debug.outfile_name, OMX_MAX_STRINGNAME_SIZE, "%s/output_%d_%d_%p.yuv",
                 m_debug.log_loc, drv_ctx.video_resolution.frame_width, drv_ctx.video_resolution.frame_height, this);
         m_debug.outfile = fopen (m_debug.outfile_name, "ab");
         if (!m_debug.outfile) {
