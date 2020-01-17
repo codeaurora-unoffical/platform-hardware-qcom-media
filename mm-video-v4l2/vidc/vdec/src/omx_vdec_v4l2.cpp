@@ -2494,6 +2494,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         m_extradata_info.output_crop_rect.nHeight = 240;
         update_resolution(320, 240, 320, 240);
 
+        memset(&fmt, 0x0, sizeof(struct v4l2_format));
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
         fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
@@ -7401,16 +7402,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer(OMX_IN OMX_HANDLETYPE         hComp,
         buffer->pBuffer = (OMX_U8*)drv_ctx.ptr_inputbuffer[nBufferIndex].bufferaddr;
     }
 
-    /* Check if the input timestamp in seconds is greater than LONG_MAX
-       or lesser than LONG_MIN. */
-    if (buffer->nTimeStamp / 1000000 > LONG_MAX ||
-       buffer->nTimeStamp / 1000000 < LONG_MIN) {
-        /* This timestamp cannot be contained in driver timestamp field */
-        DEBUG_PRINT_ERROR("[ETB] BHdr(%p) pBuf(%p) nTS(%lld) nFL(%u) >> Invalid timestamp",
-            buffer, buffer->pBuffer, buffer->nTimeStamp, (unsigned int)buffer->nFilledLen);
-        return OMX_ErrorBadParameter;
-    }
-
     DEBUG_PRINT_LOW("[ETB] BHdr(%p) pBuf(%p) nTS(%lld) nFL(%u)",
             buffer, buffer->pBuffer, buffer->nTimeStamp, (unsigned int)buffer->nFilledLen);
     if (arbitrary_bytes) {
@@ -9892,14 +9883,18 @@ bool omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size, vdec_ion *ion_info, int
     }
 
 #ifdef HYPERVISOR
-    flag = 0;
+    flag &= ~ION_FLAG_CACHED;
 #endif
     ion_info->alloc_data.flags = flag;
     ion_info->alloc_data.len = buffer_size;
 
     ion_info->alloc_data.heap_id_mask = ION_HEAP(ION_SYSTEM_HEAP_ID);
     if (secure_mode && (ion_info->alloc_data.flags & ION_FLAG_SECURE)) {
+#ifdef HYPERVISOR
+        ion_info->alloc_data.heap_id_mask = ION_HEAP(ION_SECURE_DISPLAY_HEAP_ID);
+#else
         ion_info->alloc_data.heap_id_mask = ION_HEAP(MEM_HEAP_ID);
+#endif
     }
 
     /* Use secure display cma heap for obvious reasons. */
@@ -13016,6 +13011,7 @@ OMX_ERRORTYPE omx_vdec::enable_adaptive_playback(unsigned long nMaxFrameWidth,
 
      //Get upper limit buffer count for min supported resolution
      struct v4l2_format fmt;
+     memset(&fmt, 0x0, sizeof(struct v4l2_format));
      fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
      fmt.fmt.pix_mp.height = m_decoder_capability.min_height;
      fmt.fmt.pix_mp.width = m_decoder_capability.min_width;
@@ -13048,6 +13044,7 @@ OMX_ERRORTYPE omx_vdec::enable_adaptive_playback(unsigned long nMaxFrameWidth,
                        m_smoothstreaming_width, m_smoothstreaming_height);
 
      //Get upper limit buffer size for max smooth streaming resolution set
+     memset(&fmt, 0x0, sizeof(struct v4l2_format));
      fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
      fmt.fmt.pix_mp.height = drv_ctx.video_resolution.frame_height;
      fmt.fmt.pix_mp.width = drv_ctx.video_resolution.frame_width;
