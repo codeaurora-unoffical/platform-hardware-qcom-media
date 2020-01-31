@@ -1200,8 +1200,11 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
                 if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderSliceInfo) {
                     if (pParam->nPortIndex == PORT_INDEX_OUT) {
+#ifndef _TARGET_KERNEL_VERSION_49_
                         mask = VEN_EXTRADATA_SLICEINFO;
-
+#else
+			mask = VENC_EXTRADATA_SLICEINFO;
+#endif
                         DEBUG_PRINT_HIGH("SliceInfo extradata %s",
                                 ((pParam->bEnabled == OMX_TRUE) ? "enabled" : "disabled"));
                     } else {
@@ -1212,8 +1215,11 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     }
                 } else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoEncoderMBInfo) {
                     if (pParam->nPortIndex == PORT_INDEX_OUT) {
-                        mask = VEN_EXTRADATA_MBINFO;
-
+#ifndef _TARGET_KERNEL_VERSION_49_
+			mask = VEN_EXTRADATA_MBINFO;
+#else
+			mask = VENC_EXTRADATA_MBINFO;
+#endif
                         DEBUG_PRINT_HIGH("MBInfo extradata %s",
                                 ((pParam->bEnabled == OMX_TRUE) ? "enabled" : "disabled"));
                     } else {
@@ -1227,8 +1233,11 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 else if (pParam->nIndex == (OMX_INDEXTYPE)OMX_ExtraDataVideoLTRInfo) {
                     if (pParam->nPortIndex == PORT_INDEX_OUT) {
                         if (pParam->bEnabled == OMX_TRUE)
+#ifndef _TARGET_KERNEL_VERSION_49_
                             mask = VEN_EXTRADATA_LTRINFO;
-
+#else
+			    mask = VENC_EXTRADATA_LTRINFO;
+#endif
                         DEBUG_PRINT_HIGH("LTRInfo extradata %s",
                                 ((pParam->bEnabled == OMX_TRUE) ? "enabled" : "disabled"));
                     } else {
@@ -2149,10 +2158,17 @@ int omx_venc::async_message_process (void *context, void* message)
             omx->post_event (0,m_sVenc_msg->statuscode,\
                     OMX_COMPONENT_GENERATE_EVENT_INPUT_FLUSH);
             break;
-        case VEN_MSG_FLUSH_OUPUT_DONE:
+#ifndef _TARGET_KERNEL_VERSION_49_
+	case VEN_MSG_FLUSH_OUPUT_DONE:
             omx->post_event (0,m_sVenc_msg->statuscode,\
                     OMX_COMPONENT_GENERATE_EVENT_OUTPUT_FLUSH);
             break;
+#else
+        case VEN_MSG_FLUSH_OUTPUT_DONE:
+            omx->post_event (0,m_sVenc_msg->statuscode,\
+                    OMX_COMPONENT_GENERATE_EVENT_OUTPUT_FLUSH);
+            break;
+#endif
         case VEN_MSG_INPUT_BUFFER_DONE:
             omxhdr = (OMX_BUFFERHEADERTYPE* )\
                      m_sVenc_msg->buf.clientdata;

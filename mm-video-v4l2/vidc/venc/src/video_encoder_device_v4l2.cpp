@@ -33,7 +33,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include "video_encoder_device_v4l2.h"
 #include "omx_video_encoder.h"
-#include <linux/android_pmem.h>
 #include <media/msm_vidc.h>
 #ifdef USE_ION
 #include <linux/msm_ion.h>
@@ -413,10 +412,7 @@ void* venc_dev::async_venc_message_thread (void *input)
         if (pfd.revents & POLLPRI) {
             rc = ioctl(pfd.fd, VIDIOC_DQEVENT, &dqevent);
 
-            if (dqevent.type == V4L2_EVENT_MSM_VIDC_CLOSE_DONE) {
-                DEBUG_PRINT_HIGH("CLOSE DONE");
-                break;
-            } else if (dqevent.type == V4L2_EVENT_MSM_VIDC_FLUSH_DONE) {
+            if (dqevent.type == V4L2_EVENT_MSM_VIDC_FLUSH_DONE) {
                 venc_msg.msgcode = VEN_MSG_FLUSH_INPUT_DONE;
                 venc_msg.statuscode = VEN_S_SUCCESS;
 
@@ -424,8 +420,11 @@ void* venc_dev::async_venc_message_thread (void *input)
                     DEBUG_PRINT_ERROR("ERROR: Wrong ioctl message");
                     break;
                 }
-
+#ifndef _TARGET_KERNEL_VERSION_49_
                 venc_msg.msgcode = VEN_MSG_FLUSH_OUPUT_DONE;
+#else
+		venc_msg.msgcode = VEN_MSG_FLUSH_OUTPUT_DONE;
+#endif
                 venc_msg.statuscode = VEN_S_SUCCESS;
 
                 if (omx->async_message_process(input,&venc_msg) < 0) {
@@ -479,7 +478,6 @@ void* venc_dev::async_venc_message_thread (void *input)
 
 static const int event_type[] = {
     V4L2_EVENT_MSM_VIDC_FLUSH_DONE,
-    V4L2_EVENT_MSM_VIDC_CLOSE_DONE,
     V4L2_EVENT_MSM_VIDC_SYS_ERROR
 };
 
@@ -2378,7 +2376,11 @@ unsigned venc_dev::venc_flush( unsigned port)
     struct v4l2_encoder_cmd enc;
     DEBUG_PRINT_LOW("in %s", __func__);
 
+#ifndef _TARGET_KERNEL_VERSION_49_
     enc.cmd = V4L2_ENC_QCOM_CMD_FLUSH;
+#else
+    enc.cmd = V4L2_QCOM_CMD_FLUSH;
+#endif
     enc.flags = V4L2_QCOM_CMD_FLUSH_OUTPUT | V4L2_QCOM_CMD_FLUSH_CAPTURE;
 
     if (ioctl(m_nDriver_fd, VIDIOC_ENCODER_CMD, &enc)) {
@@ -2799,11 +2801,11 @@ bool venc_dev::venc_set_au_delimiter(OMX_BOOL enable)
 {
     struct v4l2_control control;
 
-    control.id = V4L2_CID_MPEG_VIDC_VIDEO_H264_AU_DELIMITER;
+    control.id = V4L2_CID_MPEG_VIDC_VIDEO_AU_DELIMITER;
     if(enable) {
-        control.value = V4L2_MPEG_VIDC_VIDEO_H264_AU_DELIMITER_ENABLED;
+        control.value = V4L2_MPEG_VIDC_VIDEO_AU_DELIMITER_ENABLED;
     } else {
-        control.value = V4L2_MPEG_VIDC_VIDEO_H264_AU_DELIMITER_DISABLED;
+        control.value = V4L2_MPEG_VIDC_VIDEO_AU_DELIMITER_DISABLED;
     }
 
     DEBUG_PRINT_HIGH("Set au delimiter: %d", enable);

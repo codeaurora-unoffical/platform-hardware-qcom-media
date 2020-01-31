@@ -20,7 +20,9 @@ libmm-venc-def += -USINGLE_ENCODER_INSTANCE
 libmm-venc-def += -Werror
 libmm-venc-def += -D_ANDROID_ICS_
 libmm-venc-def += -D_MSM8974_
-
+ifeq ($(TARGET_ROARING_LIONUS), true)
+libmm-venc-def += -D_TARGET_KERNEL_VERSION_49_
+endif
 TARGETS_THAT_USE_FLAG_MSM8226 := msm8226 msm8916
 ifneq ($(TARGET_SUPPORTS_WEARABLES),true)
 TARGETS_THAT_NEED_SW_VENC_MPEG4 := msm8909

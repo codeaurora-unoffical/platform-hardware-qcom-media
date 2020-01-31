@@ -19,7 +19,9 @@ libmm-vidc-def += -D_ANDROID_ICS_
 # Common Dependencies
 libmm-vidc-add-dep  := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 
-
+ifeq ($(TARGET_ROARING_LIONUS), true)
+       libmm-vdec-def += -D_TARGET_KERNEL_VERSION_49_
+endif
 # ---------------------------------------------------------------------------------
 # 			Make the Shared library (libOmxVidcCommon)
 # ---------------------------------------------------------------------------------
