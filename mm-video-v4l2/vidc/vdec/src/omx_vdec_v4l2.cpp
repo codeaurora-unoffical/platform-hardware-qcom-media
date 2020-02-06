@@ -7905,6 +7905,11 @@ void omx_vdec::get_preferred_color_aspects(ColorAspects& preferredColorAspects)
     const ColorAspects &defaultColor = preferClientColor ?
         m_internal_color_space.sAspects : m_client_color_space.sAspects;
 
+    if ((m_client_color_space.sAspects.mPrimaries == ColorAspects::PrimariesBT2020) && (dpb_bit_depth == MSM_VIDC_BIT_DEPTH_8)) {
+        m_client_color_space.sAspects.mPrimaries = ColorAspects::PrimariesBT709_5;
+        m_client_color_space.sAspects.mMatrixCoeffs = ColorAspects::MatrixBT709_5;
+    }
+
     preferredColorAspects.mPrimaries = preferredColor.mPrimaries != ColorAspects::PrimariesUnspecified ?
         preferredColor.mPrimaries : defaultColor.mPrimaries;
     preferredColorAspects.mTransfer = preferredColor.mTransfer != ColorAspects::TransferUnspecified ?
@@ -8425,6 +8430,7 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
     unsigned int src_size = 0, destination_size = 0;
     unsigned int height, width;
     struct v4l2_format fmt;
+    bool is_interlaced = false;
     OMX_COLOR_FORMATTYPE drv_color_format;
 
     if (!omx) {
@@ -8457,7 +8463,8 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
 
     bool resolution_upgrade = (height > m_c2d_height ||
             width > m_c2d_width);
-    bool is_interlaced = omx->m_progressive != MSM_VIDC_PIC_STRUCT_PROGRESSIVE;
+    if (omx->drv_ctx.output_format != VDEC_YUV_FORMAT_NV12)
+        is_interlaced = omx->m_progressive != MSM_VIDC_PIC_STRUCT_PROGRESSIVE;
     if (resolution_upgrade) {
         // resolution upgraded ? ensure we are yet to allocate;
         // failing which, c2d buffers will never be reallocated and bad things will happen
