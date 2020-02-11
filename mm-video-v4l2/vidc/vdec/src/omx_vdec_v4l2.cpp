@@ -138,6 +138,7 @@ VP9_HDR10PLUS_GRALLOC_PATH_ENABLE as 0. This disables sending
 metadata via gralloc handle.
 */
 #define VP9HDR10PLUS_SETMETADATA_ENABLE 1
+#define DEC_HDR_DISABLE_FLAG 0x1
 
 #define THUMBNAIL_YUV420P_8BIT 0x01
 #define THUMBNAIL_YUV420P_10BIT 0x02
@@ -643,6 +644,9 @@ omx_vdec::omx_vdec(): m_error_propogated(false),
 
     Platform::Config::getInt32(Platform::vidc_dec_thumbnail_yuv_output,
             (int32_t *)&m_thumbnail_yuv_output, 0);
+
+    Platform::Config::getInt32(Platform::vidc_disable_hdr,
+            (int32_t *)&m_disable_hdr, 0);
 
     property_value[0] = '\0';
     property_get("vendor.vidc.dec.log.in", property_value, "0");
@@ -2996,6 +3000,14 @@ OMX_ERRORTYPE omx_vdec::get_supported_profile_level(OMX_VIDEO_PARAM_PROFILELEVEL
     if(!((profile_cap.flags >> v4l2_profile) & 0x1)) {
         DEBUG_PRINT_ERROR("%s: Invalid index corresponding profile not supported : %d ",__FUNCTION__, profileLevelType->eProfile);
         eRet = OMX_ErrorNoMore;
+    }
+    if (m_disable_hdr & DEC_HDR_DISABLE_FLAG) {
+        if (profileLevelType->eProfile == OMX_VIDEO_VP9Profile2HDR || profileLevelType->eProfile == OMX_VIDEO_VP9Profile2HDR10Plus
+            || profileLevelType->eProfile == OMX_VIDEO_HEVCProfileMain10 || profileLevelType->eProfile == OMX_VIDEO_HEVCProfileMain10HDR10
+            || profileLevelType->eProfile == OMX_VIDEO_HEVCProfileMain10HDR10Plus) {
+            DEBUG_PRINT_LOW("%s: HDR profile unsupported", __FUNCTION__);
+            return OMX_ErrorHardware;
+        }
     }
 
     DEBUG_PRINT_LOW("get_parameter: OMX_IndexParamVideoProfileLevelQuerySupported for Input port returned Profile:%u, Level:%u",
@@ -7905,6 +7917,11 @@ void omx_vdec::get_preferred_color_aspects(ColorAspects& preferredColorAspects)
     const ColorAspects &defaultColor = preferClientColor ?
         m_internal_color_space.sAspects : m_client_color_space.sAspects;
 
+    if ((m_client_color_space.sAspects.mPrimaries == ColorAspects::PrimariesBT2020) && (dpb_bit_depth == MSM_VIDC_BIT_DEPTH_8)) {
+        m_client_color_space.sAspects.mPrimaries = ColorAspects::PrimariesBT709_5;
+        m_client_color_space.sAspects.mMatrixCoeffs = ColorAspects::MatrixBT709_5;
+    }
+
     preferredColorAspects.mPrimaries = preferredColor.mPrimaries != ColorAspects::PrimariesUnspecified ?
         preferredColor.mPrimaries : defaultColor.mPrimaries;
     preferredColorAspects.mTransfer = preferredColor.mTransfer != ColorAspects::TransferUnspecified ?
@@ -8425,6 +8442,7 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
     unsigned int src_size = 0, destination_size = 0;
     unsigned int height, width;
     struct v4l2_format fmt;
+    bool is_interlaced = false;
     OMX_COLOR_FORMATTYPE drv_color_format;
 
     if (!omx) {
@@ -8457,7 +8475,8 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
 
     bool resolution_upgrade = (height > m_c2d_height ||
             width > m_c2d_width);
-    bool is_interlaced = omx->m_progressive != MSM_VIDC_PIC_STRUCT_PROGRESSIVE;
+    if (omx->drv_ctx.output_format != VDEC_YUV_FORMAT_NV12)
+        is_interlaced = omx->m_progressive != MSM_VIDC_PIC_STRUCT_PROGRESSIVE;
     if (resolution_upgrade) {
         // resolution upgraded ? ensure we are yet to allocate;
         // failing which, c2d buffers will never be reallocated and bad things will happen
