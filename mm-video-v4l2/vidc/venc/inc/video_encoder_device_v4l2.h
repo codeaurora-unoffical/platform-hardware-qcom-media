@@ -480,6 +480,7 @@ class venc_dev
         bool is_camera_source_ubwc;
         bool is_csc_enabled;
         OMX_U32 fd_list[64];
+        bool m_hypervisor;
 
     private:
         OMX_U32                             m_codec;
@@ -520,7 +521,6 @@ class venc_dev
         struct msm_venc_hybrid_hp           hybrid_hp;
         struct msm_venc_color_space         color_space;
         msm_venc_temporal_layers            temporal_layers_config;
-        bool m_hypervisor;
 
         bool venc_set_profile_level(OMX_U32 eProfile,OMX_U32 eLevel);
         bool venc_set_intra_period(OMX_U32 nPFrames, OMX_U32 nBFrames);
