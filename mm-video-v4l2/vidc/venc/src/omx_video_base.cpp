@@ -2299,6 +2299,15 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                memcpy(pParam, &m_sConfigQP, sizeof(m_sConfigQP));
                break;
            }
+       case OMX_QcomIndexConfigPackedQp:
+           {
+               VALIDATE_OMX_PARAM_DATA(configData, OMX_SKYPE_VIDEO_CONFIG_PACKED_QP);
+               OMX_SKYPE_VIDEO_CONFIG_PACKED_QP* pParam =
+                   reinterpret_cast<OMX_SKYPE_VIDEO_CONFIG_PACKED_QP*>(configData);
+               DEBUG_PRINT_LOW("get_config: OMX_SKYPE_VIDEO_CONFIG_PACKED_QP");
+               memcpy(pParam, &m_sConfigPackedQP, sizeof(m_sConfigPackedQP));
+               break;
+           }
        case OMX_QcomIndexConfigBaseLayerId:
            {
                VALIDATE_OMX_PARAM_DATA(configData, OMX_SKYPE_VIDEO_CONFIG_BASELAYERPID);
