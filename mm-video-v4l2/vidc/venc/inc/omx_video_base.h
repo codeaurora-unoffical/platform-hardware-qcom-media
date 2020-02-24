@@ -703,8 +703,7 @@ class omx_video: public qc_omx_component
         }
 
         void complete_pending_buffer_done_cbs();
-        bool is_conv_needed(int, int);
-        void print_debug_color_aspects(ColorAspects *aspects, const char *prefix);
+        bool is_conv_needed(int);
 
         OMX_ERRORTYPE get_vendor_extension_config(
                 OMX_CONFIG_ANDROID_VENDOR_EXTENSIONTYPE *ext);
@@ -801,7 +800,6 @@ class omx_video: public qc_omx_component
         OMX_VIDEO_CONFIG_ANDROID_INTRAREFRESHTYPE m_sConfigIntraRefresh;
 #endif
         OMX_QTI_VIDEO_CONFIG_BLURINFO       m_blurInfo;
-        DescribeColorAspectsParams m_sConfigColorAspects;
         OMX_VIDEO_PARAM_ANDROID_TEMPORALLAYERINGTYPE m_sParamTemporalLayers;
         OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE m_sConfigTemporalLayers;
         QOMX_ENABLETYPE m_sParamAVTimerTimestampMode;   // use VT-timestamps in gralloc-handle

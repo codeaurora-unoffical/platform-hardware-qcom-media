@@ -2337,39 +2337,6 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                memcpy(pParam, &m_blurInfo, sizeof(m_blurInfo));
                break;
            }
-       case OMX_QTIIndexConfigDescribeColorAspects:
-            {
-                VALIDATE_OMX_PARAM_DATA(configData, DescribeColorAspectsParams);
-                DescribeColorAspectsParams* pParam =
-                    reinterpret_cast<DescribeColorAspectsParams*>(configData);
-                DEBUG_PRINT_LOW("get_config: OMX_QTIIndexConfigDescribeColorAspects");
-                if (pParam->bRequestingDataSpace) {
-                    DEBUG_PRINT_HIGH("Does not handle dataspace request");
-                    return OMX_ErrorUnsupportedSetting;
-                }
-                if (pParam->bDataSpaceChanged == OMX_TRUE) {
-
-                    print_debug_color_aspects(&(pParam->sAspects), "get_config (dataspace changed) Client says");
-                    // If the dataspace says RGB, recommend 601-limited;
-                    // since that is the destination colorspace that C2D or Venus will convert to.
-                    if (pParam->nPixelFormat == HAL_PIXEL_FORMAT_RGBA_8888) {
-                        DEBUG_PRINT_HIGH("get_config (dataspace changed): ColorSpace: Recommend 601-limited for RGBA8888");
-                        pParam->sAspects.mPrimaries = ColorAspects::PrimariesBT601_6_625;
-                        pParam->sAspects.mRange = ColorAspects::RangeLimited;
-                        pParam->sAspects.mTransfer = ColorAspects::TransferSMPTE170M;
-                        pParam->sAspects.mMatrixCoeffs = ColorAspects::MatrixBT601_6;
-                    } else {
-                        // For IMPLEMENTATION_DEFINED (or anything else), stick to client's defaults.
-                        DEBUG_PRINT_HIGH("get_config (dataspace changed): ColorSpace: use client-default for format=%x",
-                                pParam->nPixelFormat);
-                    }
-                    print_debug_color_aspects(&(pParam->sAspects), "get_config (dataspace changed) recommended");
-                } else {
-                    memcpy(pParam, &m_sConfigColorAspects, sizeof(m_sConfigColorAspects));
-                    print_debug_color_aspects(&(pParam->sAspects), "get_config");
-                }
-                break;
-            }
 #ifndef _DISABLE_TEMPORAL_LAYER_
         case OMX_IndexParamAndroidVideoTemporalLayering:
             {
@@ -5155,27 +5122,17 @@ bool omx_video::omx_c2d_conv::get_buffer_size(int port,unsigned int &buf_size)
     return ret;
 }
 
-bool omx_video::is_conv_needed(int hal_fmt, int hal_flags)
+bool omx_video::is_conv_needed(int hal_fmt)
 {
     bool bRet = false;
 
-    if (!strncmp(m_platform, "msm8996", 7)) {
-        bRet = hal_fmt == HAL_PIXEL_FORMAT_RGBA_8888 &&
-            !(hal_flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED);
-    } else {
-        bRet = hal_fmt == HAL_PIXEL_FORMAT_RGBA_8888;
-    }
+    bRet = hal_fmt == HAL_PIXEL_FORMAT_RGBA_8888;
 
 #ifdef _HW_RGBA
     bRet = false;
 #endif
     DEBUG_PRINT_LOW("RGBA conversion %s", bRet ? "Needed":"Not-Needed");
     return bRet;
-}
-
-void omx_video::print_debug_color_aspects(ColorAspects *aspects, const char *prefix) {
-    DEBUG_PRINT_HIGH("%s : Color aspects : Primaries = %d Range = %d Transfer = %d MatrixCoeffs = %d",
-            prefix, aspects->mPrimaries, aspects->mRange, aspects->mTransfer, aspects->mMatrixCoeffs);
 }
 
 OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
@@ -5241,7 +5198,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
         }
 
         if (!c2d_opened) {
-            mUsesColorConversion = is_conv_needed(handle->format, handle->flags);
+            mUsesColorConversion = is_conv_needed(handle->format);
             if (mUsesColorConversion) {
                 DEBUG_PRINT_INFO("open Color conv forW: %u, H: %u",
                         (unsigned int)m_sInPortDef.format.video.nFrameWidth,
@@ -5473,7 +5430,7 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
             Input_pmem_info.offset = 0;
             Input_pmem_info.size = handle->size;
             m_graphicbuffer_size = Input_pmem_info.size;
-            if (is_conv_needed(handle->format, handle->flags))
+            if (is_conv_needed(handle->format))
                 ret = convert_queue_buffer(hComp,Input_pmem_info,index);
             else if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE ||
                     handle->format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m ||
