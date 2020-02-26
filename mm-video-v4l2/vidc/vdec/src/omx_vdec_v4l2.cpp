@@ -311,9 +311,10 @@ void* async_message_thread (void *input)
                  * When FBD comes, component updates the clients with actual
                  * resolution through set_buffer_geometry.
                  */
-
+#ifndef __LINUX__
                  event_fields_changed |= (omx->drv_ctx.video_resolution.frame_height != ptr[0]);
                  event_fields_changed |= (omx->drv_ctx.video_resolution.frame_width != ptr[1]);
+#endif
 
                  if ((codec == V4L2_PIX_FMT_H264) ||
                      (codec  == V4L2_PIX_FMT_HEVC)) {
@@ -6344,16 +6345,16 @@ OMX_ERRORTYPE omx_vdec::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
             }
 
             if (allocate_native_handle){
-#ifndef __LINUX__
                 native_handle_t *nh = (native_handle_t *)bufferHdr->pBuffer;
+#ifndef __LINUX__
                 native_handle_close(nh);
-                native_handle_delete(nh);
 #else
                 /* close fd of input buffer in dynamic input buffer mode
                  * since the fd in native handle will be overwrite by omx client.
                  */
                 close(drv_ctx.ptr_inputbuffer[index].pmem_fd);
 #endif
+                native_handle_delete(nh);
             } else {
 #ifndef USE_ION
                 // Close fd for non-secure and secure non-native-handle case
@@ -9014,7 +9015,11 @@ int omx_vdec::async_message_process (void *context, void* message)
 
                    if (vdec_msg->msgdata.output_frame.len) {
                        DEBUG_PRINT_LOW("Processing extradata");
+#ifndef __LINUX__
                        reconfig_event_sent = omx->handle_extradata(omxhdr);
+#else
+                       omx->handle_extradata(omxhdr);
+#endif
 
                        if (omx->m_extradata_info.output_crop_updated) {
                            DEBUG_PRINT_LOW("Read FBD crop from output extra data");
