@@ -885,7 +885,6 @@ class omx_vdec: public qc_omx_component
 #ifdef USE_ION
         bool alloc_map_ion_memory(OMX_U32 buffer_size, vdec_ion *ion_info, int flag);
         void free_ion_memory(struct vdec_ion *buf_ion_info);
-        void do_cache_operations(int fd);
 #endif
 
 #ifdef USE_GBM
@@ -1002,6 +1001,7 @@ class omx_vdec: public qc_omx_component
         ts_arr_list           m_timestamp_list;
 #endif
 
+        char m_platform_name[PROPERTY_VALUE_MAX] = {0};
         bool input_flush_progress;
         bool output_flush_progress;
         bool input_use_buffer;
@@ -1207,6 +1207,7 @@ class omx_vdec: public qc_omx_component
         int32_t m_dec_secure_prefetch_size_output;
         int32_t m_arb_mode_override;
         int32_t m_disable_hdr;
+        int32_t m_dec_output_rate;
         volatile int32_t m_queued_codec_config_count;
         OMX_U32 current_perf_level;
         int32_t m_thumbnail_yuv_output;
