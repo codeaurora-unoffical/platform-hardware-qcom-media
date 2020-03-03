@@ -673,6 +673,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     OMX_QTIIndexParamCapabilitiesRotationSupport= 0x7F100004,
 
+    /* Custom extension provided to IMS-VT to set meta-mode */
+    OMX_QTIIndexParamIMSVTVideoMetaBufferMode = 0x7F100005,
+
 };
 
 /**
