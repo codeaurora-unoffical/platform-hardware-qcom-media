@@ -865,6 +865,7 @@ class omx_vdec: public qc_omx_component
         bool allocate_input_done(void);
         bool allocate_output_done(void);
         bool allocate_output_extradata_done(void);
+        int omx_vdec_open_device(OMX_STRING device_name, int flag);
 
         OMX_ERRORTYPE free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr);
         OMX_ERRORTYPE free_input_buffer(unsigned int bufferindex,

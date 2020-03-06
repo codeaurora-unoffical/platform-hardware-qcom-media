@@ -169,8 +169,26 @@ extern "C" {
 #define HYPERVISOR 0
 #endif
 
+#define MAX_FD_RETRIES 100
+
 static OMX_U32 maxSmoothStreamingWidth = 1920;
 static OMX_U32 maxSmoothStreamingHeight = 1088;
+
+int omx_vdec::omx_vdec_open_device(OMX_STRING device_name, int flag)
+{
+    int fd;
+    int retries = 0;
+    while (retries < MAX_FD_RETRIES){
+        fd = open (device_name, flag);
+        if (fd >= 0) {
+            break;
+        }
+        usleep(10000); // Sleep for 10 ms
+        retries++;
+    }
+
+    return fd;
+}
 
 void* async_message_thread (void *input)
 {
@@ -2333,7 +2351,7 @@ OMX_ERRORTYPE omx_vdec::component_init(OMX_STRING role)
         hvfe_cb.context = (void *)this;
         drv_ctx.video_driver_fd = hypv_open(device_name, O_RDWR, &hvfe_cb);
     } else {
-        drv_ctx.video_driver_fd = open(device_name, O_RDWR);
+        drv_ctx.video_driver_fd = omx_vdec_open_device(device_name, O_RDWR);
     }
 
     DEBUG_PRINT_INFO("component_init: %s : fd=%d", role, drv_ctx.video_driver_fd);
@@ -6168,7 +6186,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                                       drv_ctx.op_buf_ion_info[i].fd_ion_data.fd;
 #else
                 drv_ctx.ptr_outputbuffer[i].pmem_fd = \
-                                      open (MEM_DEVICE,O_RDWR);
+                                      omx_vdec_open_device((OMX_STRING) MEM_DEVICE, O_RDWR);
 
                 if (drv_ctx.ptr_outputbuffer[i].pmem_fd < 0) {
                     DEBUG_PRINT_ERROR("ION/pmem buffer fd is bad %d", drv_ctx.ptr_outputbuffer[i].pmem_fd);
@@ -6178,7 +6196,7 @@ OMX_ERRORTYPE  omx_vdec::use_output_buffer(
                 /* FIXME: why is this code even here? We already open MEM_DEVICE a few lines above */
                 if (drv_ctx.ptr_outputbuffer[i].pmem_fd == 0) {
                     drv_ctx.ptr_outputbuffer[i].pmem_fd = \
-                                          open (MEM_DEVICE,O_RDWR);
+                                          omx_vdec_open_device((OMX_STRING) MEM_DEVICE, O_RDWR);
                     if (drv_ctx.ptr_outputbuffer[i].pmem_fd < 0) {
                         DEBUG_PRINT_ERROR("ION/pmem buffer fd is bad %d", drv_ctx.ptr_outputbuffer[i].pmem_fd);
                         return OMX_ErrorInsufficientResources;
@@ -6876,7 +6894,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_input_buffer(
         }
         pmem_fd = drv_ctx.ip_buf_ion_info[i].fd_ion_data.fd;
 #else
-        pmem_fd = open (MEM_DEVICE,O_RDWR);
+        pmem_fd = omx_vdec_open_device((OMX_STRING) MEM_DEVICE, O_RDWR);
 
         if (pmem_fd < 0) {
             DEBUG_PRINT_ERROR("open failed for pmem/adsp for input buffer");
@@ -6884,7 +6902,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_input_buffer(
         }
 
         if (pmem_fd == 0) {
-            pmem_fd = open (MEM_DEVICE,O_RDWR);
+            pmem_fd = omx_vdec_open_device((OMX_STRING) MEM_DEVICE, O_RDWR);
 
             if (pmem_fd < 0) {
                 DEBUG_PRINT_ERROR("open failed for pmem/adsp for input buffer");
@@ -7095,7 +7113,7 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
 
 #else
         for (idx = 0; idx < block_count; idx++) {
-            pmem_fd[idx] = open (MEM_DEVICE,O_RDWR);
+            pmem_fd[idx] = omx_vdec_open_device((OMX_STRING) MEM_DEVICE, O_RDWR);
 
             if (pmem_fd[idx] < 0) {
                 DEBUG_PRINT_ERROR("ERROR:pmem fd for output buffer %d",
@@ -10233,7 +10251,8 @@ int omx_vdec::alloc_map_ion_memory(OMX_U32 buffer_size,
         return -EINVAL;
     }
     ion_dev_flag = O_RDONLY;
-    fd = open (MEM_DEVICE, ion_dev_flag);
+    fd = omx_vdec_open_device((OMX_STRING) MEM_DEVICE, ion_dev_flag);
+
     if (fd < 0) {
         DEBUG_PRINT_ERROR("opening ion device failed with fd = %d", fd);
         return fd;
@@ -13697,7 +13716,7 @@ void omx_vdec::prefetchNewBuffers(bool reconfig) {
     if (m_pf_info.pf_skip_count < drv_ctx.op_buf.actualcount)
         return;
 
-    int ion_fd = open(MEM_DEVICE, O_RDONLY);
+    int ion_fd = omx_vdec_open_device((OMX_STRING) MEM_DEVICE, O_RDONLY);
     if (ion_fd < 0) {
         DEBUG_PRINT_ERROR("Ion fd open failed : %d\n", ion_fd);
         return;
@@ -13740,7 +13759,7 @@ prefetch_exit:
 void omx_vdec::drainPrefetchedBuffers() {
     int rc = 0;
 
-    int ion_fd = open(MEM_DEVICE, O_RDONLY);
+    int ion_fd = omx_vdec_open_device((OMX_STRING) MEM_DEVICE, O_RDONLY);
     if (ion_fd < 0) {
         DEBUG_PRINT_ERROR("Ion fd open failed : %d\n", ion_fd);
         return;
