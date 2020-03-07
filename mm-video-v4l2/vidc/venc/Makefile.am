@@ -21,6 +21,7 @@ AM_CPPFLAGS += -Werror
 AM_CPPFLAGS += -D_ANDROID_ICS_
 AM_CPPFLAGS += -DUSE_ION
 AM_CPPFLAGS += -Wno-enum-compare
+AM_CPPFLAGS += -Wno-format-truncation
 #AM_CPPFLAGS += "-include stdint.h"
 AM_CPPFLAGS += "-Dstrlcpy=g_strlcpy"
 AM_CPPFLAGS += "-Dstrlcat=g_strlcat"
@@ -70,6 +71,7 @@ AM_CPPFLAGS += -I${WORKSPACE}/frameworks/native/include/
 sources = src/omx_video_base.cpp
 sources += src/omx_video_encoder.cpp
 sources += src/video_encoder_device_v4l2.cpp
+sources += src/video_encoder_device_v4l2_params.cpp
 sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_common.cpp
 sources += $(top_srcdir)/mm-video-v4l2/vidc/common/src/vidc_vendor_extensions.cpp
 
@@ -80,4 +82,4 @@ libOmxVenc_la_LDFLAGS = -module -shared -avoid-version
 libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -lbase -ldl -lpthread -lion
 
 libOmxVenc_la_LDFLAGS += -L$(top_builddir)/libc2dcolorconvert  -L$(top_builddir)/libplatformconfig
-libOmxVenc_la_LDFLAGS += -lc2dcolorconvert -lplatformconfig -larbitrarybytes
+libOmxVenc_la_LDFLAGS += -lc2dcolorconvert -lplatformconfig -lqdMetaData

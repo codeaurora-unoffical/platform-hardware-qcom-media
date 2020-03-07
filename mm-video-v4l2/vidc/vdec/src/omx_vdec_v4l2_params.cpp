@@ -40,6 +40,14 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //////////////////////////////////////////////////////////////////////////////
 
 #include "omx_vdec.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#ifdef _USE_GLIB_
+#include <glib.h>
+#define strlcpy g_strlcpy
+#endif
 
 #define BUFFER_LOG_LOC "/data/vendor/media"
 

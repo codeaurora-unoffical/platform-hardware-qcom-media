@@ -36,6 +36,11 @@ AC_ARG_ENABLE([target-msm8909],
                 [Enable conditional compile for target msm8909 [default=no]]),
         [target_msm8909="${enableval}"])
 
+AC_ARG_ENABLE([target-sm8250],
+        AC_HELP_STRING([--enable-target-sm8250],
+                [Enable conditional compile for target sm8250 [default=no]]),
+        [target_sm8250="${enableval}"])
+
 AC_ARG_ENABLE([target-msm8996],
         AC_HELP_STRING([--enable-target-msm8996],
                 [Enable conditional compile for target msm8996 [default=no]]),
@@ -163,6 +168,7 @@ AC_ARG_WITH([glib-lib-dir],
 
 AM_CONDITIONAL(TARGET_MSM8953, [test "x$target_msm8953" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8909, [test "x$target_msm8909" = "xyes"])
+AM_CONDITIONAL(TARGET_SM8250, [test "x$target_sm8250" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8996, [test "x$target_msm8996" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8610, [test "x$target_msm8610" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8226, [test "x$target_msm8226" = "xyes"])

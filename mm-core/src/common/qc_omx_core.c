@@ -44,12 +44,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include "qc_omx_core.h"
 #include "omx_core_cmp.h"
 #include <cutils/properties.h>
 
-#ifndef VIDC_STUB_HAL
+#if 0
 #include "ConfigStore.h"
 #endif
 
@@ -438,7 +439,7 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
           !strncmp(core[cmp_index].so_lib_name, swDecLib, strlen(swDecLib))) {
         bool isVppEnabled = false;
         bool isCSEnabled = false;
-#ifndef VIDC_STUB_HAL
+#if 0
         isCSEnabled = isConfigStoreEnabled();
         if (isCSEnabled) {
           getConfigStoreBool("vpp", "enable", &isVppEnabled, false);

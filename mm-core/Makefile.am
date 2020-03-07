@@ -15,6 +15,7 @@ AM_CPPFLAGS += -D_ENABLE_QC_MSG_LOG_
 #AM_CPPFLAGS += -O0 -fno-inline -fno-short-enums
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/src/common/
+AM_CPPFLAGS += -I$(WORKSPACE)/hardware/qcom/media/libplatformconfig
 AM_CPPFLAGS += "-Dstrlcpy=g_strlcpy"
 AM_CPPFLAGS += "-Dstrlcat=g_strlcat"
 
@@ -45,6 +46,10 @@ h_sources +=inc/QOMX_StreamingExtensions.h
 
 c_sources  =src/common/omx_core_cmp.cpp
 c_sources +=src/common/qc_omx_core.c
+
+if TARGET_SM8250
+TARGET_REGISTRY = sm8250
+endif
 
 if TARGET_MSM8953
 TARGET_REGISTRY = msm8953
