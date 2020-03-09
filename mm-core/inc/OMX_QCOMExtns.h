@@ -1498,8 +1498,9 @@ static const struct ExtraDataMap kExtradataMap[] = {
 };
 
 static inline OMX_S32 getIndexForExtradataType(char * type) {
+    int i = 0;
     if(type == NULL) return -1;
-    for(int i = 0; i< (int)(sizeof(kExtradataMap)/ sizeof(struct ExtraDataMap)); i++){
+    for(i = 0; i< (int)(sizeof(kExtradataMap)/ sizeof(struct ExtraDataMap)); i++){
         if(!strcmp(kExtradataMap[i].type,type)){
             return kExtradataMap[i].index;
         }
@@ -1508,7 +1509,8 @@ static inline OMX_S32 getIndexForExtradataType(char * type) {
 }
 
 static inline const char * getStringForExtradataType(int64_t index) {
-    for(int i = 0; i< (int)(sizeof(kExtradataMap)/sizeof(struct ExtraDataMap)); i++){
+    int i = 0;
+    for(i = 0; i< (int)(sizeof(kExtradataMap)/sizeof(struct ExtraDataMap)); i++){
         if(kExtradataMap[i].index == index){
             return kExtradataMap[i].type;
         }

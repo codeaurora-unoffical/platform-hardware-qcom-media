@@ -357,13 +357,6 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     m_sConfigIntraRefresh.nRefreshPeriod = 0;
 #endif
 
-    OMX_INIT_STRUCT(&m_sConfigColorAspects, DescribeColorAspectsParams);
-    m_sConfigColorAspects.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
-    m_sConfigColorAspects.sAspects.mRange =  ColorAspects::RangeUnspecified;
-    m_sConfigColorAspects.sAspects.mPrimaries = ColorAspects::PrimariesUnspecified;
-    m_sConfigColorAspects.sAspects.mMatrixCoeffs = ColorAspects::MatrixUnspecified;
-    m_sConfigColorAspects.sAspects.mTransfer = ColorAspects::TransferUnspecified;
-
     if (codec_type == OMX_VIDEO_CodingMPEG4) {
         m_sParamProfileLevel.eProfile = (OMX_U32) OMX_VIDEO_MPEG4ProfileSimple;
         m_sParamProfileLevel.eLevel = (OMX_U32) OMX_VIDEO_MPEG4Level0;
@@ -1198,6 +1191,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
             }
         case OMX_GoogleAndroidIndexAllocateNativeHandle:
             {
+		/*
                 VALIDATE_OMX_PARAM_DATA(paramData, AllocateNativeHandleParams);
 
                 AllocateNativeHandleParams* allocateNativeHandleParams = (AllocateNativeHandleParams *) paramData;
@@ -1218,7 +1212,7 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
 
                 if (allocateNativeHandleParams != NULL) {
                     allocate_native_handle = allocateNativeHandleParams->enable;
-                }
+                }*/
                 break;
             }
         case OMX_IndexParamVideoQuantization:
@@ -2321,18 +2315,6 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 }
                 break;
             }
-        case OMX_QTIIndexConfigDescribeColorAspects:
-           {
-               VALIDATE_OMX_PARAM_DATA(configData, DescribeColorAspectsParams);
-               DescribeColorAspectsParams *params = (DescribeColorAspectsParams *)configData;
-               print_debug_color_aspects(&(params->sAspects), "set_config");
-               if (!handle->venc_set_config(configData, (OMX_INDEXTYPE)OMX_QTIIndexConfigDescribeColorAspects)) {
-                   DEBUG_PRINT_ERROR("Failed to set OMX_QTIIndexConfigDescribeColorAspects");
-                   return OMX_ErrorUnsupportedSetting;
-               }
-               memcpy(&m_sConfigColorAspects, configData, sizeof(m_sConfigColorAspects));
-               break;
-           }
         case OMX_IndexConfigAndroidVideoTemporalLayering:
             {
                 VALIDATE_OMX_PARAM_DATA(configData, OMX_VIDEO_CONFIG_ANDROID_TEMPORALLAYERINGTYPE);

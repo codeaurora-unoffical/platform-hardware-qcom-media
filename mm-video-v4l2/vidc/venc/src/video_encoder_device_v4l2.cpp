@@ -3217,117 +3217,6 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
             }
             break;
         }
-        case OMX_QTIIndexConfigDescribeColorAspects:
-            {
-                DescribeColorAspectsParams *params = (DescribeColorAspectsParams *)configData;
-
-                OMX_U32 color_space = MSM_VIDC_BT601_6_625;
-                OMX_U32 full_range = 0;
-                OMX_U32 matrix_coeffs = MSM_VIDC_MATRIX_601_6_625;
-                OMX_U32 transfer_chars = MSM_VIDC_TRANSFER_601_6_625;
-
-                switch((ColorAspects::Primaries)(params->sAspects.mPrimaries)) {
-                    case ColorAspects::PrimariesBT709_5:
-                        color_space = MSM_VIDC_BT709_5;
-                        break;
-                    case ColorAspects::PrimariesBT470_6M:
-                        color_space = MSM_VIDC_BT470_6_M;
-                        break;
-                    case ColorAspects::PrimariesBT601_6_625:
-                        color_space = MSM_VIDC_BT601_6_625;
-                        break;
-                    case ColorAspects::PrimariesBT601_6_525:
-                        color_space = MSM_VIDC_BT601_6_525;
-                        break;
-                    case ColorAspects::PrimariesGenericFilm:
-                        color_space = MSM_VIDC_GENERIC_FILM;
-                        break;
-                    case ColorAspects::PrimariesBT2020:
-                        color_space = MSM_VIDC_BT2020;
-                        break;
-                    default:
-                        color_space = MSM_VIDC_BT601_6_625;
-                        //params->sAspects.mPrimaries = ColorAspects::PrimariesBT601_6_625;
-                        break;
-                }
-                switch((ColorAspects::Range)params->sAspects.mRange) {
-                    case ColorAspects::RangeFull:
-                        full_range = 1;
-                        break;
-                    case ColorAspects::RangeLimited:
-                        full_range = 0;
-                        break;
-                    default:
-                        break;
-                }
-                switch((ColorAspects::Transfer)params->sAspects.mTransfer) {
-                    case ColorAspects::TransferSMPTE170M:
-                        transfer_chars = MSM_VIDC_TRANSFER_601_6_525;
-                        break;
-                    case ColorAspects::TransferUnspecified:
-                        transfer_chars = MSM_VIDC_TRANSFER_UNSPECIFIED;
-                        break;
-                    case ColorAspects::TransferGamma22:
-                        transfer_chars = MSM_VIDC_TRANSFER_BT_470_6_M;
-                        break;
-                    case ColorAspects::TransferGamma28:
-                        transfer_chars = MSM_VIDC_TRANSFER_BT_470_6_BG;
-                        break;
-                    case ColorAspects::TransferSMPTE240M:
-                        transfer_chars = MSM_VIDC_TRANSFER_SMPTE_240M;
-                        break;
-                    case ColorAspects::TransferLinear:
-                        transfer_chars = MSM_VIDC_TRANSFER_LINEAR;
-                        break;
-                    case ColorAspects::TransferXvYCC:
-                        transfer_chars = MSM_VIDC_TRANSFER_IEC_61966;
-                        break;
-                    case ColorAspects::TransferBT1361:
-                        transfer_chars = MSM_VIDC_TRANSFER_BT_1361;
-                        break;
-                    case ColorAspects::TransferSRGB:
-                        transfer_chars = MSM_VIDC_TRANSFER_SRGB;
-                        break;
-                    default:
-                        //params->sAspects.mTransfer = ColorAspects::TransferSMPTE170M;
-                        transfer_chars = MSM_VIDC_TRANSFER_601_6_625;
-                        break;
-                }
-                switch((ColorAspects::MatrixCoeffs)params->sAspects.mMatrixCoeffs) {
-                    case ColorAspects::MatrixUnspecified:
-                        matrix_coeffs = MSM_VIDC_MATRIX_UNSPECIFIED;
-                        break;
-                    case ColorAspects::MatrixBT709_5:
-                        matrix_coeffs = MSM_VIDC_MATRIX_BT_709_5;
-                        break;
-                    case ColorAspects::MatrixBT470_6M:
-                        matrix_coeffs = MSM_VIDC_MATRIX_FCC_47;
-                        break;
-                    case ColorAspects::MatrixBT601_6:
-                        matrix_coeffs = MSM_VIDC_MATRIX_601_6_525;
-                        break;
-                    case ColorAspects::MatrixSMPTE240M:
-                        transfer_chars = MSM_VIDC_MATRIX_SMPTE_240M;
-                        break;
-                    case ColorAspects::MatrixBT2020:
-                        matrix_coeffs = MSM_VIDC_MATRIX_BT_2020;
-                        break;
-                    case ColorAspects::MatrixBT2020Constant:
-                        matrix_coeffs = MSM_VIDC_MATRIX_BT_2020_CONST;
-                        break;
-                    default:
-                        //params->sAspects.mMatrixCoeffs = ColorAspects::MatrixBT601_6;
-                        matrix_coeffs = MSM_VIDC_MATRIX_601_6_625;
-                        break;
-                }
-                if (!venc_set_colorspace(color_space, full_range,
-                            transfer_chars, matrix_coeffs)) {
-
-                    DEBUG_PRINT_ERROR("Failed to set operating rate");
-                    return false;
-                }
-                break;
-            }
         case OMX_QTIIndexConfigVideoRoiInfo:
         {
             if(!venc_set_roi_qp_info((OMX_QTI_VIDEO_CONFIG_ROIINFO *)configData)) {
@@ -4131,32 +4020,10 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             DEBUG_PRINT_ERROR("Camera buffer color format is not 601_FR.");
                             DEBUG_PRINT_ERROR(" This leads to unknown color space");
                         }
-                        if (usage & private_handle_t::PRIV_FLAGS_ITU_R_601_FR) {
-                            if (is_csc_enabled) {
-                                struct v4l2_control control;
-                                control.id = V4L2_CID_MPEG_VIDC_VIDEO_VPE_CSC;
-                                control.value = V4L2_CID_MPEG_VIDC_VIDEO_VPE_CSC_ENABLE;
-                                if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
-                                    DEBUG_PRINT_ERROR("venc_empty_buf: Failed to set VPE CSC for 601_to_709");
-                                } else {
-                                    DEBUG_PRINT_INFO("venc_empty_buf: Will convert 601-FR to 709");
-                                    fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_REC709;
-                                    venc_set_colorspace(MSM_VIDC_BT709_5, 0,
-                                            MSM_VIDC_TRANSFER_BT709_5, MSM_VIDC_MATRIX_BT_709_5);
-                                }
-                            } else {
-                                venc_set_colorspace(MSM_VIDC_BT601_6_525, 1,
-                                        MSM_VIDC_TRANSFER_601_6_525, MSM_VIDC_MATRIX_601_6_525);
-                                fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_470_SYSTEM_BG;
-                            }
-                        }
                         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
                         m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
                         fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
                         fmt.fmt.pix_mp.width = m_sVenc_cfg.input_width;
-                        if (usage & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) {
-                            m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_UBWC;
-                        }
 
                         if (color_format > 0 && !venc_set_color_format(color_format)) {
                             DEBUG_PRINT_ERROR("Failed setting color format in Camerasource %lx", m_sVenc_cfg.inputformat);
@@ -4203,27 +4070,21 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 
                     if (mUseAVTimerTimestamps) {
                         uint64_t avTimerTimestampNs = bufhdr->nTimeStamp * 1000;
+                        /*
                         if (getMetaData(handle, GET_VT_TIMESTAMP, &avTimerTimestampNs) == 0
                                 && avTimerTimestampNs > 0) {
                             bufhdr->nTimeStamp = avTimerTimestampNs / 1000;
                             DEBUG_PRINT_LOW("AVTimer TS : %llu us", (unsigned long long)bufhdr->nTimeStamp);
                         }
+                       */
                     }
 
                     if (!streaming[OUTPUT_PORT]) {
-                        int color_space = 0;
-                        // Moment of truth... actual colorspace is known here..
-                        ColorSpace_t colorSpace = ITU_R_601;
-                        if (getMetaData(handle, GET_COLOR_SPACE, &colorSpace) == 0) {
-                            DEBUG_PRINT_HIGH("ENC_CONFIG: gralloc ColorSpace = %d (601=%d 601_FR=%d 709=%d)",
-                                    colorSpace, ITU_R_601, ITU_R_601_FR, ITU_R_709);
-                        }
-
                         struct v4l2_format fmt;
                         memset(&fmt, 0, sizeof(fmt));
                         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 
-                        bool isUBWC = (handle->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) && is_gralloc_source_ubwc;
+                        bool isUBWC = false; 
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
                             m_sVenc_cfg.inputformat = isUBWC ? V4L2_PIX_FMT_NV12_UBWC : V4L2_PIX_FMT_NV12;
                             DEBUG_PRINT_HIGH("ENC_CONFIG: Input Color = NV12 %s", isUBWC ? "UBWC" : "Linear");
@@ -4232,69 +4093,12 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             // Disregard the Colorspace in gralloc-handle in case of RGB and use
                             //   [a] 601 for non-UBWC case : C2D output is (apparently) 601-LR
                             //   [b] 601 for UBWC case     : Venus can convert to 601-LR or FR. use LR for now.
-                            colorSpace = ITU_R_601;
                             m_sVenc_cfg.inputformat = isUBWC ? V4L2_PIX_FMT_RGBA8888_UBWC : V4L2_PIX_FMT_RGB32;
                             DEBUG_PRINT_HIGH("ENC_CONFIG: Input Color = RGBA8888 %s", isUBWC ? "UBWC" : "Linear");
                         } else if (handle->format == QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m) {
                             m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
                             DEBUG_PRINT_HIGH("ENC_CONFIG: Input Color = NV12 Linear");
                         }
-
-                        // If device recommendation (persist.vidc.enc.csc.enable) is to use 709, force CSC
-                        if (colorSpace == ITU_R_601_FR && is_csc_enabled) {
-                            struct v4l2_control control;
-                            control.id = V4L2_CID_MPEG_VIDC_VIDEO_VPE_CSC;
-                            control.value = V4L2_CID_MPEG_VIDC_VIDEO_VPE_CSC_ENABLE;
-                            if (ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control)) {
-                                DEBUG_PRINT_ERROR("venc_empty_buf: Failed to set VPE CSC for 601_to_709");
-                            } else {
-                                DEBUG_PRINT_INFO("venc_empty_buf: Will convert 601-FR to 709");
-                                buf.flags = V4L2_MSM_BUF_FLAG_YUV_601_709_CLAMP;
-                                colorSpace = ITU_R_709;
-                            }
-                        }
-
-                        msm_vidc_h264_color_primaries_values primary;
-                        msm_vidc_h264_transfer_chars_values transfer;
-                        msm_vidc_h264_matrix_coeff_values matrix;
-                        OMX_U32 range;
-
-                        switch (colorSpace) {
-                            case ITU_R_601_FR:
-                            {
-                                primary = MSM_VIDC_BT601_6_525;
-                                range = 1; // full
-                                transfer = MSM_VIDC_TRANSFER_601_6_525;
-                                matrix = MSM_VIDC_MATRIX_601_6_525;
-
-                                fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_470_SYSTEM_BG;
-                                break;
-                            }
-                            case ITU_R_709:
-                            {
-                                primary = MSM_VIDC_BT709_5;
-                                range = 0; // limited
-                                transfer = MSM_VIDC_TRANSFER_BT709_5;
-                                matrix = MSM_VIDC_MATRIX_BT_709_5;
-
-                                fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_REC709;
-                                break;
-                            }
-                            default:
-                            {
-                                // 601 or something else ? assume 601
-                                primary = MSM_VIDC_BT601_6_625;
-                                range = 0; //limited
-                                transfer = MSM_VIDC_TRANSFER_601_6_625;
-                                matrix = MSM_VIDC_MATRIX_601_6_625;
-
-                                fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_470_SYSTEM_BG;
-                                break;
-                            }
-                        }
-                        DEBUG_PRINT_HIGH("ENC_CONFIG: selected ColorSpace = %d (601=%d 601_FR=%d 709=%d)",
-                                    colorSpace, ITU_R_601, ITU_R_601_FR, ITU_R_709);
-                        venc_set_colorspace(primary, range, transfer, matrix);
 
                         fmt.fmt.pix_mp.pixelformat = m_sVenc_cfg.inputformat;
                         fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
@@ -4998,78 +4802,6 @@ bool venc_dev::venc_enable_initial_qp(QOMX_EXTNINDEX_VIDEO_INITIALQP* initqp)
                     controls.controls[1].id, controls.controls[1].value,
                     controls.controls[2].id, controls.controls[2].value,
                     controls.controls[3].id, controls.controls[3].value);
-    return true;
-}
-
-bool venc_dev::venc_set_colorspace(OMX_U32 primaries, OMX_U32 range,
-    OMX_U32 transfer_chars, OMX_U32 matrix_coeffs)
-{
-    int rc;
-    struct v4l2_control control;
-
-    DEBUG_PRINT_LOW("Setting color space : Primaries = %d, Range = %d, Trans = %d, Matrix = %d",
-        primaries, range, transfer_chars, matrix_coeffs);
-
-    control.id = V4L2_CID_MPEG_VIDC_VIDEO_COLOR_SPACE;
-    control.value = primaries;
-
-    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
-    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
-
-    if (rc) {
-        DEBUG_PRINT_ERROR("Failed to set control : V4L2_CID_MPEG_VIDC_VIDEO_COLOR_SPACE");
-        return false;
-    }
-
-    DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
-
-    color_space.primaries = control.value;
-
-    control.id = V4L2_CID_MPEG_VIDC_VIDEO_FULL_RANGE;
-    control.value = range;
-
-    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
-    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
-
-    if (rc) {
-        DEBUG_PRINT_ERROR("Failed to set control : V4L2_CID_MPEG_VIDC_VIDEO_FULL_RANGE");
-        return false;
-    }
-
-    DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
-
-    color_space.range = control.value;
-
-    control.id = V4L2_CID_MPEG_VIDC_VIDEO_TRANSFER_CHARS;
-    control.value = transfer_chars;
-
-    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
-    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
-
-    if (rc) {
-        DEBUG_PRINT_ERROR("Failed to set control : V4L2_CID_MPEG_VIDC_VIDEO_TRANSFER_CHARS");
-        return false;
-    }
-
-    DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
-
-    color_space.transfer_chars = control.value;
-
-    control.id = V4L2_CID_MPEG_VIDC_VIDEO_MATRIX_COEFFS;
-    control.value = matrix_coeffs;
-
-    DEBUG_PRINT_LOW("Calling IOCTL set control for id=%d, val=%d", control.id, control.value);
-    rc = ioctl(m_nDriver_fd, VIDIOC_S_CTRL, &control);
-
-    if (rc) {
-        DEBUG_PRINT_ERROR("Failed to set control : V4L2_CID_MPEG_VIDC_VIDEO_MATRIX_COEFFS");
-        return false;
-    }
-
-    DEBUG_PRINT_LOW("Success IOCTL set control for id=%d, value=%d", control.id, control.value);
-
-    color_space.matrix_coeffs = control.value;
-
     return true;
 }
 
