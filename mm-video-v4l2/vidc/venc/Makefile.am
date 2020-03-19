@@ -23,7 +23,6 @@ AM_CPPFLAGS += -DSWENC_ROTATION_DISABLED
 
 if TARGET_HYPERVISOR
 AM_CPPFLAGS += -DHYPERVISOR
-AM_CPPFLAGS += -I$(top_srcdir)/hypv-intercept/
 endif
 
 AM_CPPFLAGS += -DUSE_ION
@@ -74,6 +73,7 @@ AM_CPPFLAGS += -I$(top_srcdir)/libc2dcolorconvert/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/inc/
 AM_CPPFLAGS += -I$(top_srcdir)/mm-core/src/common/
 AM_CPPFLAGS += -I$(top_srcdir)/libstagefrighthw/
+AM_CPPFLAGS += -I$(top_srcdir)/hypv-intercept/
 AM_CPPFLAGS += -I$(top_srcdir)/libplatformconfig/
 sources = src/omx_video_base.cpp
 sources += src/omx_video_encoder.cpp
@@ -87,18 +87,19 @@ libOmxVenc_la_SOURCES = $(sources)
 libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVenc_la_LDFLAGS = -module -shared -avoid-version
 libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -ldl -lpthread
+libOmxVenc_la_LDFLAGS += -L$(top_builddir)/libplatformconfig -L$(top_builddir)/libc2dcolorconvert
+libOmxVenc_la_LDFLAGS += -lplatformconfig  -lc2dcolorconvert
+
 
 if !TARGET_USES_LIBGBM
 libOmxVenc_la_LDFLAGS += -lion
 endif
 
-libOmxVenc_la_LDFLAGS += -L$(top_builddir)/libplatformconfig
-libOmxVenc_la_LDFLAGS += -lplatformconfig
-
-if TARGET_HYPERVISOR
+if TARGET_USES_LIBGBM
+libOmxVenc_la_LDFLAGS += -lgbm
+endif
 libOmxVenc_la_LDFLAGS += -L$(top_builddir)/hypv-intercept
 libOmxVenc_la_LDFLAGS += -lhypv_intercept
-endif
 
 if BUILD_SWCODEC
 lib_LTLIBRARIES += libOmxSwVencMpeg4.la
