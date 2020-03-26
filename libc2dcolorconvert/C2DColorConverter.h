@@ -116,6 +116,7 @@ enum ColorConvertFormat {
     YCbCr420_VENUS_P010,
     P010,
     VENUS_P010,
+    CbYCrY,
     NO_COLOR_FORMAT
 };
 
@@ -219,6 +220,8 @@ class C2DColorConverter{
   size_t calcLumaAlign(ColorConvertFormat format);
   size_t calcSizeAlign(ColorConvertFormat format);
   C2DBytesPerPixel calcBytesPerPixel(ColorConvertFormat format);
+  int SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight);
+  int SetSourceConfigFlags(int flags);
 };
 
 #endif  // C2D_ColorConverter_H_

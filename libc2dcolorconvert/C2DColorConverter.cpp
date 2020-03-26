@@ -239,6 +239,28 @@ void C2DColorConverter::setRotation(int32_t rotation) {
             break;
     }
 }
+
+int C2DColorConverter::SourceCrop(int x, int y, size_t srcWidth, size_t srcHeight)
+{
+    mBlit.source_rect.x = x << 16;
+    mBlit.source_rect.y = y << 16;
+    mBlit.source_rect.width = srcWidth << 16;
+    mBlit.source_rect.height = srcHeight << 16;
+    mBlit.config_mask |= C2D_SOURCE_RECT_BIT;
+    ALOGV("C2D library: source rect x = %d, y = %d, width = %d, height = %d",
+         mBlit.source_rect.x >> 16,
+         mBlit.source_rect.y >> 16,
+         mBlit.source_rect.width >> 16,
+         mBlit.source_rect.height >> 16);
+    return 0;
+}
+
+int C2DColorConverter::SetSourceConfigFlags(int flags)
+{
+   mBlit.config_mask |= flags;
+   return 0;
+}
+
 bool C2DColorConverter::convertC2D(int srcFd, void *srcBase, void * srcData,
                                    int dstFd, void *dstBase, void * dstData)
 {
@@ -340,6 +362,7 @@ bool C2DColorConverter::isYUVSurface(ColorConvertFormat format)
         case TP10_UBWC:
         case P010:
         case VENUS_P010:
+        case CbYCrY:
             return true;
         default:
             return false;
@@ -553,6 +576,8 @@ uint32_t C2DColorConverter::getC2DFormat(ColorConvertFormat format, bool isSourc
         case P010:
         case VENUS_P010:
             return C2D_COLOR_FORMAT_420_P010;
+        case CbYCrY:
+            return C2D_COLOR_FORMAT_422_UYVY;
         default:
             ALOGW("%s: Format not supported , %d", __FUNCTION__, format);
             return -1;
@@ -589,6 +614,8 @@ size_t C2DColorConverter::calcStride(ColorConvertFormat format, size_t width)
             return ALIGN(width*2, ALIGN64);
         case VENUS_P010:
             return ALIGN(width*2, ALIGN256);
+        case CbYCrY:
+           return ALIGN(width*2, ALIGN64);
         default:
             ALOGW("%s: Format not supported , %d", __FUNCTION__, format);
             return 0;
@@ -719,6 +746,9 @@ size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size
             alignedw = ALIGN(width*2, ALIGN256);
             alignedh = ALIGN(height/2, ALIGN16);
             size = ALIGN(size + (alignedw * alignedh), ALIGN4K);
+            break;
+        case CbYCrY:
+            size = ALIGN(ALIGN(width * 2, ALIGN64) * height, ALIGN4K);
             break;
         default:
             ALOGW("%s: Format not supported , %d", __FUNCTION__, format);
