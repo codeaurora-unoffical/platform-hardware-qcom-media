@@ -3291,6 +3291,8 @@ bool omx_vdec::execute_output_flush()
     unsigned long p2 = 0; // Parameter - 2
     unsigned long ident = 0;
     bool bRet = true;
+    unsigned int buf_index = 0;
+    OMX_BUFFERHEADERTYPE *buffer = NULL;
 
     /*Generate FBD for all Buffers in the FTBq*/
     pthread_mutex_lock(&m_lock);
@@ -3304,8 +3306,19 @@ bool omx_vdec::execute_output_flush()
     while (m_ftb_q.m_size) {
         m_ftb_q.pop_entry(&p1,&p2,&ident);
         if (ident == m_fill_output_msg ) {
-            print_omx_buffer("Flush FBD", (OMX_BUFFERHEADERTYPE *)p2);
-            m_cb.FillBufferDone(&m_cmp, m_app_data, (OMX_BUFFERHEADERTYPE *)(intptr_t)p2);
+            buffer = (OMX_BUFFERHEADERTYPE *)p2;
+            if (client_buffers.is_color_conversion_enabled()) {
+                buf_index = (OMX_BUFFERHEADERTYPE *)p2 - m_intermediate_out_mem_ptr;
+                if (buf_index < drv_ctx.op_buf.actualcount &&
+                      buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS) {
+                    buffer = m_out_mem_ptr + buf_index;
+                } else {
+                    DEBUG_PRINT_ERROR("Invalid output buffer index: %d", buf_index);
+                    return false;
+                }
+            }
+            print_omx_buffer("Flush FBD", buffer);
+            m_cb.FillBufferDone(&m_cmp, m_app_data, buffer);
         } else if (ident == OMX_COMPONENT_GENERATE_FBD) {
             fill_buffer_done(&m_cmp,(OMX_BUFFERHEADERTYPE *)(intptr_t)p1);
         }
@@ -7777,7 +7790,9 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
 
     if (client_buffers.is_color_conversion_enabled()) {
         buffer = m_intermediate_out_mem_ptr + nPortIndex;
+#ifndef __LINUX__
         buffer->nAllocLen = drv_ctx.op_buf.buffer_size;
+#endif
     }
 
     //buffer->nAllocLen will be sizeof(struct VideoDecoderOutputMetaData). Overwrite
