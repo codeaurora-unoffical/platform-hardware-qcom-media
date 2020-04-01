@@ -86,14 +86,9 @@ lib_LTLIBRARIES = libOmxVenc.la
 libOmxVenc_la_SOURCES = $(sources)
 libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libOmxVenc_la_LDFLAGS = -module -shared -avoid-version
-libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -ldl -lpthread
+libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -ldl -lpthread -lion
 libOmxVenc_la_LDFLAGS += -L$(top_builddir)/libplatformconfig -L$(top_builddir)/libc2dcolorconvert
 libOmxVenc_la_LDFLAGS += -lplatformconfig  -lc2dcolorconvert
-
-
-if !TARGET_USES_LIBGBM
-libOmxVenc_la_LDFLAGS += -lion
-endif
 
 if TARGET_USES_LIBGBM
 libOmxVenc_la_LDFLAGS += -lgbm

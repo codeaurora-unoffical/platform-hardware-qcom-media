@@ -4412,7 +4412,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         DEBUG_PRINT_LOW("gralloc format 0x%x (%s) (%s)",
                             handle->format, grallocFormatStr, isUBWC ? "UBWC" : "Linear");
 #ifdef __LIBGBM__
-                        if (handle->format == GBM_FORMAT_NV12_ENCODEABLE) {
+                        if (handle->format == GBM_FORMAT_NV12_ENCODEABLE || handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS) {
 #else
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
 #endif
