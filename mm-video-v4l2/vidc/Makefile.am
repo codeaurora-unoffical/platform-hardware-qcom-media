@@ -2,9 +2,11 @@
 #
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = venc
+SUBDIRS :=
+
+SUBDIRS += venc
 
 # Enable video decoder compilation for other targets not for sdmsteppe concam
-if !SKIP_VDEC_BUILD
+if WITH_VDEC
 SUBDIRS += vdec
 endif
