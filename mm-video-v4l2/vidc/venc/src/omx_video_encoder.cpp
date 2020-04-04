@@ -618,20 +618,22 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
                     msg_thread_created = false;
                     goto init_error;
                 } else {
-                    async_thread_created = true;
-                    r = pthread_create(&async_thread_id,0, venc_dev::async_venc_message_thread, this);
-                    if (r < 0) {
-                        DEBUG_PRINT_ERROR("ERROR: venc_dev::async_venc_message_thread thread creation failed");
-                        eRet = OMX_ErrorInsufficientResources;
-                        async_thread_created = false;
+                    if (!handle->m_hypervisor) {
+                        async_thread_created = true;
+                        r = pthread_create(&async_thread_id,0, venc_dev::async_venc_message_thread, this);
+                        if (r < 0) {
+                            DEBUG_PRINT_ERROR("ERROR: venc_dev::async_venc_message_thread thread creation failed");
+                            eRet = OMX_ErrorInsufficientResources;
+                            async_thread_created = false;
 
-                        msg_thread_stop = true;
-                        pthread_join(msg_thread_id,NULL);
-                        msg_thread_created = false;
+                            msg_thread_stop = true;
+                            pthread_join(msg_thread_id,NULL);
+                            msg_thread_created = false;
 
-                        goto init_error;
-                    } else
-                        dev_set_message_thread_id(async_thread_id);
+                            goto init_error;
+                        } else
+                            dev_set_message_thread_id(async_thread_id);
+                    }
                 }
             }
         }
