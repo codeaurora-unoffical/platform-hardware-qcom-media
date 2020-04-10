@@ -5616,6 +5616,7 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
 #ifdef __LIBGBM__
             struct gbm_bo *handle = (struct gbm_bo *)media_buffer->pHandle;
             bool is_venus_supported_format = (handle->format == GBM_FORMAT_NV12_ENCODEABLE ||
+                handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS ||
 #else
             private_handle_t *handle = (private_handle_t *)media_buffer->pHandle;
             bool is_venus_supported_format = (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE ||

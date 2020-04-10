@@ -66,11 +66,6 @@ AC_ARG_ENABLE([target-uses-ion],
                 [Enable conditional compile for target target-uses-ion [default=no]]),
         [target_uses_ion="${enableval}"])
 
-AC_ARG_ENABLE([target-uses-gbm],
-        AC_HELP_STRING([--enable-target-uses-gbm],
-                [Enable conditional compile for target target-uses-gbm [default=no]]),
-        [target_uses_gbm="${enableval}"])
-
 AC_ARG_ENABLE([targets-that-use-flag-msm8226],
         AC_HELP_STRING([--enable-targets-that-use-flag-msm8226],
                 [Enable conditional compile for target targets_that_use_flag_msm8226 [default=no]]),
@@ -95,6 +90,17 @@ AC_ARG_ENABLE([use-glib],
         AC_HELP_STRING([--enable-use-glib],
                 [Enable conditional compile for use glib [default=no]]),
         [use_glib="${enableval}"])
+
+AC_ARG_ENABLE([venc],
+        AC_HELP_STRING([--enable-venc], [Build video encoder modules]), [venc="${enableval}"], [venc="no"])
+
+AM_CONDITIONAL([WITH_VENC], [ test "x$venc" = "xyes"])
+
+AC_ARG_ENABLE([vdec],
+        AC_HELP_STRING([--enable-vdec], [Build video decoder modules]), [vdec="${enableval}"], [vdec="no"])
+
+AM_CONDITIONAL([WITH_VDEC], [ test "x$vdec" = "xyes"])
+
 
 AC_ARG_ENABLE([build-mm-video],
         AC_HELP_STRING([--enable-build-mm-video],
@@ -121,6 +127,10 @@ AM_CONDITIONAL(TARGET_HYPERVISOR, test "x$target_hypervisor" = "xyes")
 
 AC_ARG_WITH([sanitized-headers],
         [AS_HELP_STRING([--with-sanitized-headers=DIR],[location of the sanitized Linux kernel headers])],
+        [CPPFLAGS="$CPPFLAGS -I $withval"])
+
+AC_ARG_WITH([kernel-headers],
+        [AS_HELP_STRING([--with-kernel-headers=DIR],[location of ion header files])],
         [CPPFLAGS="$CPPFLAGS -I $withval"])
 
 AC_ARG_WITH([glib-headers],
@@ -197,11 +207,13 @@ AC_ARG_ENABLE([targets-use-libgbm],
                 [Enable conditional compile for target targets_use_libgbm [default=no]]),
         [targets_use_libgbm="${enableval}"])
 
-AC_ARG_ENABLE([vdec-build],
-        AC_HELP_STRING([--enable-vdec-build],
-                [Enable conditional compile for video decoder [default=yes]]),
-        [skip_vdec_build="${enableval}"])
+# only for auto
+AC_ARG_ENABLE([target-uses-gbm],
+        AC_HELP_STRING([--enable-target-uses-gbm],
+                [Enable conditional compile for target target-uses-gbm [default=no]]),
+        [target_uses_gbm="${enableval}"])
 
+AM_CONDITIONAL(TARGET_USES_GBM, [test "x$target_uses_gbm" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8953, [test "x$target_msm8953" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8909, [test "x$target_msm8909" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8996, [test "x$target_msm8996" = "xyes"])
@@ -210,15 +222,12 @@ AM_CONDITIONAL(TARGET_MSM8226, [test "x$target_msm8226" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_UBWC, [test "x$targets_that_support_ubwc" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_SUPPORT_PQ, [test "x$targets_that_support_pq" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_ION, [test "x$target_uses_ion" = "xyes"])
-AM_CONDITIONAL(TARGET_USES_GBM, [test "x$target_uses_gbm" = "xyes"])
 AM_CONDITIONAL(TARGETS_THAT_USE_FLAG_MSM8226, [test "x$targets_that_use_flag_msm8226" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_MEDIA_EXTENSIONS, [test "x$target_uses_media_extensions" = "xyes"])
 AM_CONDITIONAL(MASTER_SIDE_CP_TARGET_LIST, [test "x$master_side_cp_target_list" = "xyes"])
 AM_CONDITIONAL(USE_GLIB, [test "x$use_glib" = "xyes"])
-AM_CONDITIONAL(BUILD_MM_VIDEO, [test "x$build_mm_video" = "xyes"])
 AM_CONDITIONAL(TARGET_USES_LIBGBM, [test "x$targets_use_libgbm" = "xyes"])
 AM_CONDITIONAL(TARGET_STEPPE, [test "x$target_sdmsteppe" = "xyes"])
-AM_CONDITIONAL(SKIP_VDEC_BUILD, [test "x$skip_vdec_build" = "xno"])
 AM_CONDITIONAL(BUILD_SWCODEC, [test "x$build_swcodec" = "xyes"])
 AM_CONDITIONAL(TARGET_OUTPUT_DEINTERLACED, [test "x$target_output_deinterlaced" = "xyes"])
 
@@ -240,22 +249,23 @@ AC_SUBST([CFLAGS])
 AC_CONFIG_FILES([ \
         Makefile \
         mm-core/Makefile \
+        libplatformconfig/Makefile \
+        libc2dcolorconvert/Makefile \
         mm-video-v4l2/Makefile \
         mm-video-v4l2/vidc/Makefile \
-        mm-video-v4l2/vidc/venc/Makefile \
-        libplatformconfig/Makefile \
-        ])
-
-AM_COND_IF( [SKIP_VDEC_BUILD],[], [
-AC_CONFIG_FILES([ \
-        libc2dcolorconvert/Makefile \
         libarbitrarybytes/Makefile \
+        mm-video-v4l2/vidc/venc/Makefile \
+        ])
+AC_OUTPUT
+
+AM_COND_IF( [WITH_VDEC], [
+AC_CONFIG_FILES([ \
         mm-video-v4l2/vidc/vdec/Makefile \
-        ])])
+       ])])
 AC_OUTPUT
 
 AM_COND_IF( [TARGET_HYPERVISOR], [
 AC_CONFIG_FILES([ \
         hypv-intercept/Makefile \
-        ])])
+       ])])
 AC_OUTPUT
