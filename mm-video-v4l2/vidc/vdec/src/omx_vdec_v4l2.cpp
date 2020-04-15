@@ -3290,6 +3290,7 @@ bool omx_vdec::execute_output_flush()
     unsigned long p1 = 0; // Parameter - 1
     unsigned long p2 = 0; // Parameter - 2
     unsigned long ident = 0;
+    unsigned long pre_queue_size = 0;
     bool bRet = true;
     unsigned int buf_index = 0;
     OMX_BUFFERHEADERTYPE *buffer = NULL;
@@ -3303,7 +3304,8 @@ bool omx_vdec::execute_output_flush()
         m_last_rendered_TS = 0;
     }
 
-    while (m_ftb_q.m_size) {
+    pre_queue_size = m_ftb_q.m_size;
+    while (pre_queue_size--) {
         m_ftb_q.pop_entry(&p1,&p2,&ident);
         if (ident == m_fill_output_msg ) {
             buffer = (OMX_BUFFERHEADERTYPE *)p2;
@@ -3321,6 +3323,9 @@ bool omx_vdec::execute_output_flush()
             m_cb.FillBufferDone(&m_cmp, m_app_data, buffer);
         } else if (ident == OMX_COMPONENT_GENERATE_FBD) {
             fill_buffer_done(&m_cmp,(OMX_BUFFERHEADERTYPE *)(intptr_t)p1);
+        } else if (ident == OMX_COMPONENT_GENERATE_PORT_RECONFIG) {
+            DEBUG_PRINT_HIGH("Found reconfig event, append to queue, p2:0x%x", p2);
+            m_ftb_q.insert_entry(p1,p2,ident);
         }
     }
     pthread_mutex_unlock(&m_lock);
