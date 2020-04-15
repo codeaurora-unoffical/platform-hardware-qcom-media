@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2017, 2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -38,6 +38,10 @@ void omx_vdec::init_vendor_extensions (VendorExtensionStore &store) {
 
     ADD_EXTENSION("qti-ext-dec-caps-vt-driver-version", OMX_QTIIndexParamCapabilitiesVTDriverVersion, OMX_DirOutput)
     ADD_PARAM_END("number", OMX_AndroidVendorValueInt32)
+    ADD_EXTENSION("qti-ext-dec-adaptive-playback", OMX_QcomIndexParamVideoAdaptivePlaybackMode, OMX_DirOutput)
+    ADD_PARAM("enable", OMX_AndroidVendorValueInt32)
+    ADD_PARAM("width", OMX_AndroidVendorValueInt32)
+    ADD_PARAM_END("height", OMX_AndroidVendorValueInt32)
 
 }
 
@@ -75,6 +79,13 @@ OMX_ERRORTYPE omx_vdec::get_vendor_extension_config(
         case OMX_QTIIndexParamCapabilitiesVTDriverVersion:
         {
             setStatus &= vExt.setParamInt32(ext, "number", 65536);
+            break;
+        }
+        case OMX_QcomIndexParamVideoAdaptivePlaybackMode:
+        {
+            setStatus &= vExt.setParamInt32(ext, "enable", 1);
+            setStatus &= vExt.setParamInt32(ext, "width", 1920);
+            setStatus &= vExt.setParamInt32(ext, "height", 1088);
             break;
         }
         default:
@@ -155,6 +166,34 @@ OMX_ERRORTYPE omx_vdec::set_vendor_extension_config(
                     NULL, (OMX_INDEXTYPE)OMX_QTIIndexParamDitherControl, &decParam);
             if (err != OMX_ErrorNone) {
                 DEBUG_PRINT_ERROR("set_config: OMX_QTIIndexParamDitherControl failed !");
+            }
+            break;
+        }
+        case OMX_QcomIndexParamVideoAdaptivePlaybackMode:
+        {
+            PrepareForAdaptivePlaybackParams params;
+            OMX_S32 enable = 0;
+            OMX_S32 width = 1920;
+            OMX_S32 height = 1088;
+
+            if ((!vExt.readParamInt32(ext, "enable", &enable)) ||
+                (!vExt.readParamInt32(ext, "width", &width)) ||
+                (!vExt.readParamInt32(ext, "height", &height))) {
+                break;
+            }
+            params.nSize = sizeof(params);
+            params.nVersion.s.nVersionMajor = 1;
+            params.nVersion.s.nVersionMinor = 0;
+            params.nVersion.s.nRevision = 0;
+            params.nVersion.s.nStep = 0;
+            params.nPortIndex = OMX_DirOutput;
+            params.bEnable = (OMX_BOOL)enable;
+            params.nMaxFrameWidth = width;
+            params.nMaxFrameHeight = height;
+            err = set_parameter(
+                    NULL, (OMX_INDEXTYPE)OMX_QcomIndexParamVideoAdaptivePlaybackMode, &params);
+            if (err != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("set_config: OMX_QcomIndexParamVideoAdaptivePlaybackMode failed !");
             }
             break;
         }
