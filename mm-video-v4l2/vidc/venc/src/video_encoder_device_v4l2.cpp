@@ -1671,6 +1671,13 @@ void venc_dev::venc_close()
                 pthread_join(m_tid,NULL);
         }
 
+        if (venc_handle->msg_thread_created) {
+            venc_handle->msg_thread_created = false;
+            venc_handle->msg_thread_stop = true;
+            post_message(venc_handle, omx_video::OMX_COMPONENT_CLOSE_MSG);
+            DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
+            pthread_join(venc_handle->msg_thread_id, NULL);
+        }
         DEBUG_PRINT_HIGH("venc_close X");
         unsubscribe_to_events(m_nDriver_fd);
         close(m_poll_efd);
@@ -7042,7 +7049,7 @@ bool venc_dev::venc_set_iframesize_type(QOMX_VIDEO_IFRAMESIZE_TYPE type)
 bool venc_dev::venc_set_baselayerid(OMX_U32 baseid)
 {
     struct v4l2_control control;
-    if (hier_layers.hier_mode == HIER_P) {
+    if (hier_layers.hier_mode == HIER_P || temporal_layers_config.hier_mode == HIER_P) {
         control.id = V4L2_CID_MPEG_VIDC_VIDEO_BASELAYER_ID;
         control.value = baseid;
         DEBUG_PRINT_LOW("Going to set V4L2_CID_MPEG_VIDC_VIDEO_BASELAYER_ID");
