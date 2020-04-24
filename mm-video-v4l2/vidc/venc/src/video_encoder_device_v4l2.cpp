@@ -662,7 +662,7 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
     unsigned char *pVirt = NULL;
     int height = m_sVenc_cfg.input_height;
     int width = m_sVenc_cfg.input_width;
-    OMX_TICKS nTimeStamp = buf.timestamp.tv_sec * 1000000 + buf.timestamp.tv_usec;
+    OMX_TICKS nTimeStamp = (uint64_t)(buf.timestamp.tv_sec * 1000000 + buf.timestamp.tv_usec);
     int fd = buf.m.planes[0].reserved[0];
     bool vqzip_sei_found = false;
 
