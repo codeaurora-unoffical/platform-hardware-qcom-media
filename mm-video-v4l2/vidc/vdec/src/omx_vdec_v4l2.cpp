@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -1154,6 +1154,12 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode()
         // V4L2_MPEG_VIDC_VIDEO_DPB_COLOR_FMT_NONE
     }
 
+    eRet = set_dpb(enable_split);
+    if (eRet) {
+        DEBUG_PRINT_HIGH("Failed to set DPB buffer mode: %d", eRet);
+        return eRet;
+    }
+
     if (capability_changed == true) {
         // Get format for CAPTURE port
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -1176,10 +1182,6 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode()
         !BITMASK_PRESENT(&m_flags, OMX_COMPONENT_OUTPUT_ENABLE_PENDING)) {
         DEBUG_PRINT_LOW("Invalid state to decide on dpb-opb split");
         return OMX_ErrorNone;
-    }
-    eRet = set_dpb(enable_split);
-    if (eRet) {
-        DEBUG_PRINT_HIGH("Failed to set DPB buffer mode: %d", eRet);
     }
 
     return eRet;
@@ -1500,6 +1502,20 @@ void omx_vdec::process_event_cb(void *ctxt)
                                         DEBUG_PRINT_ERROR("set_buffer_req failed eRet = %d",eRet);
                                         pThis->omx_report_error();
                                         break;
+                                    }
+                                    OMX_COLOR_FORMATTYPE eColorFormat;
+                                    if (!pThis->m_progressive) {
+                                        pThis->m_disable_ubwc_mode = true;
+                                    }
+                                    if (pThis->m_disable_ubwc_mode) {
+                                        pThis->client_buffers.get_color_format(eColorFormat);
+                                        if (eColorFormat == (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed) {
+                                            eColorFormat = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m;
+                                            DEBUG_PRINT_HIGH("OMX_CommandPortDisable: set_color_format %d", eColorFormat);
+                                            if (!pThis->client_buffers.set_color_format(eColorFormat)) {
+                                                DEBUG_PRINT_ERROR("Set color format failed");
+                                            }
+                                        }
                                     }
                                 }
                                 pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
@@ -11291,6 +11307,9 @@ bool omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                     }
 
                     if (m_enable_android_native_buffers) {
+                        if (!m_progressive) {
+                            enable = OMX_InterlaceFrameProgressive;
+                        }
                         DEBUG_PRINT_LOW("setMetaData INTERLACED format:%d enable:%d",
                                         payload->format, enable);
 
