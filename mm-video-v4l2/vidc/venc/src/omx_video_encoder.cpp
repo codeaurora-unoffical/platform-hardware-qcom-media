@@ -1736,8 +1736,8 @@ OMX_ERRORTYPE  omx_venc::set_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                 m_sConfigTemporalLayers.nBLayerCountActual = m_sParamTemporalLayers.nBLayerCountActual;
                 m_sConfigTemporalLayers.nPLayerCountActual = m_sParamTemporalLayers.nPLayerCountActual;
                 m_sConfigTemporalLayers.bBitrateRatiosSpecified = m_sParamTemporalLayers.bBitrateRatiosSpecified;
-                memcpy(&m_sConfigTemporalLayers.nBitrateRatios[0],
-                        &m_sParamTemporalLayers.nBitrateRatios[0],
+                memcpy(static_cast<OMX_U32*>(&(m_sConfigTemporalLayers.nBitrateRatios[0])),
+                        static_cast<OMX_U32*>(&(m_sParamTemporalLayers.nBitrateRatios[0])),
                         OMX_VIDEO_ANDROID_MAXTEMPORALLAYERS * sizeof(OMX_U32));
                 break;
             }

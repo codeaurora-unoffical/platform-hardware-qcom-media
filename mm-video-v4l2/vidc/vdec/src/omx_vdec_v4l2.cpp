@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010 - 2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2010 - 2020, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -1154,6 +1154,12 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode()
         // V4L2_MPEG_VIDC_VIDEO_DPB_COLOR_FMT_NONE
     }
 
+    eRet = set_dpb(enable_split);
+    if (eRet) {
+        DEBUG_PRINT_HIGH("Failed to set DPB buffer mode: %d", eRet);
+        return eRet;
+    }
+
     if (capability_changed == true) {
         // Get format for CAPTURE port
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -1176,10 +1182,6 @@ OMX_ERRORTYPE omx_vdec::decide_dpb_buffer_mode()
         !BITMASK_PRESENT(&m_flags, OMX_COMPONENT_OUTPUT_ENABLE_PENDING)) {
         DEBUG_PRINT_LOW("Invalid state to decide on dpb-opb split");
         return OMX_ErrorNone;
-    }
-    eRet = set_dpb(enable_split);
-    if (eRet) {
-        DEBUG_PRINT_HIGH("Failed to set DPB buffer mode: %d", eRet);
     }
 
     return eRet;
@@ -1500,6 +1502,20 @@ void omx_vdec::process_event_cb(void *ctxt)
                                         DEBUG_PRINT_ERROR("set_buffer_req failed eRet = %d",eRet);
                                         pThis->omx_report_error();
                                         break;
+                                    }
+                                    OMX_COLOR_FORMATTYPE eColorFormat;
+                                    if (!pThis->m_progressive) {
+                                        pThis->m_disable_ubwc_mode = true;
+                                    }
+                                    if (pThis->m_disable_ubwc_mode) {
+                                        pThis->client_buffers.get_color_format(eColorFormat);
+                                        if (eColorFormat == (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed) {
+                                            eColorFormat = (OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m;
+                                            DEBUG_PRINT_HIGH("OMX_CommandPortDisable: set_color_format %d", eColorFormat);
+                                            if (!pThis->client_buffers.set_color_format(eColorFormat)) {
+                                                DEBUG_PRINT_ERROR("Set color format failed");
+                                            }
+                                        }
                                     }
                                 }
                                 pThis->m_cb.EventHandler(&pThis->m_cmp, pThis->m_app_data,
@@ -6448,6 +6464,10 @@ OMX_ERRORTYPE omx_vdec::free_output_buffer(OMX_BUFFERHEADERTYPE *bufferHdr,
             DEBUG_PRINT_HIGH("All output buffers released, free extradata");
             free_extradata();
             }
+        } else {
+            client_buffers.allocated_count--;
+            DEBUG_PRINT_HIGH("free_output_buffer: allocated_count decremented: %d",
+                    client_buffers.allocated_count);
         }
     }
 
@@ -6946,6 +6966,9 @@ OMX_ERRORTYPE  omx_vdec::allocate_output_buffer(
             int cache_flag = ION_FLAG_CACHED;
             if (intermediate == true && client_buffers.is_color_conversion_enabled()) {
                 cache_flag = 0;
+                client_buffers.allocated_count++;
+                DEBUG_PRINT_HIGH("allocate_output_buffer: allocated_count incremented %d",
+                    client_buffers.allocated_count);
             }
             bool status = alloc_map_ion_memory(drv_ctx.op_buf.buffer_size,
                                                &(*omx_op_buf_ion_info)[i],
@@ -10261,8 +10284,7 @@ OMX_ERRORTYPE omx_vdec::set_buffer_req(vdec_allocatorproperty *buffer_prop)
             eRet = OMX_ErrorInsufficientResources;
         } else {
             if (!client_buffers.update_buffer_req()) {
-                DEBUG_PRINT_ERROR("Setting c2D buffer requirements failed");
-                eRet = OMX_ErrorInsufficientResources;
+                DEBUG_PRINT_HIGH("set_buffer_req: client_buffers.update_buffer_req failed, but not fatal");
             }
         }
     }
@@ -10334,8 +10356,7 @@ OMX_ERRORTYPE omx_vdec::update_portdef(OMX_PARAM_PORTDEFINITIONTYPE *portDefn)
        }
        drv_ctx.op_buf.buffer_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
        if (!client_buffers.update_buffer_req()) {
-           DEBUG_PRINT_ERROR("client_buffers.update_buffer_req Failed");
-           return OMX_ErrorHardware;
+           DEBUG_PRINT_HIGH("update_portdef: client_buffers.update_buffer_req failed, but not fatal");
        }
 
         if (!client_buffers.get_buffer_req(buf_size)) {
@@ -11138,12 +11159,11 @@ void omx_vdec::get_preferred_color_aspects(ColorAspects& preferredColorAspects)
     const ColorAspects &defaultColor = preferClientColor ?
         m_internal_color_space.sAspects : m_client_color_space.sAspects;
 
-    /* atoll does not support BT2020 color primaries, hence overriding with
-        BT709 to avoid tone mapping issue at display*/
-    if (!strncmp(m_platform_name, "atoll", 5) &&
-        (m_client_color_space.sAspects.mPrimaries == ColorAspects::PrimariesBT2020)) {
-        m_client_color_space.sAspects.mPrimaries = ColorAspects::PrimariesBT709_5;
-        m_client_color_space.sAspects.mMatrixCoeffs = ColorAspects::MatrixBT709_5;
+    /* Client sets BT2020 for UHD and higher. Set correct aspects if the bistream is 8-bit */
+    if ((m_client_color_space.sAspects.mPrimaries == ColorAspects::PrimariesBT2020) &&
+        (dpb_bit_depth == MSM_VIDC_BIT_DEPTH_8)) {
+    m_client_color_space.sAspects.mPrimaries = ColorAspects::PrimariesBT709_5;
+    m_client_color_space.sAspects.mMatrixCoeffs = ColorAspects::MatrixBT709_5;
     }
 
     preferredColorAspects.mPrimaries = preferredColor.mPrimaries != ColorAspects::PrimariesUnspecified ?
@@ -11286,6 +11306,9 @@ bool omx_vdec::handle_extradata(OMX_BUFFERHEADERTYPE *p_buf_hdr)
                     }
 
                     if (m_enable_android_native_buffers) {
+                        if (!m_progressive) {
+                            enable = OMX_InterlaceFrameProgressive;
+                        }
                         DEBUG_PRINT_LOW("setMetaData INTERLACED format:%d enable:%d",
                                         payload->format, enable);
 
@@ -12436,6 +12459,8 @@ bool omx_vdec::allocate_color_convert_buf::update_buffer_req()
     ioctl(omx->drv_ctx.video_driver_fd, VIDIOC_G_FMT, &fmt);
     width = fmt.fmt.pix_mp.width;
     height =  fmt.fmt.pix_mp.height;
+    DEBUG_PRINT_HIGH("update_buffer_req: width = %d, height = %d, C2D width = %d, C2D height = %d",
+            width, height, m_c2d_width, m_c2d_height);
 
     bool resolution_upgrade = (height > m_c2d_height ||
             width > m_c2d_width);
@@ -12655,7 +12680,7 @@ OMX_ERRORTYPE omx_vdec::allocate_color_convert_buf::set_buffer_req(
 
     if (enabled) {
         // disallow changing buffer size/count while we have active allocated buffers
-        if (allocated_count > 0) {
+        if ((buffer_size_req != buffer_size) && (allocated_count > 0)) {
             DEBUG_PRINT_ERROR("Cannot change C2D buffer size from %u to %u with %d active allocations",
                     buffer_size_req, buffer_size, allocated_count);
             return OMX_ErrorInvalidState;
