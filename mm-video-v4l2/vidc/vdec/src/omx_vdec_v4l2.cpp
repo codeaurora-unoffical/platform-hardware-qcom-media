@@ -11159,12 +11159,11 @@ void omx_vdec::get_preferred_color_aspects(ColorAspects& preferredColorAspects)
     const ColorAspects &defaultColor = preferClientColor ?
         m_internal_color_space.sAspects : m_client_color_space.sAspects;
 
-    /* atoll does not support BT2020 color primaries, hence overriding with
-        BT709 to avoid tone mapping issue at display*/
-    if (!strncmp(m_platform_name, "atoll", 5) &&
-        (m_client_color_space.sAspects.mPrimaries == ColorAspects::PrimariesBT2020)) {
-        m_client_color_space.sAspects.mPrimaries = ColorAspects::PrimariesBT709_5;
-        m_client_color_space.sAspects.mMatrixCoeffs = ColorAspects::MatrixBT709_5;
+    /* Client sets BT2020 for UHD and higher. Set correct aspects if the bistream is 8-bit */
+    if ((m_client_color_space.sAspects.mPrimaries == ColorAspects::PrimariesBT2020) &&
+        (dpb_bit_depth == MSM_VIDC_BIT_DEPTH_8)) {
+    m_client_color_space.sAspects.mPrimaries = ColorAspects::PrimariesBT709_5;
+    m_client_color_space.sAspects.mMatrixCoeffs = ColorAspects::MatrixBT709_5;
     }
 
     preferredColorAspects.mPrimaries = preferredColor.mPrimaries != ColorAspects::PrimariesUnspecified ?
