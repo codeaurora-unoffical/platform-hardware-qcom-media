@@ -3877,12 +3877,14 @@ OMX_ERRORTYPE omx_swvdec::buffer_allocate_op(
 
         m_buffer_array_op[ii].buffer_swvdec.fd            = pmem_fd ;
 #ifdef USE_GBM
-        m_pmem_info[ii].pmeta_fd = pmeta_fd;
-        m_pmem_info[ii].pmem_fd = pmem_fd;
-        m_pmem_info[ii].size = m_buffer_array_op[ii].buffer_payload.buffer_len;
-        m_pmem_info[ii].mapped_size = m_buffer_array_op[ii].buffer_payload.mmaped_size;
-        m_pmem_info[ii].buffer = m_buffer_array_op[ii].buffer_swvdec.p_buffer;
-        m_pmem_info[ii].offset = m_buffer_array_op[ii].buffer_payload.offset;
+        if (m_pmem_info) {
+          m_pmem_info[ii].pmeta_fd = pmeta_fd;
+          m_pmem_info[ii].pmem_fd = pmem_fd;
+          m_pmem_info[ii].size = m_buffer_array_op[ii].buffer_payload.buffer_len;
+          m_pmem_info[ii].mapped_size = m_buffer_array_op[ii].buffer_payload.mmaped_size;
+          m_pmem_info[ii].buffer = m_buffer_array_op[ii].buffer_swvdec.p_buffer;
+          m_pmem_info[ii].offset = m_buffer_array_op[ii].buffer_payload.offset;
+        }
 #endif
 
         if(m_swvdec_codec == SWVDEC_CODEC_VC1)
@@ -4057,6 +4059,10 @@ OMX_ERRORTYPE omx_swvdec::buffer_allocate_op_info_array()
     pPlatformList   = m_platform_list;
     pPlatformEntry  = m_platform_entry;
     pPMEMInfo       = m_pmem_info;
+    if (NULL == pPlatformList || NULL == pPlatformEntry || NULL == pPMEMInfo) {
+      retval = OMX_ErrorInsufficientResources;
+      goto buffer_allocate_op_info_array_exit;
+    }
 #endif
     for (ii = 0; ii < m_port_op.def.nBufferCountActual; ii++)
     {
@@ -4073,27 +4079,25 @@ OMX_ERRORTYPE omx_swvdec::buffer_allocate_op_info_array()
         // Platform specific PMEM Information
         // Initialize the Platform Entry
         //DEBUG_PRINT_LOW("Initializing the Platform Entry for %d",i);
-        pPlatformEntry->type       = OMX_QCOM_PLATFORM_PRIVATE_PMEM;
-        pPlatformEntry->entry      = pPMEMInfo;
-        // Initialize the Platform List
-        pPlatformList->nEntries    = 1;
-        pPlatformList->entryList   = pPlatformEntry;
-        pPMEMInfo->offset = 0;
-        pPMEMInfo->pmem_fd = -1;
-        pPMEMInfo->pmeta_fd = -1;
-        m_buffer_array_op[ii].gbm_info.bo_fd = -1;
-        p_buffer_hdr->pPlatformPrivate = pPlatformList;
+          pPlatformEntry->type       = OMX_QCOM_PLATFORM_PRIVATE_PMEM;
+          pPlatformEntry->entry      = pPMEMInfo;
+          // Initialize the Platform List
+          pPlatformList->nEntries    = 1;
+          pPlatformList->entryList   = pPlatformEntry;
+          pPMEMInfo->offset = 0;
+          pPMEMInfo->pmem_fd = -1;
+          pPMEMInfo->pmeta_fd = -1;
+          m_buffer_array_op[ii].gbm_info.bo_fd = -1;
+          p_buffer_hdr->pPlatformPrivate = pPlatformList;
+          pPMEMInfo++;
+          pPlatformEntry++;
+          pPlatformList++;
 #endif
         p_buffer_hdr->nSize              = sizeof(OMX_BUFFERHEADERTYPE);
         p_buffer_hdr->nVersion.nVersion  = OMX_SPEC_VERSION;
         p_buffer_hdr->nOutputPortIndex   = OMX_CORE_PORT_INDEX_OP;
         p_buffer_hdr->pOutputPortPrivate =
             (void *) &(m_buffer_array_op[ii].buffer_payload);
-#ifdef USE_GBM
-        pPMEMInfo++;
-        pPlatformEntry++;
-        pPlatformList++;
-#endif
     }
 
 buffer_allocate_op_info_array_exit:
