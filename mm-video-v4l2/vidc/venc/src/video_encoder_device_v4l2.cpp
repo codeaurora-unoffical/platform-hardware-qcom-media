@@ -1829,7 +1829,8 @@ bool venc_dev::venc_get_buf_req(OMX_U32 *min_buff_count,
 
         minCount = MAX((unsigned int)control.value, minCount);
         m_sInput_buff_property.mincount = minCount;
-        m_sInput_buff_property.actualcount = m_sInput_buff_property.mincount;
+        if (m_sInput_buff_property.actualcount < m_sInput_buff_property.mincount)
+            m_sInput_buff_property.actualcount = m_sInput_buff_property.mincount;
 
         fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
         fmt.fmt.pix_mp.height = m_sVenc_cfg.input_height;
@@ -1915,7 +1916,8 @@ bool venc_dev::venc_get_buf_req(OMX_U32 *min_buff_count,
         }
 
         m_sOutput_buff_property.mincount = minCount;
-        m_sOutput_buff_property.actualcount = m_sOutput_buff_property.mincount;
+        if (m_sOutput_buff_property.actualcount < m_sOutput_buff_property.mincount)
+            m_sOutput_buff_property.actualcount = m_sOutput_buff_property.mincount;
 
         *min_buff_count = m_sOutput_buff_property.mincount;
         *actual_buff_count = m_sOutput_buff_property.actualcount;
@@ -2677,7 +2679,8 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                             handle->format, grallocFormatStr, isUBWC ? "UBWC" : "Linear");
 
 #ifdef USE_GBM
-                        if (handle->format == GBM_FORMAT_NV12_ENCODEABLE) {
+                        if (handle->format == GBM_FORMAT_NV12_ENCODEABLE ||
+                            handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS) {
 #else
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
 #endif
