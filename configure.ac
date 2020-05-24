@@ -97,7 +97,7 @@ AC_ARG_ENABLE([venc],
 AM_CONDITIONAL([WITH_VENC], [ test "x$venc" = "xyes"])
 
 AC_ARG_ENABLE([vdec],
-        AC_HELP_STRING([--enable-vdec], [Build video decoder modules]), [venc="${enableval}"], [venc="no"])
+        AC_HELP_STRING([--enable-vdec], [Build video decoder modules]), [vdec="${enableval}"], [vdec="no"])
 
 AM_CONDITIONAL([WITH_VDEC], [ test "x$vdec" = "xyes"])
 
@@ -207,7 +207,13 @@ AC_ARG_ENABLE([targets-use-libgbm],
                 [Enable conditional compile for target targets_use_libgbm [default=no]]),
         [targets_use_libgbm="${enableval}"])
 
+# only for auto
+AC_ARG_ENABLE([target-uses-gbm],
+        AC_HELP_STRING([--enable-target-uses-gbm],
+                [Enable conditional compile for target target-uses-gbm [default=no]]),
+        [target_uses_gbm="${enableval}"])
 
+AM_CONDITIONAL(TARGET_USES_GBM, [test "x$target_uses_gbm" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8953, [test "x$target_msm8953" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8909, [test "x$target_msm8909" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8996, [test "x$target_msm8996" = "xyes"])
@@ -242,7 +248,6 @@ AC_SUBST([CFLAGS])
 
 AC_CONFIG_FILES([ \
         Makefile \
-        hypv-intercept/Makefile \
         mm-core/Makefile \
         libplatformconfig/Makefile \
         libc2dcolorconvert/Makefile \
@@ -251,4 +256,16 @@ AC_CONFIG_FILES([ \
         libarbitrarybytes/Makefile \
         mm-video-v4l2/vidc/venc/Makefile \
         ])
+AC_OUTPUT
+
+AM_COND_IF( [WITH_VDEC], [
+AC_CONFIG_FILES([ \
+        mm-video-v4l2/vidc/vdec/Makefile \
+       ])])
+AC_OUTPUT
+
+AM_COND_IF( [TARGET_HYPERVISOR], [
+AC_CONFIG_FILES([ \
+        hypv-intercept/Makefile \
+       ])])
 AC_OUTPUT

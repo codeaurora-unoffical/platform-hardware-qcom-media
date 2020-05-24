@@ -4412,7 +4412,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         DEBUG_PRINT_LOW("gralloc format 0x%x (%s) (%s)",
                             handle->format, grallocFormatStr, isUBWC ? "UBWC" : "Linear");
 #ifdef __LIBGBM__
-                        if (handle->format == GBM_FORMAT_NV12_ENCODEABLE) {
+                        if (handle->format == GBM_FORMAT_NV12_ENCODEABLE || handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS) {
 #else
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
 #endif
@@ -5839,9 +5839,10 @@ bool venc_dev::venc_set_intra_refresh()
 {
     bool status = true;
     int rc;
-    struct v4l2_control control_mode, control_mbs;
+    struct v4l2_control control_mode;
     control_mode.id   = V4L2_CID_MPEG_VIDC_VIDEO_INTRA_REFRESH_MODE_CYCLIC;
     control_mode.value = 0;
+
     // There is no disabled mode.  Disabled mode is indicated by a 0 count.
     if (intra_refresh.irmode == OMX_VIDEO_IntraRefreshMax || intra_refresh.mbcount == 0) {
         return status;
@@ -5862,7 +5863,7 @@ bool venc_dev::venc_set_intra_refresh()
         return false;
     }
 
-    intra_refresh.mbcount = control_mbs.value;
+    intra_refresh.mbcount = control_mode.value;
     return status;
 }
 
