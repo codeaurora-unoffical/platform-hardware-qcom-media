@@ -662,7 +662,7 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
     unsigned char *pVirt = NULL;
     int height = m_sVenc_cfg.input_height;
     int width = m_sVenc_cfg.input_width;
-    OMX_TICKS nTimeStamp = buf.timestamp.tv_sec * 1000000 + buf.timestamp.tv_usec;
+    OMX_TICKS nTimeStamp = (uint64_t)(buf.timestamp.tv_sec * 1000000 + buf.timestamp.tv_usec);
     int fd = buf.m.planes[0].reserved[0];
     bool vqzip_sei_found = false;
 
@@ -1811,6 +1811,13 @@ void venc_dev::venc_close()
         if (async_thread_created)
             pthread_join(m_tid,NULL);
 
+        if (venc_handle->msg_thread_created) {
+            venc_handle->msg_thread_created = false;
+            venc_handle->msg_thread_stop = true;
+            post_message(venc_handle, omx_video::OMX_COMPONENT_CLOSE_MSG);
+            DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
+            pthread_join(venc_handle->msg_thread_id, NULL);
+        }
         DEBUG_PRINT_HIGH("venc_close X");
         unsubscribe_to_events(m_nDriver_fd);
         close(m_poll_efd);
@@ -3169,6 +3176,23 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                                 pParam->nQP,
                                 ENABLE_I_QP | ENABLE_P_QP | ENABLE_B_QP ) == false) {
                     DEBUG_PRINT_ERROR("Failed to set OMX_QcomIndexConfigQp failed");
+                    return false;
+                }
+                break;
+            }
+        case OMX_QcomIndexConfigPackedQp:
+            {
+                OMX_QCOM_VIDEO_CONFIG_PACKED_QP* pParam =
+                    (OMX_QCOM_VIDEO_CONFIG_PACKED_QP*) configData;
+                DEBUG_PRINT_LOW("Set_config: nQpI %d, nQpP %d, nQpB %d",
+                                pParam->nQpI,
+                                pParam->nQpP,
+                                pParam->nQpB);
+                if (venc_set_qp(pParam->nQpI,
+                                pParam->nQpP,
+                                pParam->nQpB,
+                                ENABLE_I_QP | ENABLE_P_QP | ENABLE_B_QP ) == false) {
+                    DEBUG_PRINT_ERROR("Failed to set OMX_QcomIndexConfigPackedQp failed");
                     return false;
                 }
                 break;
@@ -7151,7 +7175,8 @@ bool venc_dev::venc_validate_temporal_settings() {
 
     if (rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_VBR_CFR &&
         rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_CFR &&
-        rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_VFR) {
+        rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_MBR_VFR &&
+        rate_ctrl.rcmode != V4L2_CID_MPEG_VIDC_VIDEO_RATE_CONTROL_OFF) {
         DEBUG_PRINT_HIGH("TemporalLayer: Hier layers cannot be enabled when RC is not VBR_CFR, MBR_CFR, MBR_VFR");
         return false;
     }

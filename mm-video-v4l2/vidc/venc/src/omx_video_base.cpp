@@ -345,13 +345,6 @@ omx_video::omx_video():
 omx_video::~omx_video()
 {
     DEBUG_PRINT_HIGH("~omx_video(): Inside Destructor()");
-    if (msg_thread_created) {
-        msg_thread_stop = true;
-        post_message(this, OMX_COMPONENT_CLOSE_MSG);
-        DEBUG_PRINT_HIGH("omx_video: Waiting on Msg Thread exit");
-        pthread_join(msg_thread_id,NULL);
-    }
-    DEBUG_PRINT_HIGH("omx_video: Waiting on Async Thread exit");
     /*For V4L2 based drivers, pthread_join is done in device_close
      * so no need to do it here*/
     pthread_mutex_destroy(&m_lock);
@@ -2304,6 +2297,15 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                    reinterpret_cast<OMX_SKYPE_VIDEO_CONFIG_QP*>(configData);
                DEBUG_PRINT_LOW("get_config: OMX_QcomIndexConfigQp");
                memcpy(pParam, &m_sConfigQP, sizeof(m_sConfigQP));
+               break;
+           }
+       case OMX_QcomIndexConfigPackedQp:
+           {
+               VALIDATE_OMX_PARAM_DATA(configData, OMX_SKYPE_VIDEO_CONFIG_PACKED_QP);
+               OMX_SKYPE_VIDEO_CONFIG_PACKED_QP* pParam =
+                   reinterpret_cast<OMX_SKYPE_VIDEO_CONFIG_PACKED_QP*>(configData);
+               DEBUG_PRINT_LOW("get_config: OMX_SKYPE_VIDEO_CONFIG_PACKED_QP");
+               memcpy(pParam, &m_sConfigPackedQP, sizeof(m_sConfigPackedQP));
                break;
            }
        case OMX_QcomIndexConfigBaseLayerId:
