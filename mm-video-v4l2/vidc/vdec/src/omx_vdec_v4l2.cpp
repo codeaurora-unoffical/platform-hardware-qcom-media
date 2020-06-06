@@ -311,10 +311,9 @@ void* async_message_thread (void *input)
                  * When FBD comes, component updates the clients with actual
                  * resolution through set_buffer_geometry.
                  */
-#ifndef __LINUX__
+
                  event_fields_changed |= (omx->drv_ctx.video_resolution.frame_height != ptr[0]);
                  event_fields_changed |= (omx->drv_ctx.video_resolution.frame_width != ptr[1]);
-#endif
 
                  if ((codec == V4L2_PIX_FMT_H264) ||
                      (codec  == V4L2_PIX_FMT_HEVC)) {
@@ -3292,8 +3291,6 @@ bool omx_vdec::execute_output_flush()
     unsigned long ident = 0;
     unsigned long pre_queue_size = 0;
     bool bRet = true;
-    unsigned int buf_index = 0;
-    OMX_BUFFERHEADERTYPE *buffer = NULL;
 
     /*Generate FBD for all Buffers in the FTBq*/
     pthread_mutex_lock(&m_lock);
@@ -3308,23 +3305,12 @@ bool omx_vdec::execute_output_flush()
     while (pre_queue_size--) {
         m_ftb_q.pop_entry(&p1,&p2,&ident);
         if (ident == m_fill_output_msg ) {
-            buffer = (OMX_BUFFERHEADERTYPE *)p2;
-            if (client_buffers.is_color_conversion_enabled()) {
-                buf_index = (OMX_BUFFERHEADERTYPE *)p2 - m_intermediate_out_mem_ptr;
-                if (buf_index < drv_ctx.op_buf.actualcount &&
-                      buf_index < MAX_NUM_INPUT_OUTPUT_BUFFERS) {
-                    buffer = m_out_mem_ptr + buf_index;
-                } else {
-                    DEBUG_PRINT_ERROR("Invalid output buffer index: %d", buf_index);
-                    return false;
-                }
-            }
-            print_omx_buffer("Flush FBD", buffer);
-            m_cb.FillBufferDone(&m_cmp, m_app_data, buffer);
+            print_omx_buffer("Flush FBD", (OMX_BUFFERHEADERTYPE *)p2);
+            m_cb.FillBufferDone(&m_cmp, m_app_data, (OMX_BUFFERHEADERTYPE *)(intptr_t)p2);
         } else if (ident == OMX_COMPONENT_GENERATE_FBD) {
             fill_buffer_done(&m_cmp,(OMX_BUFFERHEADERTYPE *)(intptr_t)p1);
         } else if (ident == OMX_COMPONENT_GENERATE_PORT_RECONFIG) {
-            DEBUG_PRINT_HIGH("Found reconfig event, append to queue, p2:0x%x", p2);
+            DEBUG_PRINT_HIGH("Found reconfig event, append to queue, p2:0x%lx", p2);
             m_ftb_q.insert_entry(p1,p2,ident);
         }
     }
@@ -6364,14 +6350,7 @@ OMX_ERRORTYPE omx_vdec::free_input_buffer(OMX_BUFFERHEADERTYPE *bufferHdr)
 
             if (allocate_native_handle){
                 native_handle_t *nh = (native_handle_t *)bufferHdr->pBuffer;
-#ifndef __LINUX__
                 native_handle_close(nh);
-#else
-                /* close fd of input buffer in dynamic input buffer mode
-                 * since the fd in native handle will be overwrite by omx client.
-                 */
-                close(drv_ctx.ptr_inputbuffer[index].pmem_fd);
-#endif
                 native_handle_delete(nh);
             } else {
 #ifndef USE_ION
@@ -7465,8 +7444,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     OMX_ERRORTYPE ret = OMX_ErrorNone;
     struct vdec_bufferpayload *temp_buffer;
     bool port_setting_changed = true;
-    native_handle_t *native_handle;
-    int fd=0, offset=0;
 
     /*Should we generate a Aync error event*/
     if (buffer == NULL || buffer->pInputPortPrivate == NULL) {
@@ -7509,19 +7486,6 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     }
 
     auto_lock l(buf_lock);
-
-    if (allocate_native_handle) {
-        native_handle = (native_handle_t*)buffer->pBuffer;
-        if (!native_handle) {
-          DEBUG_PRINT_ERROR("ERROR: vdec_etb: native handle is NULL");
-          return OMX_ErrorBadParameter;
-        }
-
-        fd     = native_handle->data[0];
-        offset = buffer->nOffset;
-        DEBUG_PRINT_LOW("vdec_empty_buf: native handle fd:%d offset:%d filledlen:%d",
-            fd, offset, buffer->nFilledLen);
-    }
     temp_buffer = (struct vdec_bufferpayload *)buffer->pInputPortPrivate;
 
     if (!temp_buffer || (temp_buffer -  drv_ctx.ptr_inputbuffer) > (int)drv_ctx.ip_buf.actualcount) {
@@ -7634,13 +7598,8 @@ OMX_ERRORTYPE  omx_vdec::empty_this_buffer_proxy(OMX_IN OMX_HANDLETYPE  hComp,
     plane.length = drv_ctx.ip_buf.buffer_size;
     plane.m.userptr = (unsigned long)temp_buffer->bufferaddr -
         (unsigned long)temp_buffer->offset;
-    if (allocate_native_handle) {
-      plane.reserved[0] = fd;
-      plane.reserved[1] = offset;
-    } else {
-      plane.reserved[0] = temp_buffer->pmem_fd;
-      plane.reserved[1] = temp_buffer->offset;
-    }
+    plane.reserved[0] = temp_buffer->pmem_fd;
+    plane.reserved[1] = temp_buffer->offset;
     plane.reserved[3] = (unsigned long)buffer->pMarkData;
     plane.reserved[4] = (unsigned long)buffer->hMarkTargetComponent;
     plane.data_offset = 0;
@@ -7795,9 +7754,7 @@ OMX_ERRORTYPE  omx_vdec::fill_this_buffer(OMX_IN OMX_HANDLETYPE  hComp,
 
     if (client_buffers.is_color_conversion_enabled()) {
         buffer = m_intermediate_out_mem_ptr + nPortIndex;
-#ifndef __LINUX__
         buffer->nAllocLen = drv_ctx.op_buf.buffer_size;
-#endif
     }
 
     //buffer->nAllocLen will be sizeof(struct VideoDecoderOutputMetaData). Overwrite
@@ -9035,11 +8992,7 @@ int omx_vdec::async_message_process (void *context, void* message)
 
                    if (vdec_msg->msgdata.output_frame.len) {
                        DEBUG_PRINT_LOW("Processing extradata");
-#ifndef __LINUX__
                        reconfig_event_sent = omx->handle_extradata(omxhdr);
-#else
-                       omx->handle_extradata(omxhdr);
-#endif
 
                        if (omx->m_extradata_info.output_crop_updated) {
                            DEBUG_PRINT_LOW("Read FBD crop from output extra data");
