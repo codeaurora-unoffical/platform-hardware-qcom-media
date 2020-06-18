@@ -1599,9 +1599,9 @@ OMX_ERRORTYPE  omx_video::get_parameter(OMX_IN OMX_HANDLETYPE     hComp,
                     if (m_sOutPortDef.format.video.eCompressionFormat ==
                         OMX_VIDEO_CodingImageHEIC) {
                         portDefn->format.video.nFrameWidth =
-                            m_sInPortDef.format.video.nFrameWidth;
+                            static_cast<OMX_U32>(m_sInPortDef.format.video.nFrameWidth);
                         portDefn->format.video.nFrameHeight =
-                            m_sInPortDef.format.video.nFrameHeight;
+                            static_cast<OMX_U32>(m_sInPortDef.format.video.nFrameHeight);
                     }
 
                     if (secure_session || allocate_native_handle) {
