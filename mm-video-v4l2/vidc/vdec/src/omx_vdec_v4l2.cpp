@@ -2513,7 +2513,7 @@ OMX_ERRORTYPE  omx_vdec::send_command_proxy(OMX_IN OMX_HANDLETYPE hComp,
             if (android_atomic_add(0, &m_queued_codec_config_count) > 0) {
                struct timespec ts;
 
-               clock_gettime(CLOCK_MONOTONIC, &ts);
+               clock_gettime(CLOCK_REALTIME, &ts);
                ts.tv_sec += 1;
                DEBUG_PRINT_LOW("waiting for %d EBDs of CODEC CONFIG buffers ",
                        m_queued_codec_config_count);

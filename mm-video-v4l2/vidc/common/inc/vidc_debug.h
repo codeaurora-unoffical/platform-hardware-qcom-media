@@ -227,7 +227,7 @@ public:
             pthread_mutex_unlock(&mutex);
             return 0;
         }
-        clock_gettime(CLOCK_MONOTONIC, &ts);
+        clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += timeout_nsec / 1000000000;
         ts.tv_nsec += timeout_nsec % 1000000000;
         if (ts.tv_nsec >= 1000000000) {
