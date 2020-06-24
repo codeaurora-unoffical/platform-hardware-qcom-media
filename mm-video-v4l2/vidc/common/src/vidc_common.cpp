@@ -320,6 +320,7 @@ void get_video_format_as_string(char * buf, int buf_len, int format) {
     switch (format) {
 #ifdef USE_GBM
         case GBM_FORMAT_NV12_ENCODEABLE:
+        case GBM_FORMAT_YCbCr_420_SP_VENUS:
             snprintf(buf, buf_len, "GBM_FORMAT_NV12_ENCODEABLE");
             break;
         case GBM_FORMAT_YCbCr_420_SP_VENUS_UBWC:
