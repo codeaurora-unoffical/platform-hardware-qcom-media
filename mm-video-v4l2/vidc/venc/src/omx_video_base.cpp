@@ -339,6 +339,7 @@ omx_video::omx_video():
 
 #ifdef USE_GBM
     gbm_card_fd = -1;
+    m_pInput_gbm = NULL;
 #endif
     pthread_mutex_init(&m_buf_lock, NULL);
 }
