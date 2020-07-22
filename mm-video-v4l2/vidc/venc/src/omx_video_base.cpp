@@ -45,6 +45,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <qdMetaData.h>
 #endif
 #include "omx_video_base.h"
+#include "fastcv.h"
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -294,7 +295,8 @@ omx_video::omx_video():
     profile_mode(false),
     profile_frame_count(0),
     profile_start_time(0),
-    profile_last_time(0)
+    profile_last_time(0),
+    m_fastCV_init_done(false)
 {
     DEBUG_PRINT_HIGH("omx_video(): Inside Constructor()");
     memset(&m_cmp,0,sizeof(m_cmp));
@@ -376,6 +378,11 @@ omx_video::~omx_video()
         close(gbm_card_fd);
     }
 #endif
+    if (m_fastCV_init_done) {
+        fcvMemDeInit();
+        fcvCleanUp();
+        m_fastCV_init_done = false;
+    }
     DEBUG_PRINT_HIGH("omx_video: Destructor exit");
     DEBUG_PRINT_HIGH("Exiting OMX Video Encoder ...");
 }
@@ -5331,6 +5338,61 @@ bool omx_video::is_rotation_enabled()
     return bRet;
 }
 
+void omx_video::initFastCV() {
+    fcvSetOperationMode(FASTCV_OP_CPU_PERFORMANCE);
+    fcvMemInit();
+    m_fastCV_init_done = true;
+}
+
+bool omx_video::is_flip_conv_needed() {
+    OMX_MIRRORTYPE mirror;
+    mirror = m_sConfigFrameMirror.eMirror;
+
+    if (m_no_vpss && (mirror == OMX_MirrorVertical || mirror == OMX_MirrorHorizontal
+        || mirror == OMX_MirrorBoth)) {
+        return true;
+    }
+
+    return false;
+}
+
+OMX_ERRORTYPE omx_video::do_flip_conversion(struct pmem *buffer) {
+    OMX_U32 width = m_sInPortDef.format.video.nFrameWidth;
+    OMX_U32 height = m_sInPortDef.format.video.nFrameHeight;
+    OMX_U32 stride = VENUS_Y_STRIDE(COLOR_FMT_NV12, width);
+    OMX_U32 scanLines = VENUS_Y_SCANLINES(COLOR_FMT_NV12, height);
+    fcvFlipDir direction;
+    OMX_ERRORTYPE ret = OMX_ErrorNone;
+
+    switch(m_sConfigFrameMirror.eMirror) {
+        case OMX_MirrorVertical:
+            direction = FASTCV_FLIP_VERT;
+            break;
+        case OMX_MirrorHorizontal:
+            direction = FASTCV_FLIP_HORIZ;
+            break;
+        case OMX_MirrorBoth:
+            direction = FASTCV_FLIP_BOTH;
+            break;
+        default:
+            return OMX_ErrorBadParameter;
+    }
+
+    unsigned char *uva = (unsigned char *)ion_map(buffer->fd, buffer->size);
+    if (uva == MAP_FAILED) {
+        ret = OMX_ErrorBadParameter;
+        return ret;
+    }
+    unsigned char *src = uva;
+    DEBUG_PRINT_LOW("start flip conversion");
+    fcvFlipu8( src, width, height, stride, src, stride, direction);
+    src = src + (stride * scanLines);
+    fcvFlipu16((OMX_U16 *)src,width/2,height/2,stride,(OMX_U16 *)src,stride,direction);
+
+    ion_unmap(buffer->fd, uva, buffer->size);
+    return ret;
+}
+
 bool omx_video::is_conv_needed(void *hdl)
 {
     bool bRet = false;
@@ -5357,7 +5419,7 @@ bool omx_video::is_conv_needed(void *hdl)
     bRet = false;
 #endif
     bRet |= interlaced;
-    if (m_c2d_rotation && is_rotation_enabled()) {
+    if (m_no_vpss && is_rotation_enabled()) {
         bRet = true;
     }
     DEBUG_PRINT_LOW("RGBA conversion %s. Format %d Flag %d interlace_flag = %d",
@@ -5485,7 +5547,7 @@ OMX_ERRORTYPE  omx_video::empty_this_buffer_opaque(OMX_IN OMX_HANDLETYPE hComp,
                                 handle->flags, handle->width)) {
 #endif
             DEBUG_PRINT_HIGH("C2D setRotation - %u", m_sConfigFrameRotation.nRotation);
-            if (m_c2d_rotation && is_rotation_enabled()) {
+            if (m_no_vpss && is_rotation_enabled()) {
                 c2dcc.setRotation(m_sConfigFrameRotation.nRotation);
             }
             DEBUG_PRINT_HIGH("C2D setResolution (0x%X -> 0x%x) HxW (%dx%d) Stride (%d)",
@@ -5631,7 +5693,7 @@ OMX_ERRORTYPE omx_video::convert_queue_buffer(OMX_HANDLETYPE hComp,
                 if (dev_is_avtimer_needed() && dev_is_meta_mode()) {
                     meta_buf = (LEGACY_CAM_METADATA_TYPE *)psource_frame->pBuffer;
 
-                    if (meta_buf && m_c2d_rotation && is_rotation_enabled() &&
+                    if (meta_buf && m_no_vpss && is_rotation_enabled() &&
                         meta_buf->buffer_type == kMetadataBufferTypeGrallocSource) {
                         VideoGrallocMetadata *meta_buf = (VideoGrallocMetadata *)psource_frame->pBuffer;
 #ifdef USE_GBM
@@ -5752,6 +5814,14 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
 #endif
             Input_pmem_info.offset = 0;
             Input_pmem_info.size = handle->size;
+
+            if (is_flip_conv_needed()) {
+                ret = do_flip_conversion(&Input_pmem_info);
+                if (ret != OMX_ErrorNone) {
+                    return ret;
+                }
+            }
+
             m_graphicbuffer_size = Input_pmem_info.size;
             if (is_conv_needed(handle))
                 ret = convert_queue_buffer(hComp,Input_pmem_info,index);

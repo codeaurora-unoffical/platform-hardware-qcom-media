@@ -639,6 +639,9 @@ class omx_video: public qc_omx_component
         void complete_pending_buffer_done_cbs();
         bool is_rotation_enabled();
         bool is_conv_needed(void *hdl);
+        bool is_flip_conv_needed();
+        OMX_ERRORTYPE do_flip_conversion(struct pmem *buffer);
+        void initFastCV();
         void print_debug_color_aspects(ColorAspects *aspects, const char *prefix);
 
         OMX_ERRORTYPE get_vendor_extension_config(
@@ -803,7 +806,8 @@ class omx_video: public qc_omx_component
         OMX_U64 profile_start_time;
         OMX_U64 profile_last_time;
         bool profile_etb();
-        int32_t m_c2d_rotation;
+        int32_t m_no_vpss;
+        bool m_fastCV_init_done;
 };
 
 #endif // __OMX_VIDEO_BASE_H__
