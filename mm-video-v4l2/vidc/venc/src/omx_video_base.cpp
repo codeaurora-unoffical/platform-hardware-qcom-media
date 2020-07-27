@@ -5149,7 +5149,7 @@ void omx_video::free_gbm_memory(struct venc_gbm *buf_gbm_info)
       DEBUG_PRINT_ERROR(" GBM: free called with invalid fd/allocdata");
       return;
     }
-    DEBUG_PRINT_LOW("free gbm bo fd meta fd  %p %d %d",
+    DEBUG_PRINT_LOW("free gbm bo fd meta fd  %p %ld %ld",
            buf_gbm_info->bo,buf_gbm_info->bo_fd,buf_gbm_info->meta_fd);
 
     if (buf_gbm_info->bo)
