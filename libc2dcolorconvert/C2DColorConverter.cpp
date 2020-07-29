@@ -547,6 +547,11 @@ uint32_t C2DColorConverter::getC2DFormat(ColorConvertFormat format, bool isSourc
     switch (format) {
         case RGB565:
             return C2D_COLOR_FORMAT_565_RGB;
+        case RGB888:
+            C2DFormat = C2D_COLOR_FORMAT_888_RGB | C2D_FORMAT_SWAP_ENDIANNESS;
+            if (isSource)
+                C2DFormat |= C2D_FORMAT_PREMULTIPLIED;
+            return C2DFormat;
         case RGBA8888:
             C2DFormat = C2D_COLOR_FORMAT_8888_RGBA | C2D_FORMAT_SWAP_ENDIANNESS;
             if (isSource)
@@ -589,6 +594,8 @@ size_t C2DColorConverter::calcStride(ColorConvertFormat format, size_t width)
     switch (format) {
         case RGB565:
             return ALIGN(width, ALIGN32) * 2; // RGB565 has width as twice
+        case RGB888:
+            return ALIGN(width, ALIGN32) * 3;
         case RGBA8888:
             if (mSrcStride)
                 return mSrcStride * 4;
@@ -675,6 +682,17 @@ size_t C2DColorConverter::calcSize(ColorConvertFormat format, size_t width, size
             bpp = 2;
             mAdrenoComputeFmtAlignedWidthAndHeight(width, height,
                                                    0, ADRENO_PIXELFORMAT_B5G6R5,
+                                                   1, tile_mode, raster_mode,
+                                                   padding_threshold,
+                                                   &alignedw, &alignedh);
+            ALOGV("%s: alignedw %d alignedh %d", __FUNCTION__,alignedw, alignedh);
+            size = alignedw * alignedh * bpp;
+            size = ALIGN(size, ALIGN4K);
+            break;
+        case RGB888:
+            bpp = 3;
+            mAdrenoComputeFmtAlignedWidthAndHeight(width, height,
+                                                   0, ADRENO_PIXELFORMAT_R8G8B8,
                                                    1, tile_mode, raster_mode,
                                                    padding_threshold,
                                                    &alignedw, &alignedh);
@@ -892,6 +910,9 @@ C2DBytesPerPixel C2DColorConverter::calcBytesPerPixel(ColorConvertFormat format)
         case RGB565:
             bpp.numerator = 2;
             break;
+        case RGB888:
+            bpp.numerator = 3;
+            break;
         case RGBA8888:
         case RGBA8888_UBWC:
             bpp.numerator = 4;
@@ -993,6 +1014,8 @@ int32_t C2DColorConverter::dumpOutput(char * filename, char mode) {
         bpp = 2;
       } else if (mDstFormat == RGBA8888  || mDstFormat == RGBA8888_UBWC) {
         bpp = 4;
+      }else if (mDstFormat == RGB888) {
+        bpp = 3;
       }
 
       int count = 0;
