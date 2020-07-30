@@ -1074,6 +1074,7 @@ class omx_vdec: public qc_omx_component
 #ifdef FLEXYUV_SUPPORTED
         static OMX_ERRORTYPE describeColorFormat(DescribeColorFormatParams *params);
 #endif
+        bool m_buffer_error;
 
 };
 
