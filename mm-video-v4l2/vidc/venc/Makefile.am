@@ -88,4 +88,4 @@ libOmxVenc_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC $(GBM_CFLAGS)
 libOmxVenc_la_LDFLAGS = -module -shared -avoid-version
 libOmxVenc_la_LDFLAGS += -lstdc++ -lpthread -llog -lutils -lcutils -lglib-2.0 -lbase -ldl -lpthread -lion $(GBM_LIBS)
 libOmxVenc_la_LDFLAGS += -L$(top_builddir)/libc2dcolorconvert  -L$(top_builddir)/libplatformconfig
-libOmxVenc_la_LDFLAGS += -lc2dcolorconvert -lplatformconfig
+libOmxVenc_la_LDFLAGS += -lc2dcolorconvert -lplatformconfig -lfastcvopt
