@@ -899,7 +899,10 @@ omx_vdec::~omx_vdec()
     DEBUG_PRINT_INFO("Exit OMX vdec Destructor: fd=%d",drv_ctx.video_driver_fd);
     m_perf_control.perf_lock_release();
 #ifdef USE_GBM
-    close(drv_ctx.gbm_card_fd);
+    if (drv_ctx.gbm_card_fd >= 0) {
+        close(drv_ctx.gbm_card_fd);
+        drv_ctx.gbm_card_fd = -1;
+    }
 #endif
 }
 
