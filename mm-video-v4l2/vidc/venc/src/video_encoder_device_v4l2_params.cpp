@@ -75,12 +75,21 @@ void venc_dev::venc_get_consumer_usage(OMX_U32* usage)
         DEBUG_PRINT_INFO("Clear UBWC consumer usage bits as 8-bit linear color requested");
     }
 
-    if (venc_handle->is_flip_conv_needed())
+    if (venc_handle->is_flip_conv_needed()) {
+#ifdef USE_GBM
+        *usage = *usage | GBM_BO_USAGE_CPU_READ_QTI;
+#else
         *usage = *usage | GRALLOC_USAGE_SW_READ_OFTEN;
+#endif
+    }
 
     if (m_codec == OMX_VIDEO_CodingImageHEIC) {
         DEBUG_PRINT_INFO("Clear UBWC and set HEIF consumer usage bit");
+#ifdef USE_GBM
+        *usage &= ~GBM_BO_USAGE_UBWC_ALIGNED_QTI;
+#else
         *usage &= ~GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+#endif
         *usage |= GRALLOC_USAGE_PRIVATE_HEIF_VIDEO;
     }
 
@@ -153,12 +162,10 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                 if (!venc_handle->m_no_vpss && venc_set_mirror(mirror->eMirror) == false) {
                     DEBUG_PRINT_ERROR("ERROR: Setting OMX_IndexConfigCommonMirror failed");
                     return false;
-                } else if(venc_handle->m_no_vpss){
+                } else if(venc_handle->m_no_vpss) {
                     venc_handle->initFastCV();
-                } else {
-                    DEBUG_PRINT_ERROR("ERROR: Invalid Setting OMX_IndexConfigCommonMirror");
-                    return false;
                 }
+
                 break;
             }
         case OMX_IndexConfigCommonRotate:
