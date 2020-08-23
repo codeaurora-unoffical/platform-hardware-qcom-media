@@ -287,18 +287,22 @@ static void* exit_thread(void *fds)
 {
     struct pollfd *pfds = (struct pollfd *)fds;
     int fd_index = pfds[0].fd & HYPV_HANDLE_MASK;
-    struct hypv_intercept *handle = &g_hvfe_handle[fd_index];
     struct pollfd exit_fd;
 
-    HYP_VIDEO_MSG_INFO("exit thread created. fd = %d", fd_index);
-    exit_fd.events = POLLIN | POLLERR;
-    exit_fd.fd = pfds[1].fd;
+    if (fd_index >= MAX_HVFE_HANDLE) {
+        HYP_VIDEO_MSG_ERROR("invalid fd index %d", fd_index);
+    } else {
+        struct hypv_intercept *handle = &g_hvfe_handle[fd_index];
+        HYP_VIDEO_MSG_INFO("exit thread created. fd = %d", fd_index);
+        exit_fd.events = POLLIN | POLLERR;
+        exit_fd.fd = pfds[1].fd;
 
-    poll(&exit_fd, 1, POLL_TIMEOUT);
+        poll(&exit_fd, 1, POLL_TIMEOUT);
 
-    if ((exit_fd.revents & POLLIN) || (exit_fd.revents & POLLERR)) {
-       handle->exit_flag = true;
-       pthread_cond_signal(&handle->cond);
+        if ((exit_fd.revents & POLLIN) || (exit_fd.revents & POLLERR)) {
+            handle->exit_flag = true;
+            pthread_cond_signal(&handle->cond);
+        }
     }
 
     return NULL;
