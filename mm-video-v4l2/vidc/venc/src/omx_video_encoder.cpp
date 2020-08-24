@@ -621,6 +621,14 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
         }
     }
 
+    if (perfmode) {
+        QOMX_EXTNINDEX_VIDEO_PERFMODE pParam;
+        pParam.nPerfMode = perfmode;
+        DEBUG_PRINT_LOW("Perfmode = 0x%x", pParam.nPerfMode);
+        if (!handle->venc_set_config(&pParam, (OMX_INDEXTYPE)OMX_QcomIndexConfigVideoVencPerfMode))
+            DEBUG_PRINT_ERROR("Failed setting PerfMode to %d", pParam.nPerfMode);
+    }
+
     if (lowlatency)
     {
         QOMX_ENABLETYPE low_latency;
