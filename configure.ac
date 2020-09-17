@@ -185,6 +185,10 @@ AC_ARG_WITH([ion-headers],
         [AS_HELP_STRING([--with-ion-headers=DIR],[location of common headers])],
         [CPPFLAGS="$CPPFLAGS -I$withval"])
 
+AC_ARG_WITH([fastcv-headers],
+        [AS_HELP_STRING([--with-fastcv-headers=DIR],[location of common headers])],
+        [CPPFLAGS="$CPPFLAGS -I$withval"])
+
 AM_CONDITIONAL(TARGET_MSM8953, [test "x$target_msm8953" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8909, [test "x$target_msm8909" = "xyes"])
 AM_CONDITIONAL(TARGET_MSM8996, [test "x$target_msm8996" = "xyes"])

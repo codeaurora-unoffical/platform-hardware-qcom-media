@@ -956,6 +956,7 @@ int venc_dev::venc_set_format(int format)
 
         switch (color_format) {
         case NV12_128m:
+        case NV12_512:
             return venc_set_color_format((OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32m);
         case NV12_UBWC:
             return venc_set_color_format((OMX_COLOR_FORMATTYPE)QOMX_COLOR_FORMATYUV420PackedSemiPlanar32mCompressed);
@@ -1380,6 +1381,23 @@ int venc_dev::venc_input_log_buffers(OMX_BUFFERHEADERTYPE *pbuffer, int fd, int 
             }
             for (i = 0; i < m_sVenc_cfg.input_height/2; i++) {
                 fwrite(ptemp, m_sVenc_cfg.input_width, 1, m_debug.infile);
+                ptemp += stride;
+            }
+        } else if (color_format == COLOR_FMT_NV12_512) {
+            stride = VENUS_Y_STRIDE(color_format, m_sVenc_cfg.input_width);
+            scanlines = VENUS_Y_SCANLINES(color_format, m_sVenc_cfg.input_height);
+
+            for (i = 0; i < scanlines; i++) {
+                fwrite(ptemp, stride, 1, m_debug.infile);
+                ptemp += stride;
+            }
+            if (metadatamode == 1) {
+                ptemp = pvirt + (stride * scanlines);
+            } else {
+                ptemp = (unsigned char *)pbuffer->pBuffer + (stride * scanlines);
+            }
+            for (i = 0; i < scanlines/2; i++) {
+                fwrite(ptemp, stride, 1, m_debug.infile);
                 ptemp += stride;
             }
         } else if (color_format == COLOR_FMT_RGBA8888) {
@@ -2691,8 +2709,8 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
 #else
                         } else if (handle->format == HAL_PIXEL_FORMAT_NV12_HEIF) {
 #endif
-                            m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
-                            DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12");
+                            m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_512;
+                            DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12_512");
 #ifdef USE_GBM
                         } else if (handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS_UBWC) {
 #else
@@ -3068,6 +3086,9 @@ unsigned long venc_dev::get_media_colorformat(unsigned long inputformat)
     switch (inputformat) {
         case V4L2_PIX_FMT_NV12:
             color_format = COLOR_FMT_NV12;
+            break;
+        case V4L2_PIX_FMT_NV12_512:
+            color_format = COLOR_FMT_NV12_512;
             break;
         case V4L2_PIX_FMT_NV12_UBWC:
             color_format = COLOR_FMT_NV12_UBWC;
@@ -3635,7 +3656,7 @@ unsigned long venc_dev::venc_get_color_format(OMX_COLOR_FORMATTYPE eColorFormat)
     }
 
     if (m_codec == OMX_VIDEO_CodingImageHEIC)
-        format = V4L2_PIX_FMT_NV12;
+        format = V4L2_PIX_FMT_NV12_512;
 
     return format;
 }
@@ -3681,7 +3702,7 @@ bool venc_dev::venc_set_color_format(OMX_COLOR_FORMATTYPE color_format)
     }
 
     if (m_codec == OMX_VIDEO_CodingImageHEIC)
-        m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12;
+        m_sVenc_cfg.inputformat = V4L2_PIX_FMT_NV12_512;
 
     memset(&fmt, 0, sizeof(fmt));
     fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
