@@ -24,4 +24,5 @@ lib_LTLIBRARIES = libplatformconfig.la
 libplatformconfig_la_SOURCES = $(c_sources)
 libplatformconfig_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libplatformconfig_la_CPPFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
+libplatformconfig_la_LDFLAGS = -avoid-version
 libplatformconfig_la_LIBADD = -lexpat -llog -lcutils -lutils
