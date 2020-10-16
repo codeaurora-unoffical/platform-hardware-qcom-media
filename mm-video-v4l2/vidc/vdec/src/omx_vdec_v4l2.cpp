@@ -8992,7 +8992,11 @@ int omx_vdec::async_message_process (void *context, void* message)
 
                    if (vdec_msg->msgdata.output_frame.len) {
                        DEBUG_PRINT_LOW("Processing extradata");
+#ifndef __LINUX__
                        reconfig_event_sent = omx->handle_extradata(omxhdr);
+#else
+                       omx->handle_extradata(omxhdr);
+#endif
 
                        if (omx->m_extradata_info.output_crop_updated) {
                            DEBUG_PRINT_LOW("Read FBD crop from output extra data");
