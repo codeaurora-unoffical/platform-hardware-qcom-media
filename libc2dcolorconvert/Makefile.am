@@ -16,4 +16,5 @@ endif
 lib_LTLIBRARIES = libc2dcolorconvert.la
 libc2dcolorconvert_la_SOURCES = $(c_sources) $(h_sources)
 libc2dcolorconvert_la_CPPFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
+libc2dcolorconvert_la_LDFLAGS = -avoid-version
 libc2dcolorconvert_la_LIBADD = -ldl -lpthread -llog

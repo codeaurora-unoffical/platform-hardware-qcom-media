@@ -20,4 +20,4 @@ include_HEADERS = $(h_sources)
 libarbitrarybytes_la_SOURCES = $(c_sources)
 libarbitrarybytes_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
 libarbitrarybytes_la_CPPFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS) -fPIC
-libarbitrarybytes_la_LDFLAGS = -llog -lcutils
+libarbitrarybytes_la_LDFLAGS = -avoid-version -llog -lcutils
