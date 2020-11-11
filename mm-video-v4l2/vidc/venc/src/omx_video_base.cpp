@@ -5364,10 +5364,17 @@ bool omx_video::is_flip_conv_needed(void *hdl) {
         is_flip_needed = true;
     }
 
+#ifdef USE_GBM
+    if (handle && !(handle->format == GBM_FORMAT_NV12_ENCODEABLE ||
+            handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS)) {
+        is_flip_needed = false;
+    }
+#else
     if (handle && !(handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE ||
             handle->format == HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS)) {
         is_flip_needed = false;
     }
+#endif
 
     return is_flip_needed;
 }
