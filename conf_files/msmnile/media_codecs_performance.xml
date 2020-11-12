@@ -22,13 +22,13 @@ limitations under the License.
 <MediaCodecs>
     <Encoders>
         <MediaCodec name="OMX.qcom.video.encoder.avc" type="video/avc" update="true">
-            <Limit name="measured-frame-rate-320x240" range="238-238" />
+            <Limit name="measured-frame-rate-320x240" range="625-705" />
             <Limit name="measured-frame-rate-720x480" range="277-287" />
             <Limit name="measured-frame-rate-1280x720" range="200-204" />
             <Limit name="measured-frame-rate-1920x1080" range="116-118" />
         </MediaCodec>
         <MediaCodec name="OMX.qcom.video.encoder.hevc" type="video/hevc" update="true">
-            <Limit name="measured-frame-rate-320x240" range="226-226" />
+            <Limit name="measured-frame-rate-320x240" range="630-695" />
             <Limit name="measured-frame-rate-720x480" range="336-339" />
             <Limit name="measured-frame-rate-1280x720" range="183-194" />
             <Limit name="measured-frame-rate-1920x1080" range="91-104" />
@@ -107,7 +107,7 @@ limitations under the License.
         <MediaCodec name="OMX.qcom.video.decoder.avc" type="video/avc" update="true">
             <Limit name="measured-frame-rate-320x240" range="960-1268" />
             <Limit name="measured-frame-rate-720x480" range="857-1104" />
-            <Limit name="measured-frame-rate-1280x720" range="312-316" />
+            <Limit name="measured-frame-rate-1280x720" range="728-736" />
             <Limit name="measured-frame-rate-1920x1088" range="246-250" />
         </MediaCodec>
             <MediaCodec name="OMX.qcom.video.decoder.hevc" type="video/hevc" update="true">
@@ -127,6 +127,7 @@ limitations under the License.
             <Limit name="measured-frame-rate-1280x720" range="240-292" />
         </MediaCodec>
         <MediaCodec name="OMX.qcom.video.decoder.vp8" type="video/x-vnd.on2.vp8" update="true">
+            <Limit name="measured-frame-rate-320x180" range="1390-1424" />
             <Limit name="measured-frame-rate-320x240" range="337-337" />
             <Limit name="measured-frame-rate-640x360" range="330-750" />
             <Limit name="measured-frame-rate-1280x720" range="337-337" />
