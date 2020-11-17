@@ -1641,7 +1641,7 @@ bailout:
 bool venc_dev::venc_open(OMX_U32 codec)
 {
     int r, minqp = 0, maxqp = 127;
-    unsigned int alignment = 0,buffer_size = 0, temp =0, enable_cma = 0;
+    unsigned int alignment = 0,buffer_size = 0, temp =0;
     struct v4l2_control control;
     OMX_STRING device_name = (OMX_STRING)"/dev/video33";
     OMX_STRING cma_device_name = (OMX_STRING)"/dev/video35";
@@ -1651,10 +1651,6 @@ bool venc_dev::venc_open(OMX_U32 codec)
 
     property_get("ro.board.platform", m_platform_name, "0");
 
-    property_get("vendor.vidc.encoder.cma", property_value, "0");
-    enable_cma = atoi(property_value);
-    DEBUG_PRINT_LOW("encoder cma status %d", enable_cma);
-
     if (!strncmp(m_platform_name, "msm8610", 7)) {
         device_name = (OMX_STRING)"/dev/video/q6_enc";
         supported_rc_modes = (RC_ALL & ~RC_CBR_CFR);
@@ -1663,10 +1659,11 @@ bool venc_dev::venc_open(OMX_U32 codec)
 #ifdef HYPERVISOR
     m_nDriver_fd = hypv_open(device_name, O_RDWR);
 #else
-    if (enable_cma) {
-    m_nDriver_fd = open(cma_device_name, O_RDWR);
+    DEBUG_PRINT_LOW("encoder cma status %d", venc_handle->get_cma_status());
+    if (venc_handle->get_cma_status()) {
+        m_nDriver_fd = open(cma_device_name, O_RDWR);
     } else {
-    m_nDriver_fd = open(device_name, O_RDWR);
+        m_nDriver_fd = open(device_name, O_RDWR);
     }
 #endif
 
