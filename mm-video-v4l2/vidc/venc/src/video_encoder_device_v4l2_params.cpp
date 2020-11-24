@@ -75,7 +75,7 @@ void venc_dev::venc_get_consumer_usage(OMX_U32* usage)
         DEBUG_PRINT_INFO("Clear UBWC consumer usage bits as 8-bit linear color requested");
     }
 
-    if (venc_handle->is_flip_conv_needed()) {
+    if (venc_handle->is_flip_conv_needed(NULL)) {
 #ifdef USE_GBM
         *usage = *usage | GBM_BO_USAGE_CPU_READ_QTI;
 #else
