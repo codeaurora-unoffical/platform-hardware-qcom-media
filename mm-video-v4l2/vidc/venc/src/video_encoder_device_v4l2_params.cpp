@@ -75,7 +75,7 @@ void venc_dev::venc_get_consumer_usage(OMX_U32* usage)
         DEBUG_PRINT_INFO("Clear UBWC consumer usage bits as 8-bit linear color requested");
     }
 
-    if (venc_handle->is_flip_conv_needed()) {
+    if (venc_handle->is_flip_conv_needed(NULL)) {
 #ifdef USE_GBM
         *usage = *usage | GBM_BO_USAGE_CPU_READ_QTI;
 #else
@@ -163,7 +163,12 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                     DEBUG_PRINT_ERROR("ERROR: Setting OMX_IndexConfigCommonMirror failed");
                     return false;
                 } else if(venc_handle->m_no_vpss) {
-                    venc_handle->initFastCV();
+                    if ((venc_handle->m_nOperatingRate >> 16) <= 30) {
+                        venc_handle->initFastCV();
+                    } else {
+                        DEBUG_PRINT_ERROR("ERROR: Flip not supported fps %u",
+                                venc_handle->m_nOperatingRate >> 16);
+                    }
                 }
 
                 break;

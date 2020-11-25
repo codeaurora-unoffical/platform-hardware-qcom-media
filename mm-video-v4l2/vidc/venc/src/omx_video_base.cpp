@@ -270,6 +270,7 @@ omx_video::omx_video():
     m_sExtraData(0),
     m_sParamConsumerUsage(0),
     m_input_msg_id(OMX_COMPONENT_GENERATE_ETB),
+    m_nOperatingRate(0),
     m_inp_mem_ptr(NULL),
     m_out_mem_ptr(NULL),
     m_client_output_extradata_mem_ptr(NULL),
@@ -5345,16 +5346,37 @@ void omx_video::initFastCV() {
     m_fastCV_init_done = true;
 }
 
-bool omx_video::is_flip_conv_needed() {
+bool omx_video::is_flip_conv_needed(void *hdl) {
     OMX_MIRRORTYPE mirror;
     mirror = m_sConfigFrameMirror.eMirror;
+    OMX_U32 captureRate = m_nOperatingRate >> 16;
+    bool is_flip_needed = false;
 
-    if (m_no_vpss && (mirror == OMX_MirrorVertical || mirror == OMX_MirrorHorizontal
-        || mirror == OMX_MirrorBoth)) {
-        return true;
+#ifdef USE_GBM
+    struct gbm_bo *handle = (struct gbm_bo*) hdl;
+#else
+    private_handle_t *handle = (private_handle_t*) hdl;
+#endif
+
+    if (m_no_vpss && m_fastCV_init_done && captureRate <= 30 &&
+        (mirror == OMX_MirrorVertical || mirror == OMX_MirrorHorizontal ||
+         mirror == OMX_MirrorBoth)) {
+        is_flip_needed = true;
     }
 
-    return false;
+#ifdef USE_GBM
+    if (handle && !(handle->format == GBM_FORMAT_NV12_ENCODEABLE ||
+            handle->format == GBM_FORMAT_YCbCr_420_SP_VENUS)) {
+        is_flip_needed = false;
+    }
+#else
+    if (handle && !(handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE ||
+            handle->format == HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS)) {
+        is_flip_needed = false;
+    }
+#endif
+
+    return is_flip_needed;
 }
 
 OMX_ERRORTYPE omx_video::do_flip_conversion(struct pmem *buffer) {
@@ -5816,7 +5838,7 @@ OMX_ERRORTYPE omx_video::push_input_buffer(OMX_HANDLETYPE hComp)
             Input_pmem_info.offset = 0;
             Input_pmem_info.size = handle->size;
 
-            if (is_flip_conv_needed()) {
+            if (is_flip_conv_needed(handle)) {
                 ret = do_flip_conversion(&Input_pmem_info);
                 if (ret != OMX_ErrorNone) {
                     return ret;
