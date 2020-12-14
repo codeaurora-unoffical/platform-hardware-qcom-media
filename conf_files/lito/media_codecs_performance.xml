@@ -35,7 +35,7 @@ limitations under the License.
             <Limit name="measured-frame-rate-3840x2160" range="20-27" />
         </MediaCodec>
         <MediaCodec name="OMX.qcom.video.encoder.h263sw" type="video/3gpp" update="true">
-            <Limit name="measured-frame-rate-176x144" range="60-90" />
+            <Limit name="measured-frame-rate-176x144" range="124-174" />
             <Limit name="measured-frame-rate-352x288" range="55-85" />
         </MediaCodec>
         <MediaCodec name="OMX.qcom.video.encoder.mpeg4sw" type="video/mp4v-es" update="true">
