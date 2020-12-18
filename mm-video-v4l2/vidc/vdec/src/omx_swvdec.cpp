@@ -1,7 +1,7 @@
 /**
  * @copyright
  *
- *   Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ *   Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
  *   modification, are permitted provided that the following conditions are met:
@@ -223,7 +223,7 @@ OMX_ERRORTYPE omx_swvdec::component_init(OMX_STRING cmp_name)
             SWVDEC_STATUS_SUCCESS)
         {
             retval = retval_swvdec2omx(retval_swvdec);
-            goto component_init_exit;
+            goto swvdec_res_destroy;
         }
         m_swvdec_created = true;
 
@@ -231,7 +231,7 @@ OMX_ERRORTYPE omx_swvdec::component_init(OMX_STRING cmp_name)
                                            DEFAULT_FRAME_HEIGHT)) !=
             OMX_ErrorNone)
         {
-            goto component_init_exit;
+            goto swvdec_res_destroy;
         }
 
         m_omx_color_formattype =
@@ -241,25 +241,25 @@ OMX_ERRORTYPE omx_swvdec::component_init(OMX_STRING cmp_name)
         if ((retval = set_frame_attributes(m_omx_color_formattype)) !=
             OMX_ErrorNone)
         {
-            goto component_init_exit;
+            goto swvdec_res_destroy;
         }
     }
 
     if ((retval = get_buffer_requirements_swvdec(OMX_CORE_PORT_INDEX_IP)) !=
         OMX_ErrorNone)
     {
-        goto component_init_exit;
+        goto swvdec_res_destroy;
     }
 
     if ((retval = get_buffer_requirements_swvdec(OMX_CORE_PORT_INDEX_OP)) !=
         OMX_ErrorNone)
     {
-        goto component_init_exit;
+        goto swvdec_res_destroy;
     }
 
     if ((retval = async_thread_create()) != OMX_ErrorNone)
     {
-        goto component_init_exit;
+        goto swvdec_res_destroy;
     }
 
     if (sem_init(&m_sem_cmd, 0, 0))
@@ -267,7 +267,7 @@ OMX_ERRORTYPE omx_swvdec::component_init(OMX_STRING cmp_name)
         OMX_SWVDEC_LOG_ERROR("failed to create command processing semaphore");
 
         retval = OMX_ErrorInsufficientResources;
-        goto component_init_exit;
+        goto sem_init_fail;
     }
 
     if (pthread_mutex_init(&m_meta_buffer_array_mutex, NULL))
@@ -275,12 +275,24 @@ OMX_ERRORTYPE omx_swvdec::component_init(OMX_STRING cmp_name)
         OMX_SWVDEC_LOG_ERROR("failed to create meta buffer info array mutex");
 
         retval = OMX_ErrorInsufficientResources;
-        goto component_init_exit;
+        goto mutex_init_fail;
     }
 
     OMX_SWVDEC_LOG_HIGH("OMX_StateInvalid -> OMX_StateLoaded");
 
     m_state = OMX_StateLoaded;
+
+    return retval;
+
+mutex_init_fail:
+    sem_destroy(&m_sem_cmd);
+
+sem_init_fail:
+    async_thread_destroy();
+
+swvdec_res_destroy:
+    swvdec_res_destroy(m_swvdec_handle);
+    m_swvdec_handle = NULL;
 
 component_init_exit:
     return retval;
