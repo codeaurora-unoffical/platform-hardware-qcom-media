@@ -481,6 +481,7 @@ class venc_dev
         bool venc_set_target_bitrate(OMX_U32 nTargetBitrate);
         bool venc_set_ratectrl_cfg(OMX_VIDEO_CONTROLRATETYPE eControlRate);
         bool venc_set_session_qp_range(OMX_QCOM_VIDEO_PARAM_IPB_QPRANGETYPE *qp_range);
+        bool venc_set_frame_qp_range(OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE *qp_range);
         bool venc_set_encode_framerate(OMX_U32 encode_framerate);
         bool venc_set_intra_vop_refresh(OMX_BOOL intra_vop_refresh);
         bool venc_set_color_format(OMX_COLOR_FORMATTYPE color_format);

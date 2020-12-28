@@ -781,6 +781,7 @@ class omx_video: public qc_omx_component
         int profile_frame_count;
         OMX_U64 profile_start_time;
         OMX_U64 profile_last_time;
+        OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE m_sFrameQPRange;
         bool profile_etb();
 };
 

@@ -2420,7 +2420,15 @@ OMX_ERRORTYPE  omx_video::get_config(OMX_IN OMX_HANDLETYPE      hComp,
                 VALIDATE_OMX_VENDOR_EXTENSION_PARAM_DATA(ext);
                 return get_vendor_extension_config(ext);
             }
-
+        case OMX_QTIIndexConfigFrameIPBQPRange:
+        {
+               VALIDATE_OMX_PARAM_DATA(configData, OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE);
+               OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE *layerConfig =
+                            (OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE *)configData;
+               DEBUG_PRINT_LOW("get_config: OMX_QTIIndexConfigFrameIPBQPRange");
+               memcpy(configData, &m_sFrameQPRange, sizeof(m_sFrameQPRange));
+               break;
+        }
         default:
             DEBUG_PRINT_ERROR("ERROR: unsupported index %d", (int) configIndex);
             return OMX_ErrorUnsupportedIndex;
