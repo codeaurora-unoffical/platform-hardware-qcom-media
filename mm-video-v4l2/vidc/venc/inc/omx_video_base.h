@@ -222,6 +222,7 @@ class omx_video: public qc_omx_component
         OMX_BUFFERHEADERTYPE  *psource_frame;
         OMX_BUFFERHEADERTYPE  *pdest_frame;
         bool secure_session;
+        bool enable_cma;
         bool hier_b_enabled;
         bool m_ubwc_supported;
         C2DColorConverter c2dcc;
@@ -243,6 +244,7 @@ class omx_video: public qc_omx_component
 
         // virtual int async_message_process (void *context, void* message);
         void process_event_cb(void *ctxt);
+        bool get_cma_status();
 
         OMX_ERRORTYPE allocate_buffer(
                 OMX_HANDLETYPE hComp,
