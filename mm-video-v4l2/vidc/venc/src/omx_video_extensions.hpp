@@ -87,6 +87,10 @@ void omx_video::init_vendor_extensions(VendorExtensionStore &store) {
     ADD_EXTENSION("qti-ext-enc-ltr", OMX_QcomIndexConfigVideoLTRMark, OMX_DirInput)
     ADD_PARAM_END("mark-frame", OMX_AndroidVendorValueInt32)
 
+    ADD_EXTENSION("qti-ext-enc-sar", OMX_QcomIndexParamVencAspectRatio, OMX_DirInput)
+    ADD_PARAM    ("width", OMX_AndroidVendorValueInt32)
+    ADD_PARAM_END("height", OMX_AndroidVendorValueInt32)
+
     ADD_EXTENSION("qti-ext-enc-dynamic-frame-rate", OMX_IndexConfigVideoFramerate, OMX_DirOutput)
     ADD_PARAM_END("frame-rate", OMX_AndroidVendorValueInt32)
 
@@ -261,6 +265,12 @@ OMX_ERRORTYPE omx_video::get_vendor_extension_config(
         case OMX_QcomIndexConfigVideoLTRMark:
         {
             setStatus &= vExt.setParamInt32(ext, "mark-frame", m_sConfigLTRMark.nID);
+            break;
+        }
+        case OMX_QcomIndexParamVencAspectRatio:
+        {
+            setStatus &= vExt.setParamInt32(ext, "width", m_sSar.nSARWidth);
+            setStatus &= vExt.setParamInt32(ext, "height", m_sSar.nSARHeight);
             break;
         }
         case OMX_IndexConfigVideoFramerate:
@@ -720,6 +730,25 @@ OMX_ERRORTYPE omx_video::set_vendor_extension_config(
                 DEBUG_PRINT_ERROR("set_config: OMX_QcomIndexConfigVideoLTRMark failed !");
             }
 
+            break;
+        }
+        case OMX_QcomIndexParamVencAspectRatio:
+        {
+            QOMX_EXTNINDEX_VIDEO_VENC_SAR aspectRatioParam;
+            OMX_INIT_STRUCT(&aspectRatioParam, QOMX_EXTNINDEX_VIDEO_VENC_SAR);
+            valueSet |= vExt.readParamInt32(ext, "width", (OMX_S32 *)&(aspectRatioParam.nSARWidth));
+            valueSet |= vExt.readParamInt32(ext, "height", (OMX_S32 *)&(aspectRatioParam.nSARHeight));
+            if (!valueSet) {
+                break;
+            }
+
+            DEBUG_PRINT_HIGH("VENDOR-EXT: set_config: VencAspectRatio: width =%d, height=%d",
+              aspectRatioParam.nSARWidth, aspectRatioParam.nSARHeight);
+            err = set_parameter(
+                    NULL, (OMX_INDEXTYPE)OMX_QcomIndexParamVencAspectRatio, &aspectRatioParam);
+            if (err != OMX_ErrorNone) {
+                DEBUG_PRINT_ERROR("set_param: OMX_QcomIndexParamVencAspectRatio failed !");
+            }
             break;
         }
         case OMX_IndexConfigVideoFramerate:
