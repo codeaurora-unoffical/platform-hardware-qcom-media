@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2009-2017, The Linux Foundation. All rights reserved.
+Copyright (c) 2009-2017, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -694,6 +694,9 @@ enum OMX_QCOM_EXTN_INDEXTYPE
 
     /* QP range for I/P/B frames : OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE */
     OMX_QTIIndexConfigFrameIPBQPRange = 0x7F100005,
+
+    /* Configure IPB ROI info : OMX_QTI_VIDEO_CONFIG_IPB_ROIINFO */
+    OMX_QTIIndexConfigVideoIPBRoiInfo = 0x7F100006,
 };
 
 /**
@@ -1411,6 +1414,21 @@ typedef struct OMX_QTI_VIDEO_CONFIG_ROIINFO {
     OMX_PTR         pRoiMBInfo;
 } OMX_QTI_VIDEO_CONFIG_ROIINFO;
 
+typedef struct OMX_QTI_VIDEO_CONFIG_IPB_ROIINFO {
+    OMX_U32         nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_U32         nPortIndex;
+    OMX_S32         nUpperIFrameQpOffset;
+    OMX_S32         nLowerIFrameQpOffset;
+    OMX_S32         nUpperPFrameQpOffset;
+    OMX_S32         nLowerPFrameQpOffset;
+    OMX_S32         nUpperBFrameQpOffset;
+    OMX_S32         nLowerBFrameQpOffset;
+    OMX_BOOL        bUseRoiInfo;
+    OMX_S32         nRoiMBInfoSize;
+    OMX_PTR         pRoiMBInfo;
+} OMX_QTI_VIDEO_CONFIG_IPB_ROIINFO;
+
 /**
  * When enable below BLUR feature, a filter will be applied to the
  * input YUV to achieve the similar effect as downscaling to the
@@ -1828,6 +1846,7 @@ typedef struct QOMX_VIDEO_CUSTOM_BUFFERSIZE {
 #define OMX_QTI_INDEX_CONFIG_COLOR_ASPECTS "OMX.google.android.index.describeColorAspects"
 #define OMX_QTI_INDEX_CONFIG_VIDEO_GETDSMODE "OMX.QTI.index.config.video.getdsmode"
 #define OMX_QTI_INDEX_PARAM_TME "OMX.QTI.index.param.tme"
+#define OMX_QTI_INDEX_CONFIG_VIDEO_IPB_ROIINFO "OMX.QTI.index.config.IPBRoiInfo"
 
 typedef enum {
     QOMX_VIDEO_FRAME_PACKING_CHECKERBOARD = 0,

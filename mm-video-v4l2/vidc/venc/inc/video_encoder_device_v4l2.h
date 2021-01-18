@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2018, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -525,7 +525,7 @@ class venc_dev
         bool venc_set_operatingrate(OMX_U32 rate);
         bool venc_set_layer_bitrates(OMX_U32 *pLayerBitrates, OMX_U32 numLayers);
         bool venc_set_lowlatency_mode(OMX_BOOL enable);
-        bool venc_set_roi_qp_info(OMX_QTI_VIDEO_CONFIG_ROIINFO *roiInfo);
+        bool venc_set_roi_qp_info(void *roiInfo, bool);
         bool venc_set_blur_resolution(OMX_QTI_VIDEO_CONFIG_BLURINFO *blurInfo);
         bool venc_set_colorspace(OMX_U32 primaries, OMX_U32 range, OMX_U32 transfer_chars, OMX_U32 matrix_coeffs);
         bool venc_reconfigure_temporal_settings();
@@ -565,9 +565,10 @@ class venc_dev
         struct roidata {
             bool dirty;
             OMX_TICKS timestamp;
-            OMX_QTI_VIDEO_CONFIG_ROIINFO info;
+            OMX_QTI_VIDEO_CONFIG_IPB_ROIINFO info;
         };
         bool m_roi_enabled;
+        bool m_roi_IPB_enabled;
         pthread_mutex_t m_roilock;
         std::list<roidata> m_roilist;
         void get_roi_for_timestamp(struct roidata &roi, OMX_TICKS timestamp);

@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2018, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -116,6 +116,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     mBatchSize = 0;
     deinterlace_enabled = false;
     m_roi_enabled = false;
+    m_roi_IPB_enabled = false;
     pthread_mutex_init(&m_roilock, NULL);
     pthread_mutex_init(&pause_resume_mlock, NULL);
     pthread_cond_init(&pause_resume_cond, NULL);
@@ -203,7 +204,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
 
 venc_dev::~venc_dev()
 {
-    if (m_roi_enabled) {
+    if (m_roi_enabled || m_roi_IPB_enabled) {
         std::list<roidata>::iterator iter;
         pthread_mutex_lock(&m_roilock);
         for (iter = m_roilist.begin(); iter != m_roilist.end(); iter++) {
@@ -755,13 +756,19 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
     struct roidata roi;
     memset(&roi, 0, sizeof(struct roidata));
     roi.dirty = false;
-    if (m_roi_enabled) {
+    if (m_roi_enabled || m_roi_IPB_enabled) {
         get_roi_for_timestamp(roi, nTimeStamp);
     }
 
     if (roi.dirty) {
+        int roi_qp_payload_size = 0;
+        if (m_roi_IPB_enabled)
+            roi_qp_payload_size = sizeof(struct msm_vidc_ipb_roi_qp_payload);
+        else
+            roi_qp_payload_size = sizeof(struct msm_vidc_roi_qp_payload);
+
         data->nSize = ALIGN(sizeof(OMX_OTHER_EXTRADATATYPE) +
-            sizeof(struct msm_vidc_roi_qp_payload) +
+            roi_qp_payload_size +
             roi.info.nRoiMBInfoSize - 2 * sizeof(unsigned int), 4);
         if (data->nSize > input_extradata_info.buffer_size  - consumed_len) {
            DEBUG_PRINT_ERROR("Buffer size (%lu) is less than ROI extradata size (%u)",
@@ -771,15 +778,50 @@ bool venc_dev::handle_input_extradata(struct v4l2_buffer buf)
         data->nVersion.nVersion = OMX_SPEC_VERSION;
         data->nPortIndex = 0;
         data->eType = (OMX_EXTRADATATYPE)MSM_VIDC_EXTRADATA_ROI_QP;
-        data->nDataSize = sizeof(struct msm_vidc_roi_qp_payload);
-        struct msm_vidc_roi_qp_payload *roiData =
-                (struct msm_vidc_roi_qp_payload *)(data->data);
-        roiData->upper_qp_offset = roi.info.nUpperQpOffset;
-        roiData->lower_qp_offset = roi.info.nLowerQpOffset;
-        roiData->b_roi_info = roi.info.bUseRoiInfo;
-        roiData->mbi_info_size = roi.info.nRoiMBInfoSize;
-        DEBUG_PRINT_HIGH("Using ROI QP map: Enable = %d", roiData->b_roi_info);
-        memcpy(roiData->data, roi.info.pRoiMBInfo, roi.info.nRoiMBInfoSize);
+        data->nDataSize = roi_qp_payload_size;
+        if (m_roi_IPB_enabled) {
+            struct msm_vidc_ipb_roi_qp_payload *ipb_roiData =
+                (struct msm_vidc_ipb_roi_qp_payload *)(data->data);
+
+            data->eType = (OMX_EXTRADATATYPE)MSM_VIDC_EXTRADATA_IPB_ROI_QP;
+            ipb_roiData->nUpperQpOffset[0] = roi.info.nUpperIFrameQpOffset;
+            ipb_roiData->nLowerQpOffset[0] = roi.info.nLowerIFrameQpOffset;
+            ipb_roiData->nUpperQpOffset[1] =
+                roi.info.nUpperPFrameQpOffset?roi.info.nUpperPFrameQpOffset:
+                        roi.info.nUpperIFrameQpOffset;
+            ipb_roiData->nLowerQpOffset[1] =
+                roi.info.nLowerPFrameQpOffset?roi.info.nLowerPFrameQpOffset:
+                        roi.info.nLowerIFrameQpOffset;
+            ipb_roiData->nUpperQpOffset[2] =
+                roi.info.nUpperBFrameQpOffset?roi.info.nUpperBFrameQpOffset:
+                        roi.info.nUpperIFrameQpOffset;
+            ipb_roiData->nLowerQpOffset[2] =
+                roi.info.nLowerBFrameQpOffset?roi.info.nLowerBFrameQpOffset:
+                        roi.info.nLowerIFrameQpOffset;
+
+            ipb_roiData->b_roi_info = roi.info.bUseRoiInfo;
+            ipb_roiData->mbi_info_size = roi.info.nRoiMBInfoSize;
+            DEBUG_PRINT_HIGH("Using IPB ROI QP map: Enable = %d - I %d %d P %d %d B %d %d ",
+                ipb_roiData->b_roi_info,
+                ipb_roiData->nUpperQpOffset[0],
+                ipb_roiData->nLowerQpOffset[0],
+                ipb_roiData->nUpperQpOffset[1],
+                ipb_roiData->nLowerQpOffset[1],
+                ipb_roiData->nUpperQpOffset[2],
+                ipb_roiData->nLowerQpOffset[2]);
+            memcpy(ipb_roiData->data, roi.info.pRoiMBInfo, roi.info.nRoiMBInfoSize);
+        } else {
+             struct msm_vidc_roi_qp_payload *roiData =
+                     (struct msm_vidc_roi_qp_payload *)(data->data);
+             data->eType = (OMX_EXTRADATATYPE)MSM_VIDC_EXTRADATA_ROI_QP;
+             roiData->upper_qp_offset = roi.info.nUpperIFrameQpOffset;
+             roiData->lower_qp_offset = roi.info.nLowerIFrameQpOffset;
+             roiData->b_roi_info = roi.info.bUseRoiInfo;
+             roiData->mbi_info_size = roi.info.nRoiMBInfoSize;
+             DEBUG_PRINT_HIGH("Using ROI QP map: Enable = %d", roiData->b_roi_info);
+             memcpy(roiData->data, roi.info.pRoiMBInfo, roi.info.nRoiMBInfoSize);
+        }
+
         data = (OMX_OTHER_EXTRADATATYPE *)((char *)data + data->nSize);
         consumed_len += data->nSize;
     }
@@ -3262,11 +3304,20 @@ bool venc_dev::venc_set_config(void *configData, OMX_INDEXTYPE index)
                 }
                 break;
             }
-        case OMX_QTIIndexConfigVideoRoiInfo:
+        case OMX_QTIIndexConfigVideoIPBRoiInfo:
         {
-            if(!venc_set_roi_qp_info((OMX_QTI_VIDEO_CONFIG_ROIINFO *)configData)) {
+            m_roi_IPB_enabled = true;
+            if(!venc_set_roi_qp_info(configData, true)) {
                 DEBUG_PRINT_ERROR("Failed to set ROI QP info");
                 return false;
+            }
+            break;
+        }
+        case OMX_QTIIndexConfigVideoRoiInfo:
+        {
+            if(!venc_set_roi_qp_info(configData, false)) {
+               DEBUG_PRINT_ERROR("Failed to set ROI QP info");
+               return false;
             }
             break;
         }
@@ -6616,9 +6667,10 @@ bool venc_dev::venc_set_operatingrate(OMX_U32 rate) {
     return true;
 }
 
-bool venc_dev::venc_set_roi_qp_info(OMX_QTI_VIDEO_CONFIG_ROIINFO *roiInfo)
+bool venc_dev::venc_set_roi_qp_info(void *roiInfo, bool ipb_enabled)
 {
     struct roidata roi;
+    OMX_PTR pRoiMBInfo;
 
     if (!m_roi_enabled) {
         DEBUG_PRINT_ERROR("ROI info not enabled");
@@ -6635,20 +6687,43 @@ bool venc_dev::venc_set_roi_qp_info(OMX_QTI_VIDEO_CONFIG_ROIINFO *roiInfo)
         return false;
     }
 
-    DEBUG_PRINT_HIGH("ROI QP info received");
+    DEBUG_PRINT_HIGH("ROI QP info received m_roi_IPB_enabled %d ", m_roi_IPB_enabled);
     memset(&roi, 0, sizeof(struct roidata));
 
-    roi.info.nUpperQpOffset = roiInfo->nUpperQpOffset;
-    roi.info.nLowerQpOffset = roiInfo->nLowerQpOffset;
-    roi.info.bUseRoiInfo = roiInfo->bUseRoiInfo;
-    roi.info.nRoiMBInfoSize = roiInfo->nRoiMBInfoSize;
+    if (ipb_enabled) {
+        OMX_QTI_VIDEO_CONFIG_IPB_ROIINFO *IPBroidata = (OMX_QTI_VIDEO_CONFIG_IPB_ROIINFO*)roiInfo;
+
+        roi.info.nUpperIFrameQpOffset = IPBroidata->nUpperIFrameQpOffset;
+        roi.info.nUpperPFrameQpOffset = IPBroidata->nUpperPFrameQpOffset;
+        roi.info.nUpperBFrameQpOffset = IPBroidata->nUpperBFrameQpOffset;
+        roi.info.nLowerIFrameQpOffset = IPBroidata->nLowerIFrameQpOffset;
+        roi.info.nLowerPFrameQpOffset = IPBroidata->nLowerPFrameQpOffset;
+        roi.info.nLowerBFrameQpOffset = IPBroidata->nLowerBFrameQpOffset;
+        roi.info.bUseRoiInfo = IPBroidata->bUseRoiInfo;
+        roi.info.nRoiMBInfoSize = IPBroidata->nRoiMBInfoSize;
+        pRoiMBInfo = IPBroidata->pRoiMBInfo;
+        DEBUG_PRINT_LOW("i p b upper QP %d - %d - %d lower %d %d %d roi data size %d",
+                roi.info.nUpperIFrameQpOffset,
+                roi.info.nUpperIFrameQpOffset,
+                roi.info.nUpperPFrameQpOffset,
+                roi.info.nLowerPFrameQpOffset,
+                roi.info.nUpperBFrameQpOffset,
+                roi.info.nLowerBFrameQpOffset, roi.info.nRoiMBInfoSize);
+    } else {
+       OMX_QTI_VIDEO_CONFIG_ROIINFO *roidata = (OMX_QTI_VIDEO_CONFIG_ROIINFO*)roiInfo;
+       roi.info.nUpperIFrameQpOffset = roidata->nUpperQpOffset;
+       roi.info.nLowerIFrameQpOffset = roidata->nLowerQpOffset;
+       roi.info.bUseRoiInfo = roidata->bUseRoiInfo;
+       roi.info.nRoiMBInfoSize = roidata->nRoiMBInfoSize;
+       pRoiMBInfo = roidata->pRoiMBInfo;
+    }
 
     roi.info.pRoiMBInfo = malloc(roi.info.nRoiMBInfoSize);
     if (!roi.info.pRoiMBInfo) {
         DEBUG_PRINT_ERROR("venc_set_roi_qp_info: malloc failed.");
         return false;
     }
-    memcpy(roi.info.pRoiMBInfo, roiInfo->pRoiMBInfo, roiInfo->nRoiMBInfoSize);
+    memcpy(roi.info.pRoiMBInfo, pRoiMBInfo, roi.info.nRoiMBInfoSize);
     /*
      * set the timestamp equal to previous etb timestamp + 1
      * to know this roi data arrived after previous etb

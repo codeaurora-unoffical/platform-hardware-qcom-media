@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
+Copyright (c) 2010-2018, 2021 The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -2056,6 +2056,15 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 VALIDATE_OMX_PARAM_DATA(configData, OMX_QTI_VIDEO_CONFIG_ROIINFO);
                 if (!handle->venc_set_config(configData, (OMX_INDEXTYPE)OMX_QTIIndexConfigVideoRoiInfo)) {
                     DEBUG_PRINT_ERROR("Failed to set OMX_QTIIndexConfigVideoRoiInfo");
+                    return OMX_ErrorUnsupportedSetting;
+                }
+                break;
+            }
+        case OMX_QTIIndexConfigVideoIPBRoiInfo:
+            {
+                VALIDATE_OMX_PARAM_DATA(configData, OMX_QTI_VIDEO_CONFIG_IPB_ROIINFO);
+                if (!handle->venc_set_config(configData, (OMX_INDEXTYPE)OMX_QTIIndexConfigVideoIPBRoiInfo)) {
+                    DEBUG_PRINT_ERROR("Failed to set OMX_QTIIndexConfigVideoIPBRoiInfo");
                     return OMX_ErrorUnsupportedSetting;
                 }
                 break;
