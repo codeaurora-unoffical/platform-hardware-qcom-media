@@ -295,6 +295,9 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     OMX_INIT_STRUCT(&m_sSessionQPRange, OMX_QCOM_VIDEO_PARAM_IPB_QPRANGETYPE);
     m_sSessionQPRange.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
 
+    OMX_INIT_STRUCT(&m_sFrameQPRange, OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE);
+    m_sFrameQPRange.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
+
     OMX_INIT_STRUCT(&m_sAVCSliceFMO, OMX_VIDEO_PARAM_AVCSLICEFMO);
     m_sAVCSliceFMO.nPortIndex = (OMX_U32) PORT_INDEX_OUT;
     m_sAVCSliceFMO.eSliceMode = OMX_VIDEO_SLICEMODE_AVCDefault;
@@ -2181,7 +2184,18 @@ OMX_ERRORTYPE  omx_venc::set_config(OMX_IN OMX_HANDLETYPE      hComp,
                 }
                 break;
             }
-
+        case OMX_QTIIndexConfigFrameIPBQPRange:
+        {
+            VALIDATE_OMX_PARAM_DATA(configData, OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE);
+            OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE* pParam =
+                (OMX_QCOM_VIDEO_CONFIG_IPB_QPRANGETYPE*) configData;
+            if (!handle->venc_set_config(pParam, (OMX_INDEXTYPE)OMX_QTIIndexConfigFrameIPBQPRange)) {
+                DEBUG_PRINT_ERROR("ERROR: Setting OMX_QTIIndexConfigFrameIPBQPRange failed");
+                return OMX_ErrorUnsupportedSetting;
+            }
+            memcpy(&m_sFrameQPRange, pParam, sizeof(m_sFrameQPRange));
+            break;
+        }
         default:
             DEBUG_PRINT_ERROR("ERROR: unsupported index %d", (int) configIndex);
             break;
