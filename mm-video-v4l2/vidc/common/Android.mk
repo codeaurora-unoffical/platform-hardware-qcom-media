@@ -22,8 +22,13 @@ libmm-vidc-def += -D_ANDROID_ICS_
 # ---------------------------------------------------------------------------------
 
 libmm-vidc-inc      := $(LOCAL_PATH)/inc
+ifneq ($(LIBION_HEADER_PATH_WRAPPER), )
+include $(LIBION_HEADER_PATH_WRAPPER)
+libmm-vidc-inc      += $(LIBION_HEADER_PATHS)
+else
 libmm-vidc-inc      += $(TOP)/system/core/libion/include
 libmm-vidc-inc      += $(TOP)/system/core/libion/kernel-headers
+endif
 libmm-vidc-inc      += $(TOP)/hardware/qcom/media/mm-core/inc
 libmm-vidc-inc      += $(TOP)/hardware/qcom/media/mm-video-v4l2/vidc/vdec/inc
 libmm-vidc-inc      += $(TOP)/hardware/qcom/media/mm-video-v4l2/vidc/venc/inc
@@ -42,7 +47,7 @@ LOCAL_SHARED_LIBRARIES    := liblog libcutils libdl
 
 LOCAL_SRC_FILES   := src/extra_data_handler.cpp
 LOCAL_SRC_FILES   += src/vidc_color_converter.cpp
-LOCAL_HEADER_LIBRARIES := libhardware_headers libutils_headers libnativebase_headers media_plugin_headers
+LOCAL_HEADER_LIBRARIES := libhardware_headers libutils_headers libnativebase_headers media_plugin_headers display_headers
 
 LOCAL_SRC_FILES   += src/vidc_vendor_extensions.cpp
 

@@ -80,8 +80,13 @@ include $(CLEAR_VARS)
 
 # Common Includes
 libmm-vdec-inc          := $(LOCAL_PATH)/inc
+ifneq ($(LIBION_HEADER_PATH_WRAPPER), )
+include $(LIBION_HEADER_PATH_WRAPPER)
+libmm-vdec-inc          += $(LIBION_HEADER_PATHS)
+else
 libmm-vdec-inc          += $(TOP)/system/core/libion/include
 libmm-vdec-inc          += $(TOP)/system/core/libion/kernel-headers
+endif
 libmm-vdec-inc          += $(TOP)/hardware/qcom/media/mm-video-v4l2/vidc/common/inc
 libmm-vdec-inc          += $(TOP)/hardware/qcom/media/mm-core/inc
 libmm-vdec-inc          += $(TARGET_OUT_HEADERS)/qcom/display
@@ -181,7 +186,8 @@ LOCAL_HEADER_LIBRARIES := \
         media_plugin_headers \
         libnativebase_headers \
         libutils_headers \
-        libhardware_headers
+        libhardware_headers \
+        display_headers
 
 LOCAL_C_INCLUDES              += $(libmm-vdec-inc)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(libmm-vdec-add-dep)
