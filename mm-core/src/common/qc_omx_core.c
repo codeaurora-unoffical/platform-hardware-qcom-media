@@ -475,6 +475,22 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
             pthread_mutex_unlock(&lock_core);
             return OMX_ErrorInsufficientResources;
         }
+
+        if (vpp_cmp_index >= 0)
+        {
+            hnd_index = get_comp_handle_index("OMX.qti.vdec.vpp");
+        }
+        else
+        {
+            hnd_index = get_comp_handle_index(optComponentName);
+        }
+
+        if(hnd_index < 0)
+        {
+            DEBUG_PRINT("OMX_GetHandle:NO free slot available to store Component Handle\n");
+            pthread_mutex_unlock(&lock_core);
+            return OMX_ErrorInsufficientResources;
+        }
         // Construct the component requested
         // Function returns the opaque handle
         void* pThis = (*(core[cmp_index].fn_ptr))();
@@ -492,24 +508,9 @@ OMX_GetHandle(OMX_OUT OMX_HANDLETYPE*     handle,
           }
           qc_omx_component_set_callbacks(hComp,callBacks,appData);
 
-          if (vpp_cmp_index >= 0)
-          {
-            hnd_index = get_comp_handle_index("OMX.qti.vdec.vpp");
-          }
-          else
-          {
-            hnd_index = get_comp_handle_index(optComponentName);
-          }
-
           if(hnd_index >= 0)
           {
             core[cmp_index].inst[hnd_index]= *handle = (OMX_HANDLETYPE) hComp;
-          }
-          else
-          {
-            DEBUG_PRINT("OMX_GetHandle:NO free slot available to store Component Handle\n");
-            pthread_mutex_unlock(&lock_core);
-            return OMX_ErrorInsufficientResources;
           }
           DEBUG_PRINT("Component %p Successfully created\n",*handle);
           if(!strcmp(core[cmp_index].so_lib_name,"libOmxWmaDec.so")  ||
