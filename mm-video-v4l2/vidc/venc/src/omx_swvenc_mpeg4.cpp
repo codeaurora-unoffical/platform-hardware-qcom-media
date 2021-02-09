@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -194,7 +194,8 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     {
         DEBUG_PRINT_ERROR("swvenc_init returned %d, ret insufficient resources",
          sRet);
-        RETURN(OMX_ErrorInsufficientResources);
+        eRet = OMX_ErrorInsufficientResources;
+        goto swvenc_res_destroy;
     }
 
     m_stopped = true;
@@ -283,7 +284,8 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     {
        DEBUG_PRINT_ERROR("%s, swvenc_set_rc_mode failed (%d)",
          __FUNCTION__, Ret);
-       RETURN(OMX_ErrorUndefined);
+       eRet = OMX_ErrorUndefined;
+       goto swvenc_res_destroy;
     }
 
     // Initialize the video parameters for input port
@@ -314,7 +316,8 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     {
        DEBUG_PRINT_ERROR("%s, swvenc_setproperty failed (%d)",
          __FUNCTION__, Ret);
-       RETURN(OMX_ErrorUnsupportedSetting);
+       eRet = OMX_ErrorUnsupportedSetting;
+       goto swvenc_res_destroy;
     }
 
     /* set the frame attributes */
@@ -331,7 +334,8 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     {
        DEBUG_PRINT_ERROR("%s, swvenc_setproperty failed (%d)",
          __FUNCTION__, Ret);
-       RETURN(OMX_ErrorUndefined);
+       eRet = OMX_ErrorUndefined;
+       goto swvenc_res_destroy;
     }
 
     Ret = swvenc_get_buffer_req(&m_sInPortDef.nBufferCountMin,
@@ -343,7 +347,8 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     {
        DEBUG_PRINT_ERROR("ERROR: %s, swvenc_get_buffer_req failed (%d)", __FUNCTION__,
           Ret);
-       RETURN(OMX_ErrorUndefined);
+       eRet = OMX_ErrorUndefined;
+       goto swvenc_res_destroy;
     }
 
     // Initialize the video parameters for output port
@@ -376,7 +381,8 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
     {
        DEBUG_PRINT_ERROR("ERROR: %s, swvenc_get_buffer_req failed (%d)", __FUNCTION__,
           Ret);
-       RETURN(OMX_ErrorUndefined);
+       eRet = OMX_ErrorUndefined;
+       goto swvenc_res_destroy;
     }
 
     // Initialize the video color format for input port
@@ -494,6 +500,11 @@ OMX_ERRORTYPE omx_venc::component_init(OMX_STRING role)
         mVendorExtensionStore.dumpExtensions((const char *)m_nkind);
     }
 
+    RETURN(eRet);
+
+swvenc_res_destroy:
+    swvenc_res_destroy(m_hSwVenc);
+    m_hSwVenc = NULL;
     RETURN(eRet);
 }
 
